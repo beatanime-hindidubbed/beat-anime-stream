@@ -89,8 +89,8 @@ export interface ScheduleData {
 
 export const api = {
   getHome: () => fetchApi<HomeData>("/hianime/home"),
-  getAnimeInfo: (id: string) => fetchApi<AnimeInfo>(`/hianime/info/${id}`),
-  getEpisodes: (id: string) => fetchApi<{ episodes: Episode[]; totalEpisodes: number }>(`/hianime/episodes/${id}`),
+  getAnimeInfo: (id: string) => fetchApi<AnimeInfo>(`/hianime/anime/${id}`),
+  getEpisodes: (id: string) => fetchApi<{ episodes: Episode[]; totalEpisodes: number }>(`/hianime/anime/${id}/episodes`),
   getEpisodeSources: (episodeId: string, category = "sub") =>
     fetchApi<EpisodeSource>(`/hianime/episode/sources?animeEpisodeId=${episodeId}&category=${category}`),
   search: (q: string, page = 1) => fetchApi<SearchResult>(`/hianime/search?q=${encodeURIComponent(q)}&page=${page}`),
