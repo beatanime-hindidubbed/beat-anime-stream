@@ -93,6 +93,8 @@ export const api = {
   getEpisodes: (id: string) => fetchApi<{ episodes: Episode[]; totalEpisodes: number }>(`/hianime/anime/${id}/episodes`),
   getEpisodeSources: (episodeId: string, category = "sub") =>
     fetchApi<EpisodeSource>(`/hianime/episode/sources?animeEpisodeId=${episodeId}&category=${category}`),
+  proxyUrl: (url: string, referer = "https://megacloud.blog/") =>
+    `${BASE_URL}/hindiapi/proxy?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}`,
   search: (q: string, page = 1) => fetchApi<SearchResult>(`/hianime/search?q=${encodeURIComponent(q)}&page=${page}`),
   searchSuggestions: (q: string) => fetchApi<{ suggestions: AnimeItem[] }>(`/hianime/search/suggestion?q=${encodeURIComponent(q)}`),
   getCategory: (name: string, page = 1) => fetchApi<SearchResult>(`/hianime/category/${name}?page=${page}`),

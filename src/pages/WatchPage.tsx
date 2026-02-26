@@ -14,7 +14,7 @@ export default function WatchPage() {
   // The route param captures everything, so we reconstruct
   const fullEpisodeId = episodeId ? `${episodeId}${searchParams.get("ep") ? `?ep=${searchParams.get("ep")}` : ""}` : "";
 
-  const [category, setCategory] = useState<"sub" | "dub">("sub");
+  const [category, setCategory] = useState<"sub" | "dub" | "raw">("dub");
   const [showEpList, setShowEpList] = useState(false);
 
   const { data: sources, isLoading } = useQuery({
@@ -67,7 +67,12 @@ export default function WatchPage() {
     [user, animeId, fullEpisodeId, currentEp, animeName, animePoster]
   );
 
-  const streamUrl = sources?.sources?.[0]?.url || "";
+  const rawStreamUrl = sources?.sources?.[0]?.url || "";
+  const streamUrl = rawStreamUrl ? api.proxyUrl(rawStreamUrl) : "";
+  const proxiedTracks = sources?.tracks?.map((t) => ({
+    ...t,
+    file: t.file ? api.proxyUrl(t.file) : t.file,
+  }));
 
   return (
     <div className="container py-4 max-w-6xl">
@@ -78,7 +83,7 @@ export default function WatchPage() {
         ) : streamUrl ? (
           <VideoPlayer
             src={streamUrl}
-            tracks={sources?.tracks}
+            tracks={proxiedTracks}
             intro={sources?.intro}
             outro={sources?.outro}
             onTimeUpdate={handleTimeUpdate}
@@ -106,18 +111,15 @@ export default function WatchPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setCategory("sub")}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${category === "sub" ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}
-          >
-            SUB
-          </button>
-          <button
-            onClick={() => setCategory("dub")}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${category === "dub" ? "bg-accent text-accent-foreground" : "bg-secondary text-secondary-foreground"}`}
-          >
-            DUB
-          </button>
+          {(["dub", "sub", "raw"] as const).map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setCategory(cat)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${category === cat ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}
+            >
+              {cat === "dub" ? "HINDI" : cat.toUpperCase()}
+            </button>
+          ))}
           <button
             onClick={() => setShowEpList(!showEpList)}
             className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-secondary text-sm text-secondary-foreground hover:bg-secondary/80 transition-colors"
