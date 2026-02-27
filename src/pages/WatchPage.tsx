@@ -7,23 +7,41 @@ import VideoPlayer from "@/components/VideoPlayer";
 import BackButton from "@/components/BackButton";
 import AnimeCard from "@/components/AnimeCard";
 import { getWorkingStream, StreamResult, HIANIME_SERVERS } from "@/lib/streaming";
-import { useState, useEffect, useCallback } from "react";
-import { ChevronLeft, ChevronRight, List, Loader2, AlertTriangle, Server, RefreshCw } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { ChevronLeft, ChevronRight, List, Loader2, AlertTriangle, Server, RefreshCw, Globe, ChevronDown } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+
+const LANGUAGES = [
+  { code: "sub", label: "English (Sub)", short: "ENG SUB" },
+  { code: "dub", label: "Hindi (Dub)", short: "HINDI" },
+  { code: "raw", label: "Japanese (Raw)", short: "RAW" },
+] as const;
 
 export default function WatchPage() {
   const { episodeId } = useParams<{ episodeId: string }>();
   const [searchParams] = useSearchParams();
   const fullEpisodeId = episodeId ? `${episodeId}${searchParams.get("ep") ? `?ep=${searchParams.get("ep")}` : ""}` : "";
 
-  const [category, setCategory] = useState<"sub" | "dub">("sub");
+  const [category, setCategory] = useState<string>("sub");
   const [selectedServer, setSelectedServer] = useState<string>("hd-2");
   const [showEpList, setShowEpList] = useState(false);
+  const [showLangMenu, setShowLangMenu] = useState(false);
   const [streamResult, setStreamResult] = useState<StreamResult | null>(null);
   const [streamLoading, setStreamLoading] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
+  const langRef = useRef<HTMLDivElement>(null);
 
   const animeId = fullEpisodeId.split("?")[0];
+
+  // Close lang menu on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (langRef.current && !langRef.current.contains(e.target as Node)) setShowLangMenu(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   const { data: epData } = useQuery({
     queryKey: ["episodes", animeId],
@@ -60,7 +78,7 @@ export default function WatchPage() {
       try {
         const result = await getWorkingStream({
           episodeId: fullEpisodeId,
-          category,
+          category: category === "raw" ? "sub" : category,
           server: selectedServer,
         });
 
@@ -68,7 +86,7 @@ export default function WatchPage() {
         if (result) {
           setStreamResult(result);
         } else {
-          setStreamError("All servers failed. Try switching server or category.");
+          setStreamError("All servers failed. Try switching server or language.");
         }
       } catch {
         if (!cancelled) setStreamError("Failed to load stream.");
@@ -100,6 +118,7 @@ export default function WatchPage() {
   );
 
   const recommended = info?.recommendedAnimes || info?.relatedAnimes || [];
+  const currentLang = LANGUAGES.find(l => l.code === category) || LANGUAGES[0];
 
   return (
     <div className="container py-4 max-w-6xl">
@@ -143,7 +162,7 @@ export default function WatchPage() {
         </div>
       )}
 
-      {/* Controls */}
+      {/* Controls row */}
       <div className="flex flex-wrap items-center gap-3 mb-4">
         {/* Prev/Next */}
         <div className="flex items-center gap-2">
@@ -159,17 +178,38 @@ export default function WatchPage() {
           )}
         </div>
 
-        {/* Category: SUB / DUB */}
-        <div className="flex items-center gap-1 border border-border rounded-lg p-0.5">
-          {(["sub", "dub"] as const).map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setCategory(cat)}
-              className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${category === cat ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
-            >
-              {cat.toUpperCase()}
-            </button>
-          ))}
+        {/* Language dropdown */}
+        <div ref={langRef} className="relative">
+          <button
+            onClick={() => setShowLangMenu(!showLangMenu)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm font-medium text-foreground hover:bg-secondary/80 transition-colors"
+          >
+            <Globe className="w-4 h-4" />
+            {currentLang.short}
+            <ChevronDown className={`w-3 h-3 transition-transform ${showLangMenu ? "rotate-180" : ""}`} />
+          </button>
+          <AnimatePresence>
+            {showLangMenu && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                className="absolute top-full mt-1 left-0 w-48 bg-card border border-border rounded-lg shadow-card z-30 overflow-hidden"
+              >
+                {LANGUAGES.map((lang) => (
+                  <button
+                    key={lang.code}
+                    onClick={() => { setCategory(lang.code); setShowLangMenu(false); }}
+                    className={`w-full px-4 py-2.5 text-sm text-left transition-colors hover:bg-secondary/80 ${
+                      category === lang.code ? "text-primary font-medium bg-secondary/40" : "text-foreground"
+                    }`}
+                  >
+                    {lang.label}
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Server selector */}
