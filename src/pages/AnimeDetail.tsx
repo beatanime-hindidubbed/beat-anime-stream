@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import { store } from "@/lib/store";
 import { useAuth } from "@/hooks/useAuth";
 import AnimeCard from "@/components/AnimeCard";
+import BackButton from "@/components/BackButton";
 import { BookmarkPlus, BookmarkCheck, Play, Star, Clock, Tv } from "lucide-react";
 import { useState } from "react";
 import { motion } from "framer-motion";
@@ -58,6 +59,9 @@ export default function AnimeDetail() {
 
   return (
     <div>
+      <div className="container pt-4">
+        <BackButton />
+      </div>
       {/* Banner */}
       <div className="relative h-[40vh] overflow-hidden">
         <img src={anime.poster} alt={anime.name} className="w-full h-full object-cover" />
