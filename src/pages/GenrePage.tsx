@@ -1,4 +1,5 @@
 import { useParams, useSearchParams } from "react-router-dom";
+import BackButton from "@/components/BackButton";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import AnimeCard from "@/components/AnimeCard";
@@ -17,6 +18,7 @@ export default function GenrePage() {
 
   return (
     <div className="container py-8">
+      <BackButton />
       <h1 className="font-display text-2xl font-bold text-foreground mb-6 capitalize">{name} Anime</h1>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
         {isLoading

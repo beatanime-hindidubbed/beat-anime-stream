@@ -1,29 +1,28 @@
-import { useParams, Link, useSearchParams } from "react-router-dom";
+import { useParams, Link, useSearchParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api, Episode } from "@/lib/api";
 import { store } from "@/lib/store";
 import { useAuth } from "@/hooks/useAuth";
 import VideoPlayer from "@/components/VideoPlayer";
+import IframePlayer from "@/components/IframePlayer";
+import BackButton from "@/components/BackButton";
+import AnimeCard from "@/components/AnimeCard";
+import { getWorkingStream, StreamResult } from "@/lib/streaming";
 import { useState, useEffect, useCallback } from "react";
-import { ChevronLeft, ChevronRight, List } from "lucide-react";
+import { ChevronLeft, ChevronRight, List, Loader2, AlertTriangle, Server } from "lucide-react";
 
 export default function WatchPage() {
   const { episodeId } = useParams<{ episodeId: string }>();
   const [searchParams] = useSearchParams();
-  // episodeId can contain "?" from URL pattern like "anime-id?ep=123"
-  // The route param captures everything, so we reconstruct
+  const navigate = useNavigate();
   const fullEpisodeId = episodeId ? `${episodeId}${searchParams.get("ep") ? `?ep=${searchParams.get("ep")}` : ""}` : "";
 
-  const [category, setCategory] = useState<"sub" | "dub" | "raw">("dub");
+  const [preferredLang, setPreferredLang] = useState<string>("hi");
   const [showEpList, setShowEpList] = useState(false);
+  const [streamResult, setStreamResult] = useState<StreamResult | null>(null);
+  const [streamLoading, setStreamLoading] = useState(false);
+  const [streamError, setStreamError] = useState<string | null>(null);
 
-  const { data: sources, isLoading } = useQuery({
-    queryKey: ["sources", fullEpisodeId, category],
-    queryFn: () => api.getEpisodeSources(fullEpisodeId, category),
-    enabled: !!fullEpisodeId,
-  });
-
-  // Extract anime ID from episodeId (format: "anime-id?ep=xxx")
   const animeId = fullEpisodeId.split("?")[0];
 
   const { data: epData } = useQuery({
@@ -48,10 +47,45 @@ export default function WatchPage() {
   const animeName = info?.anime?.info?.name || animeId;
   const animePoster = info?.anime?.info?.poster;
 
+  // Fetch stream with multi-provider fallback
+  useEffect(() => {
+    if (!fullEpisodeId || !animeName) return;
+    let cancelled = false;
+
+    const fetchStream = async () => {
+      setStreamLoading(true);
+      setStreamError(null);
+      setStreamResult(null);
+
+      try {
+        const result = await getWorkingStream({
+          episodeId: fullEpisodeId,
+          animeName,
+          episodeNumber: currentEp?.number || 1,
+          preferredLang,
+          preferredCategory: preferredLang === "hi" ? "dub" : "sub",
+        });
+
+        if (cancelled) return;
+        if (result) {
+          setStreamResult(result);
+        } else {
+          setStreamError("All servers failed. Try again in a moment.");
+        }
+      } catch {
+        if (!cancelled) setStreamError("Failed to load stream.");
+      } finally {
+        if (!cancelled) setStreamLoading(false);
+      }
+    };
+
+    fetchStream();
+    return () => { cancelled = true; };
+  }, [fullEpisodeId, animeName, currentEp?.number, preferredLang]);
+
   const handleTimeUpdate = useCallback(
     (time: number, duration: number) => {
       if (!user || !animeId || !fullEpisodeId || !currentEp) return;
-      // Save every 10 seconds
       if (Math.floor(time) % 10 === 0 && duration > 0) {
         store.updateContinueWatching({
           id: animeId,
@@ -67,33 +101,63 @@ export default function WatchPage() {
     [user, animeId, fullEpisodeId, currentEp, animeName, animePoster]
   );
 
-  const rawStreamUrl = sources?.sources?.[0]?.url || "";
-  const streamUrl = rawStreamUrl ? api.proxyUrl(rawStreamUrl) : "";
-  const proxiedTracks = sources?.tracks?.map((t) => ({
-    ...t,
-    file: t.file ? api.proxyUrl(t.file) : t.file,
-  }));
+  // Genre-based recommendations
+  const genres = info?.anime?.moreInfo?.genres;
+  const genreList = typeof genres === "string"
+    ? genres.split(",").map(g => g.trim().toLowerCase())
+    : [];
+
+  const recommended = info?.recommendedAnimes || info?.relatedAnimes || [];
+
+  const langOptions = [
+    { code: "hi", label: "HINDI" },
+    { code: "en", label: "SUB" },
+    { code: "ja", label: "RAW" },
+  ];
 
   return (
     <div className="container py-4 max-w-6xl">
+      <BackButton />
+
       {/* Player */}
       <div className="mb-4">
-        {isLoading ? (
-          <div className="aspect-video rounded-lg bg-secondary animate-pulse" />
-        ) : streamUrl ? (
+        {streamLoading ? (
+          <div className="aspect-video rounded-lg bg-secondary flex items-center justify-center gap-3 text-muted-foreground">
+            <Loader2 className="w-6 h-6 animate-spin" />
+            <span className="text-sm">Finding best server...</span>
+          </div>
+        ) : streamError ? (
+          <div className="aspect-video rounded-lg bg-secondary flex flex-col items-center justify-center gap-3 text-muted-foreground">
+            <AlertTriangle className="w-8 h-8" />
+            <span className="text-sm">{streamError}</span>
+            <button onClick={() => setPreferredLang(prev => prev)} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm">
+              Retry
+            </button>
+          </div>
+        ) : streamResult?.type === "iframe" ? (
+          <IframePlayer src={streamResult.url} />
+        ) : streamResult?.type === "hls" ? (
           <VideoPlayer
-            src={streamUrl}
-            tracks={proxiedTracks}
-            intro={sources?.intro}
-            outro={sources?.outro}
+            src={streamResult.url}
+            tracks={streamResult.tracks}
+            intro={streamResult.intro}
+            outro={streamResult.outro}
             onTimeUpdate={handleTimeUpdate}
           />
         ) : (
           <div className="aspect-video rounded-lg bg-secondary flex items-center justify-center text-muted-foreground">
-            No source available. Try switching sub/dub.
+            No source available.
           </div>
         )}
       </div>
+
+      {/* Server info */}
+      {streamResult && (
+        <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground">
+          <Server className="w-3 h-3" />
+          <span>Playing via <span className="text-primary font-medium">{streamResult.provider}</span> / {streamResult.server} ({streamResult.category})</span>
+        </div>
+      )}
 
       {/* Controls */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
@@ -111,13 +175,13 @@ export default function WatchPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {(["dub", "sub", "raw"] as const).map((cat) => (
+          {langOptions.map((lang) => (
             <button
-              key={cat}
-              onClick={() => setCategory(cat)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${category === cat ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}
+              key={lang.code}
+              onClick={() => setPreferredLang(lang.code)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${preferredLang === lang.code ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}
             >
-              {cat === "dub" ? "HINDI" : cat.toUpperCase()}
+              {lang.label}
             </button>
           ))}
           <button
@@ -153,6 +217,18 @@ export default function WatchPage() {
               >
                 {ep.number}
               </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Recommended / Same genre */}
+      {recommended.length > 0 && (
+        <div className="mt-8">
+          <h2 className="font-display text-xl font-bold text-foreground mb-4">Recommended</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+            {recommended.slice(0, 12).map((a, i) => (
+              <AnimeCard key={a.id} anime={a} index={i} />
             ))}
           </div>
         </div>

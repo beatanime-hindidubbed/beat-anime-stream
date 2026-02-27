@@ -1,4 +1,5 @@
 import { useSearchParams } from "react-router-dom";
+import BackButton from "@/components/BackButton";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import AnimeCard from "@/components/AnimeCard";
@@ -17,6 +18,7 @@ export default function SearchPage() {
 
   return (
     <div className="container py-8">
+      <BackButton />
       <h1 className="font-display text-2xl font-bold text-foreground mb-6">
         Results for "<span className="text-gradient">{q}</span>"
       </h1>
