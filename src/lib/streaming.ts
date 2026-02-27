@@ -16,146 +16,77 @@ export interface StreamResult {
   provider: string;
 }
 
-// Provider 1: HindiDubbed (Hindi only)
-function toHindiSlug(name: string): string[] {
-  const base = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  return [base, `${base}-s1`, `${base}-season-1`];
-}
+export const HIANIME_SERVERS = ["hd-2", "hd-1", "vidstreaming", "megacloud"] as const;
+export type HiAnimeServer = typeof HIANIME_SERVERS[number];
 
-async function tryHindiDubbed(animeName: string, episodeNumber: number): Promise<StreamResult | null> {
-  const slugs = toHindiSlug(animeName);
-  for (const slug of slugs) {
-    try {
-      const res = await fetch(`${BASE}/hindidubbed/anime/${slug}`);
-      if (!res.ok) continue;
-      const data = await res.json();
-      const episodes = data?.data?.episodes;
-      if (!episodes?.length) continue;
-      const ep = episodes.find((e: any) => e.number === episodeNumber) || episodes[episodeNumber - 1];
-      if (!ep?.servers?.length) continue;
-      const server = ep.servers[0];
-      if (server?.url) {
-        return { type: "iframe", url: server.url, server: server.name || "hindidubbed", category: "hindi", provider: "hindidubbed" };
-      }
-    } catch { continue; }
-  }
-  return null;
-}
-
-// Provider 2: WatchAW (multi-language)
-async function tryWatchAW(animeName: string, episodeNumber: number, preferredLang = "hi"): Promise<StreamResult | null> {
+// Try a specific HiAnime server+category
+async function tryHiAnimeServer(episodeId: string, server: string, category: string): Promise<StreamResult | null> {
   try {
-    const searchRes = await fetch(`${BASE}/watchaw/search?q=${encodeURIComponent(animeName)}`);
-    if (!searchRes.ok) return null;
-    const searchData = await searchRes.json();
-    const results = searchData?.data?.results;
-    if (!results?.length) return null;
-    const slug = results[0].slug;
-    
-    const epRes = await fetch(`${BASE}/watchaw/episode?id=${slug}-1x${episodeNumber}`);
-    if (!epRes.ok) return null;
-    const epData = await epRes.json();
-    const sources = epData?.data?.sources;
+    const res = await fetch(
+      `${BASE}/hianime/episode/sources?animeEpisodeId=${encodeURIComponent(episodeId)}&server=${server}&category=${category}`
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const sources = data?.data?.sources;
     if (!sources?.length) return null;
-    
-    const langPriority = [preferredLang, 'hi', 'en', 'ja', 'ta', 'te'];
-    let source = null;
-    for (const lang of langPriority) {
-      source = sources.find((s: any) => s.langCode === lang);
-      if (source) break;
-    }
-    source = source || sources[0];
-    
-    if (source?.url) {
-      return { type: "iframe", url: source.url, server: source.providerName || "watchaw", category: source.language || source.langCode || "unknown", provider: "watchaw" };
-    }
-  } catch { /* fall through */ }
-  return null;
-}
 
-// Provider 3: HiAnime (sub/dub with proxy)
-const HIANIME_SERVERS = ["hd-2", "hd-1", "vidstreaming", "megacloud"];
-const HIANIME_CATEGORIES = ["sub", "dub"];
+    const rawUrl = sources[0].url;
+    const proxiedUrl = proxyUrl(rawUrl);
 
-async function tryHiAnime(episodeId: string, preferredCategory?: string): Promise<StreamResult | null> {
-  const categories = preferredCategory 
-    ? [preferredCategory, ...HIANIME_CATEGORIES.filter(c => c !== preferredCategory)]
-    : HIANIME_CATEGORIES;
-    
-  for (const server of HIANIME_SERVERS) {
-    for (const category of categories) {
-      try {
-        const res = await fetch(
-          `${BASE}/hianime/episode/sources?animeEpisodeId=${encodeURIComponent(episodeId)}&server=${server}&category=${category}`
-        );
-        if (!res.ok) continue;
-        const data = await res.json();
-        const sources = data?.data?.sources;
-        if (!sources?.length) continue;
-        
-        const rawUrl = sources[0].url;
-        const proxiedUrl = proxyUrl(rawUrl);
-        
-        // Build tracks
-        const rawTracks = data?.data?.tracks || [];
-        const tracks = rawTracks
-          .filter((t: any) => (t.kind || t.lang) !== "thumbnails" && t.lang !== "thumbnails")
-          .map((t: any) => ({
-            file: proxyUrl(t.url || t.file),
-            label: t.label || t.lang || "Unknown",
-            kind: t.kind || "subtitles",
-            default: t.default || false,
-          }));
+    const rawTracks = data?.data?.tracks || [];
+    const tracks = rawTracks
+      .filter((t: any) => (t.kind || t.lang) !== "thumbnails" && t.lang !== "thumbnails")
+      .map((t: any) => ({
+        file: proxyUrl(t.url || t.file),
+        label: t.label || t.lang || "Unknown",
+        kind: t.kind || "subtitles",
+        default: t.default || false,
+      }));
 
-        return {
-          type: "hls",
-          url: proxiedUrl,
-          tracks,
-          intro: data?.data?.intro,
-          outro: data?.data?.outro,
-          server,
-          category,
-          provider: "hianime",
-        };
-      } catch { continue; }
-    }
+    return {
+      type: "hls",
+      url: proxiedUrl,
+      tracks,
+      intro: data?.data?.intro,
+      outro: data?.data?.outro,
+      server,
+      category,
+      provider: "hianime",
+    };
+  } catch {
+    return null;
   }
-  return null;
 }
 
 export interface GetStreamOptions {
-  episodeId: string;       // HiAnime episodeId like "anime-name?ep=12345"
-  animeName: string;
-  episodeNumber: number;
-  preferredLang?: string;  // 'hi', 'en', 'ja', etc.
-  preferredCategory?: string; // 'sub' or 'dub' for HiAnime
+  episodeId: string;
+  category?: string;       // 'sub' or 'dub'
+  server?: string;         // specific server to try first
 }
 
 export async function getWorkingStream(opts: GetStreamOptions): Promise<StreamResult | null> {
-  const { episodeId, animeName, episodeNumber, preferredLang = "hi", preferredCategory } = opts;
-  
-  // Strategy: Try HiAnime first (most reliable for sub), then WatchAW, then HindiDubbed
-  // If user wants Hindi, try HindiDubbed and WatchAW first
-  
-  if (preferredLang === "hi") {
-    // Try HindiDubbed first for Hindi
-    const hindi = await tryHindiDubbed(animeName, episodeNumber);
-    if (hindi) return hindi;
-    
-    // Try WatchAW
-    const watchaw = await tryWatchAW(animeName, episodeNumber, "hi");
-    if (watchaw) return watchaw;
+  const { episodeId, category = "sub", server } = opts;
+
+  // If user picked a specific server, try that first
+  if (server) {
+    const result = await tryHiAnimeServer(episodeId, server, category);
+    if (result) return result;
+    // Also try the other category on same server
+    const altCat = category === "sub" ? "dub" : "sub";
+    const alt = await tryHiAnimeServer(episodeId, server, altCat);
+    if (alt) return alt;
   }
-  
-  // Try HiAnime with server fallback
-  const hianime = await tryHiAnime(episodeId, preferredCategory);
-  if (hianime) return hianime;
-  
-  // Last resort: try WatchAW with any language
-  if (preferredLang !== "hi") {
-    const watchaw = await tryWatchAW(animeName, episodeNumber, preferredLang);
-    if (watchaw) return watchaw;
+
+  // Fallback: try all servers in order
+  for (const s of HIANIME_SERVERS) {
+    if (s === server) continue; // already tried
+    const result = await tryHiAnimeServer(episodeId, s, category);
+    if (result) return result;
+    // Try other category
+    const altCat = category === "sub" ? "dub" : "sub";
+    const alt = await tryHiAnimeServer(episodeId, s, altCat);
+    if (alt) return alt;
   }
-  
+
   return null;
 }
