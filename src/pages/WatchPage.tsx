@@ -1,4 +1,4 @@
-import { useParams, Link, useSearchParams } from "react-router-dom";
+import { useParams, Link, useSearchParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { store } from "@/lib/store";
@@ -18,6 +18,7 @@ const LANGUAGES = [
 ] as const;
 
 export default function WatchPage() {
+  const navigate = useNavigate();
   const { episodeId } = useParams<{ episodeId: string }>();
   const [searchParams] = useSearchParams();
   const fullEpisodeId = episodeId ? `${episodeId}${searchParams.get("ep") ? `?ep=${searchParams.get("ep")}` : ""}` : "";
@@ -146,6 +147,9 @@ export default function WatchPage() {
             intro={streamResult.intro}
             outro={streamResult.outro}
             onTimeUpdate={handleTimeUpdate}
+            onEnded={() => {
+              if (nextEp) navigate(`/watch/${nextEp.episodeId}`);
+            }}
           />
         ) : (
           <div className="aspect-video rounded-lg bg-secondary flex items-center justify-center text-muted-foreground">
