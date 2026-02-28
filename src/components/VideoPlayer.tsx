@@ -19,13 +19,14 @@ interface Props {
   intro?: { start: number; end: number };
   outro?: { start: number; end: number };
   onTimeUpdate?: (time: number, duration: number) => void;
+  onEnded?: () => void;
   startTime?: number;
   ambientMode?: boolean;
 }
 
 const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
-export default function VideoPlayer({ src, tracks, intro, outro, onTimeUpdate, startTime, ambientMode = false }: Props) {
+export default function VideoPlayer({ src, tracks, intro, outro, onTimeUpdate, onEnded, startTime, ambientMode = false }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -221,6 +222,7 @@ export default function VideoPlayer({ src, tracks, intro, outro, onTimeUpdate, s
           onTimeUpdate={handleTimeUpdate}
           onPlay={() => setPlaying(true)}
           onPause={() => setPlaying(false)}
+          onEnded={() => onEnded?.()}
           onClick={togglePlay}
           crossOrigin="anonymous"
         >
