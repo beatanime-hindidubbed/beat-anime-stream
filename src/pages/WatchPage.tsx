@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import { store } from "@/lib/store";
 import { useAuth } from "@/hooks/useAuth";
 import VideoPlayer from "@/components/VideoPlayer";
+import DownloadButton from "@/components/DownloadButton";
 import BackButton from "@/components/BackButton";
 import AnimeCard from "@/components/AnimeCard";
 import { getWorkingStream, StreamResult, HIANIME_SERVERS } from "@/lib/streaming";
@@ -238,12 +239,17 @@ export default function WatchPage() {
         </button>
       </div>
 
-      {/* Episode info */}
-      <div className="mb-4">
-        <Link to={`/anime/${animeId}`} className="text-primary hover:underline text-sm">{animeName}</Link>
-        <h2 className="font-display text-lg font-bold text-foreground">
-          Episode {currentEp?.number}{currentEp?.title ? ` - ${currentEp.title}` : ""}
-        </h2>
+      {/* Episode info + download */}
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <Link to={`/anime/${animeId}`} className="text-primary hover:underline text-sm">{animeName}</Link>
+          <h2 className="font-display text-lg font-bold text-foreground">
+            Episode {currentEp?.number}{currentEp?.title ? ` - ${currentEp.title}` : ""}
+          </h2>
+        </div>
+        {currentEp?.episodeId && (
+          <DownloadButton episodeId={currentEp.episodeId} episodeNumber={currentEp.number} />
+        )}
       </div>
 
       {/* Episode list */}
