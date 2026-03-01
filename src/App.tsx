@@ -21,7 +21,7 @@ import WatchlistPage from "./pages/WatchlistPage";
 import HindiPage from "./pages/HindiPage";
 import RecentPage from "./pages/RecentPage";
 import ExplorePage from "./pages/ExplorePage";
-import ManhwaPage from "./pages/ManhwaPage";
+import ManhwaPage from "./pages/ManhwaPage"; // Donghua = Chinese Anime (中国动漫)
 import PolicyPage from "./pages/PolicyPage";
 import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
