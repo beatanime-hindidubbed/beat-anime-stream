@@ -50,9 +50,10 @@ export default function Navbar() {
 
   const navLinks = [
     { to: "/", label: "Home" },
+    { to: "/hindi", label: "Hindi" },
+    { to: "/recent", label: "Recent" },
     { to: "/category/most-popular", label: "Popular" },
     { to: "/category/top-airing", label: "Airing" },
-    { to: "/genre/action", label: "Action" },
     { to: "/schedule", label: "Schedule" },
   ];
 

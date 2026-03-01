@@ -4,6 +4,8 @@ import { api } from "@/lib/api";
 import { store } from "@/lib/store";
 import { useAuth } from "@/hooks/useAuth";
 import AnimeCard from "@/components/AnimeCard";
+import AnimeDownloadButton from "@/components/AnimeDownloadButton";
+import DownloadButton from "@/components/DownloadButton";
 import BackButton from "@/components/BackButton";
 import { BookmarkPlus, BookmarkCheck, Play, Star, Clock, Tv } from "lucide-react";
 import { useState } from "react";
@@ -111,7 +113,7 @@ export default function AnimeDetail() {
               <p className="text-sm text-muted-foreground mb-4 max-w-2xl line-clamp-3">{anime.description}</p>
             )}
 
-            <div className="flex items-center gap-3 mb-6">
+            <div className="flex items-center gap-3 flex-wrap mb-6">
               {episodes.length > 0 && (
                 <Link
                   to={`/watch/${episodes[0].episodeId}`}
@@ -119,6 +121,13 @@ export default function AnimeDetail() {
                 >
                   <Play className="w-4 h-4" /> Watch Now
                 </Link>
+              )}
+              {id && episodes.length > 0 && (
+                <AnimeDownloadButton
+                  animeId={id}
+                  animeName={anime.name || "anime"}
+                  totalEpisodes={episodes.length}
+                />
               )}
               {user && (
                 <button
