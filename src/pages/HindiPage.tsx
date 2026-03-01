@@ -7,8 +7,8 @@ import { Globe } from "lucide-react";
 
 const LANGUAGES = [
   { key: "hindi", label: "🇮🇳 Hindi", searchTerm: "hindi dub" },
-  { key: "tamil", label: "🎬 Tamil", searchTerm: "tamil dub" },
-  { key: "telugu", label: "🎭 Telugu", searchTerm: "telugu dub" },
+  { key: "tamil", label: " Tamil", searchTerm: "tamil dub" },
+  { key: "telugu", label: " Telugu", searchTerm: "telugu dub" },
 ];
 
 // Popular anime IDs to prioritize for dub content
