@@ -3,20 +3,59 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { store } from "@/lib/store";
 import { useAuth } from "@/hooks/useAuth";
+import { useSiteSettings } from "@/hooks/useSiteSettings";
 import VideoPlayer from "@/components/VideoPlayer";
 import DownloadButton from "@/components/DownloadButton";
 import BackButton from "@/components/BackButton";
 import AnimeCard from "@/components/AnimeCard";
 import { getWorkingStream, StreamResult, HIANIME_SERVERS } from "@/lib/streaming";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { ChevronLeft, ChevronRight, List, Loader2, AlertTriangle, Server, RefreshCw, Globe, ChevronDown } from "lucide-react";
+import { ChevronLeft, ChevronRight, List, Loader2, Server, RefreshCw, Globe, ChevronDown } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
+
+const HINDI_API_BASE = "https://beat-anime-api.onrender.com/api/v1";
 
 const LANGUAGES = [
   { code: "sub", label: "English (Sub)", short: "ENG SUB" },
   { code: "dub", label: "Hindi (Dub)", short: "HINDI" },
   { code: "raw", label: "Japanese (Raw)", short: "RAW" },
 ] as const;
+
+interface HindiSource {
+  name: string;
+  isHLS: boolean;
+  url: string;
+  headers: Record<string, string>;
+}
+
+async function fetchHindiSources(animeInfo: any, episodeNumber: number): Promise<HindiSource[]> {
+  const moreInfo = animeInfo?.anime?.moreInfo || animeInfo?.moreInfo || {};
+  const info = animeInfo?.anime?.info || {};
+
+  const anilistId = moreInfo.anilistid || moreInfo.anilist_id || info.anilistId;
+  const malId = moreInfo.malid || moreInfo.mal_id || info.malId;
+
+  if (!anilistId && !malId) throw new Error("No AniList/MAL ID found for this anime");
+
+  const paramName = anilistId ? "anilistId" : "malId";
+  const paramValue = anilistId || malId;
+
+  const url = `${HINDI_API_BASE}/hindiapi/episode?${paramName}=${paramValue}&season=1&episode=${episodeNumber}&type=series`;
+  const res = await fetch(url);
+  const data = await res.json();
+
+  if (!res.ok || data.status !== 200) throw new Error(data.error || "No Hindi sources found");
+
+  const sources = data.data?.streams || data.data?.sources || data.data?.servers || [];
+  if (!sources.length) throw new Error("No Hindi sources found");
+
+  return sources.map((src: any) => ({
+    name: src.provider || src.serverName || src.name || "Unknown",
+    isHLS: !!(src.dhls || src.isM3U8 || (src.url && src.url.includes(".m3u8")) || (src.streamUrl && src.streamUrl.includes(".m3u8"))),
+    url: src.dhls || src.streamUrl || src.url || "",
+    headers: src.headers || {},
+  }));
+}
 
 export default function WatchPage() {
   const navigate = useNavigate();
@@ -32,11 +71,18 @@ export default function WatchPage() {
   const [streamLoading, setStreamLoading] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
+  const [retryMessage, setRetryMessage] = useState("");
+
+  // Hindi-specific state
+  const [hindiSources, setHindiSources] = useState<HindiSource[]>([]);
+  const [selectedHindiSource, setSelectedHindiSource] = useState<HindiSource | null>(null);
+  const [hindiIframeSrc, setHindiIframeSrc] = useState<string | null>(null);
+
   const langRef = useRef<HTMLDivElement>(null);
+  const { settings } = useSiteSettings();
 
   const animeId = fullEpisodeId.split("?")[0];
 
-  // Close lang menu on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (langRef.current && !langRef.current.contains(e.target as Node)) setShowLangMenu(false);
@@ -67,52 +113,99 @@ export default function WatchPage() {
   const animeName = info?.anime?.info?.name || animeId;
   const animePoster = info?.anime?.info?.poster;
 
-  // Fetch stream
+  // ── Hindi stream loader ──────────────────────────────────────────────────
   useEffect(() => {
-    if (!fullEpisodeId) return;
+    if (category !== "dub" || !info || !currentEp) return;
+    let cancelled = false;
+
+    const load = async () => {
+      setStreamLoading(true);
+      setStreamError(null);
+      setStreamResult(null);
+      setHindiSources([]);
+      setSelectedHindiSource(null);
+      setHindiIframeSrc(null);
+      setRetryMessage("Fetching Hindi sources...");
+
+      try {
+        const sources = await fetchHindiSources(info, currentEp.number || 1);
+        if (cancelled) return;
+
+        setHindiSources(sources);
+        const firstHLS = sources.find((s) => s.isHLS) || sources[0];
+
+        if (firstHLS) {
+          setSelectedHindiSource(firstHLS);
+          if (firstHLS.isHLS) {
+            setStreamResult({ type: "hls", url: firstHLS.url, server: firstHLS.name, category: "dub", tracks: [] } as any);
+          } else {
+            setHindiIframeSrc(firstHLS.url);
+          }
+        } else {
+          setStreamError("all_failed");
+        }
+      } catch (err: any) {
+        if (!cancelled) setStreamError(err.message || "all_failed");
+      } finally {
+        if (!cancelled) { setStreamLoading(false); setRetryMessage(""); }
+      }
+    };
+
+    load();
+    return () => { cancelled = true; };
+  }, [category, info, currentEp, retryKey]);
+
+  // ── HiAnime (sub/raw) stream loader ──────────────────────────────────────
+  useEffect(() => {
+    if (category === "dub" || !fullEpisodeId) return;
     let cancelled = false;
 
     const fetchStream = async () => {
       setStreamLoading(true);
       setStreamError(null);
       setStreamResult(null);
+      setHindiSources([]);
+      setRetryMessage("");
 
-      try {
-        const result = await getWorkingStream({
-          episodeId: fullEpisodeId,
-          category: category === "raw" ? "sub" : category,
-          server: selectedServer,
-        });
-
+      for (let i = 0; i < HIANIME_SERVERS.length; i++) {
         if (cancelled) return;
-        if (result) {
-          setStreamResult(result);
-        } else {
-          setStreamError("All servers failed. Try switching server or language.");
+        const server = HIANIME_SERVERS[i];
+        if (i > 0) {
+          setRetryMessage(`Trying server ${i + 1}/${HIANIME_SERVERS.length}: ${server.toUpperCase()}...`);
+          await new Promise((r) => setTimeout(r, 800));
         }
-      } catch {
-        if (!cancelled) setStreamError("Failed to load stream.");
-      } finally {
-        if (!cancelled) setStreamLoading(false);
+        try {
+          const result = await getWorkingStream({ episodeId: fullEpisodeId, category: category === "raw" ? "sub" : category, server });
+          if (cancelled) return;
+          if (result) { setSelectedServer(server); setStreamResult(result); setStreamLoading(false); setRetryMessage(""); return; }
+        } catch {}
       }
+
+      if (!cancelled) { setStreamError("all_failed"); setStreamLoading(false); }
     };
 
     fetchStream();
     return () => { cancelled = true; };
-  }, [fullEpisodeId, category, selectedServer, retryKey]);
+  }, [fullEpisodeId, category, retryKey]);
+
+  const switchHindiSource = (src: HindiSource) => {
+    setSelectedHindiSource(src);
+    setStreamResult(null);
+    setHindiIframeSrc(null);
+    if (src.isHLS) {
+      setStreamResult({ type: "hls", url: src.url, server: src.name, category: "dub", tracks: [] } as any);
+    } else {
+      setHindiIframeSrc(src.url);
+    }
+  };
 
   const handleTimeUpdate = useCallback(
     (time: number, duration: number) => {
       if (!user || !animeId || !fullEpisodeId || !currentEp) return;
       if (Math.floor(time) % 10 === 0 && duration > 0) {
         store.updateContinueWatching({
-          id: animeId,
-          name: animeName,
-          poster: animePoster,
-          episodeId: fullEpisodeId,
-          episodeNumber: currentEp.number || 0,
-          progress: time,
-          duration,
+          id: animeId, name: animeName, poster: animePoster,
+          episodeId: fullEpisodeId, episodeNumber: currentEp.number || 0, progress: time, duration,
         });
       }
     },
@@ -120,56 +213,123 @@ export default function WatchPage() {
   );
 
   const recommended = info?.recommendedAnimes || info?.relatedAnimes || [];
-  const currentLang = LANGUAGES.find(l => l.code === category) || LANGUAGES[0];
+  const currentLang = LANGUAGES.find((l) => l.code === category) || LANGUAGES[0];
+
+  const renderPlayer = () => {
+    if (streamLoading) {
+      return (
+        <div className="aspect-video rounded-lg bg-secondary flex flex-col items-center justify-center gap-4 text-muted-foreground">
+          {settings.loadingGif ? (
+            <img src={settings.loadingGif} alt="Loading" className="w-32 h-32 object-contain" />
+          ) : (
+            <Loader2 className="w-10 h-10 animate-spin text-primary" />
+          )}
+          <div className="text-center">
+            <p className="text-sm font-medium text-foreground">Finding the best stream...</p>
+            {retryMessage && <p className="text-xs text-muted-foreground mt-1">{retryMessage}</p>}
+          </div>
+        </div>
+      );
+    }
+
+    if (streamError) {
+      return (
+        <div className="aspect-video rounded-lg bg-secondary flex flex-col items-center justify-center gap-4">
+          {settings.errorGif ? (
+            <img src={settings.errorGif} alt="Error" className="w-40 h-40 object-contain" />
+          ) : (
+            <div className="text-6xl">😔</div>
+          )}
+          <div className="text-center px-4">
+            <p className="text-foreground font-medium mb-1">
+              {category === "dub" ? "No Hindi stream found for this episode" : "Stream unavailable right now"}
+            </p>
+            <p className="text-sm text-muted-foreground mb-4">
+              {category === "dub"
+                ? streamError !== "all_failed" ? streamError : "This anime may not have a Hindi dub available"
+                : "Try switching the language or come back later"}
+            </p>
+            <div className="flex gap-2 justify-center flex-wrap">
+              <button onClick={() => setRetryKey((k) => k + 1)} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm">
+                <RefreshCw className="w-4 h-4" /> Try Again
+              </button>
+              {category !== "sub" && (
+                <button onClick={() => setCategory("sub")} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm">
+                  Switch to SUB
+                </button>
+              )}
+              {category !== "dub" && (
+                <button onClick={() => setCategory("dub")} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm">
+                  Switch to HINDI
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (hindiIframeSrc) {
+      return (
+        <div className="aspect-video rounded-lg overflow-hidden bg-black">
+          <iframe
+            src={hindiIframeSrc}
+            className="w-full h-full"
+            allowFullScreen
+            allow="autoplay; encrypted-media; fullscreen"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
+          />
+        </div>
+      );
+    }
+
+    if (streamResult?.type === "hls") {
+      return (
+        <VideoPlayer
+          src={streamResult.url}
+          tracks={streamResult.tracks}
+          intro={streamResult.intro}
+          outro={streamResult.outro}
+          onTimeUpdate={handleTimeUpdate}
+          onEnded={() => { if (nextEp) navigate(`/watch/${nextEp.episodeId}`); }}
+        />
+      );
+    }
+
+    return (
+      <div className="aspect-video rounded-lg bg-secondary flex items-center justify-center text-muted-foreground">
+        <Loader2 className="w-6 h-6 animate-spin" />
+      </div>
+    );
+  };
 
   return (
     <div className="container py-4 max-w-6xl">
       <BackButton />
 
       {/* Player */}
-      <div className="mb-4">
-        {streamLoading ? (
-          <div className="aspect-video rounded-lg bg-secondary flex items-center justify-center gap-3 text-muted-foreground">
-            <Loader2 className="w-6 h-6 animate-spin" />
-            <span className="text-sm">Finding best server...</span>
-          </div>
-        ) : streamError ? (
-          <div className="aspect-video rounded-lg bg-secondary flex flex-col items-center justify-center gap-3 text-muted-foreground">
-            <AlertTriangle className="w-8 h-8" />
-            <span className="text-sm">{streamError}</span>
-            <button onClick={() => setRetryKey(k => k + 1)} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm">
-              <RefreshCw className="w-4 h-4" /> Retry
-            </button>
-          </div>
-        ) : streamResult?.type === "hls" ? (
-          <VideoPlayer
-            src={streamResult.url}
-            tracks={streamResult.tracks}
-            intro={streamResult.intro}
-            outro={streamResult.outro}
-            onTimeUpdate={handleTimeUpdate}
-            onEnded={() => {
-              if (nextEp) navigate(`/watch/${nextEp.episodeId}`);
-            }}
-          />
-        ) : (
-          <div className="aspect-video rounded-lg bg-secondary flex items-center justify-center text-muted-foreground">
-            No source available. Try another server.
-          </div>
-        )}
-      </div>
+      <div className="mb-4">{renderPlayer()}</div>
 
-      {/* Server info */}
-      {streamResult && (
+      {/* Stream info */}
+      {(streamResult || hindiIframeSrc) && (
         <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground">
           <Server className="w-3 h-3" />
-          <span>Playing via <span className="text-primary font-medium">{streamResult.server}</span> ({streamResult.category})</span>
+          <span>
+            Streaming via{" "}
+            <span className="text-primary font-medium">
+              {category === "dub" ? (selectedHindiSource?.name || "Hindi Server") : streamResult?.server}
+            </span>
+            {" · "}
+            <span className={category === "dub" ? "text-orange-400 font-medium" : ""}>
+              {category === "dub" ? "🇮🇳 हिंदी DUB" : (streamResult?.category || category).toUpperCase()}
+            </span>
+          </span>
         </div>
       )}
 
       {/* Controls row */}
       <div className="flex flex-wrap items-center gap-3 mb-4">
-        {/* Prev/Next */}
+        {/* Prev / Next */}
         <div className="flex items-center gap-2">
           {prevEp && (
             <Link to={`/watch/${prevEp.episodeId}`} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-secondary text-sm text-secondary-foreground hover:bg-secondary/80 transition-colors">
@@ -210,6 +370,7 @@ export default function WatchPage() {
                     }`}
                   >
                     {lang.label}
+                    {lang.code === "dub" && <span className="ml-2 text-xs text-orange-400">🇮🇳</span>}
                   </button>
                 ))}
               </motion.div>
@@ -218,19 +379,39 @@ export default function WatchPage() {
         </div>
 
         {/* Server selector */}
-        <div className="flex items-center gap-1 border border-border rounded-lg p-0.5">
-          {HIANIME_SERVERS.map((srv) => (
-            <button
-              key={srv}
-              onClick={() => setSelectedServer(srv)}
-              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${selectedServer === srv ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
-            >
-              {srv.toUpperCase()}
-            </button>
-          ))}
-        </div>
+        {category === "dub" && hindiSources.length > 1 ? (
+          <div className="flex items-center gap-1 border border-orange-500/30 rounded-lg p-0.5 flex-wrap">
+            {hindiSources.map((src) => (
+              <button
+                key={src.name}
+                onClick={() => switchHindiSource(src)}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
+                  selectedHindiSource?.name === src.name
+                    ? "bg-orange-500 text-white"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {src.name}
+                {!src.isHLS && <span className="ml-1 text-[9px] opacity-60">EMBED</span>}
+              </button>
+            ))}
+          </div>
+        ) : category !== "dub" ? (
+          <div className="flex items-center gap-1 border border-border rounded-lg p-0.5">
+            {HIANIME_SERVERS.map((srv) => (
+              <button
+                key={srv}
+                onClick={() => { setSelectedServer(srv); setRetryKey((k) => k + 1); }}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
+                  selectedServer === srv ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {srv.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        ) : null}
 
-        {/* Episodes toggle */}
         <button
           onClick={() => setShowEpList(!showEpList)}
           className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-secondary text-sm text-secondary-foreground hover:bg-secondary/80 transition-colors ml-auto"
@@ -244,8 +425,11 @@ export default function WatchPage() {
         <div>
           <Link to={`/anime/${animeId}`} className="text-primary hover:underline text-sm">{animeName}</Link>
           <h2 className="font-display text-lg font-bold text-foreground">
-            Episode {currentEp?.number}{currentEp?.title ? ` - ${currentEp.title}` : ""}
+            Episode {currentEp?.number}{currentEp?.title ? ` — ${currentEp.title}` : ""}
           </h2>
+          {category === "dub" && (
+            <span className="text-xs text-orange-400 font-medium">🇮🇳 Hindi Dubbed</span>
+          )}
         </div>
         {currentEp?.episodeId && (
           <DownloadButton episodeId={currentEp.episodeId} episodeNumber={currentEp.number} />
@@ -276,7 +460,7 @@ export default function WatchPage() {
       {/* Recommended */}
       {recommended.length > 0 && (
         <div className="mt-8">
-          <h2 className="font-display text-xl font-bold text-foreground mb-4">Recommended</h2>
+          <h2 className="font-display text-xl font-bold text-foreground mb-4">You might also like</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
             {recommended.slice(0, 12).map((a, i) => (
               <AnimeCard key={a.id} anime={a} index={i} />
