@@ -16,6 +16,8 @@ import GenrePage from "./pages/GenrePage";
 import SchedulePage from "./pages/SchedulePage";
 import LoginPage from "./pages/LoginPage";
 import WatchlistPage from "./pages/WatchlistPage";
+import HindiPage from "./pages/HindiPage";
+import RecentPage from "./pages/RecentPage";
 import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
 
@@ -47,6 +49,8 @@ const App = () => (
                       <Route path="/category/:name" element={<CategoryPage />} />
                       <Route path="/genre/:name" element={<GenrePage />} />
                       <Route path="/schedule" element={<SchedulePage />} />
+                      <Route path="/hindi" element={<HindiPage />} />
+                      <Route path="/recent" element={<RecentPage />} />
                       <Route path="/login" element={<LoginPage />} />
                       <Route path="/watchlist" element={<WatchlistPage />} />
                       <Route path="*" element={<Index />} />
