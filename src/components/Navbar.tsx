@@ -2,11 +2,13 @@ import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
 import { Search, Menu, X, User, LogOut, BookmarkPlus, Send } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { api, AnimeItem } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function Navbar() {
   const { user, logout } = useAuth();
+  const { settings } = useSiteSettings();
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<AnimeItem[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -51,9 +53,9 @@ export default function Navbar() {
   const navLinks = [
     { to: "/", label: "Home" },
     { to: "/hindi", label: "Hindi" },
+    { to: "/manhwa", label: "Manhwa" },
+    { to: "/explore", label: "Explore" },
     { to: "/recent", label: "Recent" },
-    { to: "/category/most-popular", label: "Popular" },
-    { to: "/category/top-airing", label: "Airing" },
     { to: "/schedule", label: "Schedule" },
   ];
 
@@ -63,17 +65,23 @@ export default function Navbar() {
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2 shrink-0">
           <div className="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center">
-            <span className="font-display font-bold text-primary-foreground text-sm">B</span>
+            <span className="font-display font-bold text-primary-foreground text-sm">
+              {settings.siteIcon || "B"}
+            </span>
           </div>
           <span className="font-display font-bold text-lg text-foreground hidden sm:block">
-            Beat <span className="text-gradient">Anistream</span>
+            {settings.siteName || "Beat"} <span className="text-gradient">Anistream</span>
           </span>
         </Link>
 
         {/* Desktop Nav */}
-        <div className="hidden md:flex items-center gap-6">
+        <div className="hidden md:flex items-center gap-5">
           {navLinks.map((l) => (
-            <Link key={l.to} to={l.to} className="text-sm text-muted-foreground hover:text-primary transition-colors">
+            <Link
+              key={l.to}
+              to={l.to}
+              className="text-sm text-muted-foreground hover:text-primary transition-colors"
+            >
               {l.label}
             </Link>
           ))}
@@ -100,7 +108,7 @@ export default function Navbar() {
                 initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -4 }}
-                className="absolute top-full mt-1 w-full bg-card border border-border rounded-lg shadow-card overflow-hidden"
+                className="absolute top-full mt-1 w-full bg-card border border-border rounded-lg shadow-card overflow-hidden z-50"
               >
                 {suggestions.map((s) => (
                   <Link
@@ -125,14 +133,24 @@ export default function Navbar() {
 
         {/* Right side */}
         <div className="flex items-center gap-2">
-          {/* Telegram */}
-          <a href="https://t.me/beatanime" target="_blank" rel="noopener noreferrer" className="p-2 text-muted-foreground hover:text-primary transition-colors" title="Telegram Channel">
-            <Send className="w-4 h-4" />
-          </a>
+          {settings.telegramChannel && (
+            <a
+              href={settings.telegramChannel}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2 text-muted-foreground hover:text-primary transition-colors"
+              title="Telegram"
+            >
+              <Send className="w-4 h-4" />
+            </a>
+          )}
 
           {user ? (
             <div className="relative">
-              <button onClick={() => setUserMenu(!userMenu)} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary text-sm text-foreground hover:bg-secondary/80 transition-colors">
+              <button
+                onClick={() => setUserMenu(!userMenu)}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary text-sm text-foreground hover:bg-secondary/80 transition-colors"
+              >
                 <User className="w-4 h-4" />
                 <span className="hidden sm:inline">{user.username}</span>
               </button>
@@ -142,12 +160,19 @@ export default function Navbar() {
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    className="absolute right-0 top-full mt-1 w-48 bg-card border border-border rounded-lg shadow-card overflow-hidden"
+                    className="absolute right-0 top-full mt-1 w-48 bg-card border border-border rounded-lg shadow-card overflow-hidden z-50"
                   >
-                    <Link to="/watchlist" onClick={() => setUserMenu(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm text-foreground hover:bg-secondary transition-colors">
+                    <Link
+                      to="/watchlist"
+                      onClick={() => setUserMenu(false)}
+                      className="flex items-center gap-2 px-4 py-2.5 text-sm text-foreground hover:bg-secondary transition-colors"
+                    >
                       <BookmarkPlus className="w-4 h-4" /> Watchlist
                     </Link>
-                    <button onClick={() => { logout(); setUserMenu(false); }} className="flex items-center gap-2 px-4 py-2.5 text-sm text-destructive hover:bg-secondary transition-colors w-full">
+                    <button
+                      onClick={() => { logout(); setUserMenu(false); }}
+                      className="flex items-center gap-2 px-4 py-2.5 text-sm text-destructive hover:bg-secondary transition-colors w-full"
+                    >
                       <LogOut className="w-4 h-4" /> Logout
                     </button>
                   </motion.div>
@@ -155,13 +180,18 @@ export default function Navbar() {
               </AnimatePresence>
             </div>
           ) : (
-            <Link to="/login" className="px-4 py-1.5 rounded-lg bg-gradient-primary text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity">
+            <Link
+              to="/login"
+              className="px-4 py-1.5 rounded-lg bg-gradient-primary text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity"
+            >
               Login
             </Link>
           )}
 
-          {/* Mobile menu toggle */}
-          <button onClick={() => setMobileMenu(!mobileMenu)} className="md:hidden p-2 text-muted-foreground">
+          <button
+            onClick={() => setMobileMenu(!mobileMenu)}
+            className="md:hidden p-2 text-muted-foreground"
+          >
             {mobileMenu ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
         </div>
@@ -190,7 +220,12 @@ export default function Navbar() {
                 </div>
               </form>
               {navLinks.map((l) => (
-                <Link key={l.to} to={l.to} onClick={() => setMobileMenu(false)} className="block text-sm text-muted-foreground hover:text-primary transition-colors py-1">
+                <Link
+                  key={l.to}
+                  to={l.to}
+                  onClick={() => setMobileMenu(false)}
+                  className="block text-sm text-muted-foreground hover:text-primary transition-colors py-1"
+                >
                   {l.label}
                 </Link>
               ))}
