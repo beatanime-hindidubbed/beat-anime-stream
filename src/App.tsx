@@ -25,6 +25,7 @@ import ManhwaPage from "./pages/ManhwaPage"; // Donghua = Chinese Anime (中国�
 import PolicyPage from "./pages/PolicyPage";
 import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
+import VerifyPage from "./pages/VerifyPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -46,6 +47,7 @@ const App = () => (
                 {/* Admin routes - no navbar/footer */}
                 <Route path="/admin" element={<AdminLogin />} />
                 <Route path="/admin/dashboard" element={<AdminDashboard />} />
+                <Route path="/verify" element={<VerifyPage />} />
 
                 {/* Main site routes */}
                 <Route

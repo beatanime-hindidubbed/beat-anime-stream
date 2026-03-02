@@ -74,4 +74,7 @@ export const store = {
     const list = store.getContinueWatching().filter((i) => i.id !== id);
     localStorage.setItem(KEYS.continueWatching, JSON.stringify(list));
   },
+  clearAllContinueWatching: () => {
+    localStorage.setItem(KEYS.continueWatching, JSON.stringify([]));
+  },
 };
