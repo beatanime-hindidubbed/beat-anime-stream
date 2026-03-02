@@ -57,13 +57,12 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
     supabase
       .from("site_settings")
       .select("*")
-      .then(({ data }) => {
-        if (!data?.length) return;
+      .then(({ data, error }) => {
+        if (error || !data?.length) return;
         const map: Record<string, any> = {};
         data.forEach((row) => { map[row.key] = row.value; });
         setSettings((prev) => ({ ...prev, ...map }));
-      })
-      .catch(() => {});
+      });
   }, []);
 
   useEffect(() => {
@@ -77,8 +76,7 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
       for (const [key, value] of Object.entries(partial)) {
         await supabase
           .from("site_settings")
-          .upsert({ key, value }, { onConflict: "key" })
-          .catch(() => {});
+          .upsert({ key, value }, { onConflict: "key" });
       }
     },
     [settings]

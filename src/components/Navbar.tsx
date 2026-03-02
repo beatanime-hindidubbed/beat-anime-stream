@@ -69,8 +69,8 @@ export default function Navbar() {
               {settings.siteIcon || "B"}
             </span>
           </div>
-          <span className="font-display font-bold text-lg text-foreground hidden sm:block">
-            {settings.siteName || "Beat"} <span className="text-gradient">Anistream</span>
+          <span className="font-display font-bold text-lg hidden sm:block">
+            <span className="text-gradient">{settings.siteName || "Beat Anistream"}</span>
           </span>
         </Link>
 

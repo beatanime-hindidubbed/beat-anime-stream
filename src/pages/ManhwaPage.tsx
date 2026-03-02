@@ -4,83 +4,67 @@ import AnimeCard from "@/components/AnimeCard";
 import SkeletonCard from "@/components/SkeletonCard";
 import { motion } from "framer-motion";
 
-// Donghua = Chinese anime (中国动漫)
-// HiAnime API: search "chinese" or "donghua" keyword + these genres
-const DONGHUA_GENRES = [
-  "action", "adventure", "fantasy", "martial-arts", "supernatural",
-  "drama", "romance", "comedy", "isekai", "demons",
-];
-
-// Search keywords that pull Chinese anime from HiAnime
-const DONGHUA_KEYWORDS = [
-  "donghua", "chinese", "manhua", "chinese animation",
-  "jade dynasty", "stellar transformation", "battle through the heavens",
-  "soul land", "the king's avatar", "fog hill",
+// Known donghua titles for accurate filtering
+const DONGHUA_TITLES = [
+  "soul land", "battle through the heavens", "stellar transformation",
+  "martial universe", "the king's avatar", "fog hill", "jade dynasty",
+  "perfect world", "swallowed star", "wu dong qian kun", "douluo dalu",
+  "spirit sword sovereign", "tales of demons and gods", "immortality",
+  "martial peak", "against the gods", "the daily life of the immortal king",
+  "link click", "scissor seven", "heaven official's blessing",
+  "mo dao zu shi", "grandmaster of demonic cultivation",
+  "dragon prince yuan", "renegade immortal", "a record of mortal's journey",
 ];
 
 export default function ManhwaPage() {
-  const [activeGenre, setActiveGenre] = useState<string>("action");
   const [page, setPage] = useState(1);
   const [animes, setAnimes] = useState<AnimeItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [searchIdx, setSearchIdx] = useState(0);
   const loaderRef = useRef<HTMLDivElement>(null);
 
-  const fetchPage = useCallback(async (pg: number, reset = false) => {
+  const fetchDonghua = useCallback(async (pg: number, idx: number, reset = false) => {
     setLoading(true);
     try {
-      // Search using "chinese" keyword + genre to pull donghua from HiAnime
-      const [keywordData, genreData] = await Promise.allSettled([
-        api.search(`chinese ${activeGenre}`, pg),
-        api.getGenre(activeGenre, pg),
-      ]);
+      // Search specific donghua titles to ensure only Chinese anime
+      const keyword = DONGHUA_TITLES[idx % DONGHUA_TITLES.length];
+      const data = await api.search(keyword, pg);
+      const items = data?.animes || [];
 
-      // Combine results and deduplicate
-      const keywordItems = keywordData.status === "fulfilled"
-        ? (keywordData.value?.animes || [])
-        : [];
-      const genreItems = genreData.status === "fulfilled"
-        ? (genreData.value?.animes || [])
-        : [];
-
-      // Merge and deduplicate by id
-      const seen = new Set<string>();
-      const merged: AnimeItem[] = [];
-      [...keywordItems, ...genreItems].forEach((a) => {
-        if (!seen.has(a.id)) { seen.add(a.id); merged.push(a); }
-      });
-
-      setAnimes((prev) => reset ? merged : [...prev, ...merged]);
-      setHasMore(merged.length >= 12);
+      setAnimes((prev) => reset ? items : [...prev, ...items]);
+      setHasMore(items.length >= 6);
     } catch {
       setHasMore(false);
     } finally {
       setLoading(false);
     }
-  }, [activeGenre]);
+  }, []);
 
   useEffect(() => {
     setPage(1);
     setAnimes([]);
     setHasMore(true);
-    fetchPage(1, true);
-  }, [activeGenre]);
+    setSearchIdx(0);
+    fetchDonghua(1, 0, true);
+  }, []);
 
   useEffect(() => {
     if (!loaderRef.current) return;
     const obs = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && !loading && hasMore) {
-          const next = page + 1;
-          setPage(next);
-          fetchPage(next);
+          const nextIdx = searchIdx + 1;
+          setSearchIdx(nextIdx);
+          setPage((p) => p + 1);
+          fetchDonghua(1, nextIdx);
         }
       },
       { threshold: 0.1 }
     );
     obs.observe(loaderRef.current);
     return () => obs.disconnect();
-  }, [loading, hasMore, page, fetchPage]);
+  }, [loading, hasMore, searchIdx, fetchDonghua]);
 
   return (
     <div className="container py-6">
@@ -94,18 +78,17 @@ export default function ManhwaPage() {
               Donghua
             </h1>
             <p className="text-sm text-muted-foreground">
-              中国动漫 · Chinese Anime
+              中国动漫 · Chinese Anime Only
             </p>
           </div>
         </div>
 
-        {/* Popular donghua quick-search chips */}
+        {/* Quick-search chips */}
         <div className="flex gap-2 mt-4 overflow-x-auto scrollbar-hide pb-1">
-          {DONGHUA_KEYWORDS.map((kw) => (
+          {DONGHUA_TITLES.slice(0, 12).map((kw) => (
             <button
               key={kw}
               onClick={() => {
-                // Direct search for famous donghua titles
                 setAnimes([]);
                 setLoading(true);
                 api.search(kw, 1)
@@ -121,23 +104,6 @@ export default function ManhwaPage() {
         </div>
       </motion.div>
 
-      {/* Genre filter */}
-      <div className="flex gap-2 mb-6 overflow-x-auto scrollbar-hide pb-2">
-        {DONGHUA_GENRES.map((g) => (
-          <button
-            key={g}
-            onClick={() => setActiveGenre(g)}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap capitalize ${
-              activeGenre === g
-                ? "bg-gradient-accent text-accent-foreground shadow-glow"
-                : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
-            }`}
-          >
-            {g}
-          </button>
-        ))}
-      </div>
-
       {/* Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 mb-8">
         {animes.map((a, i) => (
@@ -149,8 +115,8 @@ export default function ManhwaPage() {
       {animes.length === 0 && !loading && (
         <div className="text-center py-20 text-muted-foreground">
           <div className="text-5xl mb-4">🐲</div>
-          <p className="font-medium">No Donghua found for this genre</p>
-          <p className="text-sm mt-1">Try a different genre or use the search chips above</p>
+          <p className="font-medium">No Donghua found</p>
+          <p className="text-sm mt-1">Try a different search above</p>
         </div>
       )}
 
