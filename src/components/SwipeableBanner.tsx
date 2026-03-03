@@ -99,7 +99,7 @@ export default function SwipeableBanner({ items }: Props) {
                 </span>
               )}
             </div>
-            <h1 className="font-display text-3xl md:text-5xl lg:text-6xl font-bold text-foreground mb-3 max-w-2xl leading-tight">
+            <h1 className="font-display text-2xl md:text-3xl lg:text-4xl font-bold text-foreground mb-3 max-w-2xl leading-tight">
               {current.name}
             </h1>
             {current.description && (

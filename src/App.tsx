@@ -3,9 +3,9 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { AuthProvider } from "@/hooks/useAuth";
 import { SupabaseAuthProvider } from "@/hooks/useSupabaseAuth";
 import { SiteSettingsProvider } from "@/hooks/useSiteSettings";
+import CookieConsent from "@/components/CookieConsent";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import ScrollToTop from "@/components/ScrollToTop";
@@ -21,7 +21,7 @@ import WatchlistPage from "./pages/WatchlistPage";
 import HindiPage from "./pages/HindiPage";
 import RecentPage from "./pages/RecentPage";
 import ExplorePage from "./pages/ExplorePage";
-import ManhwaPage from "./pages/ManhwaPage"; // Donghua = Chinese Anime (中国动漫)
+import ManhwaPage from "./pages/ManhwaPage";
 import PolicyPage from "./pages/PolicyPage";
 import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
@@ -36,53 +36,52 @@ const queryClient = new QueryClient({
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <SupabaseAuthProvider>
-      <AuthProvider>
-        <SiteSettingsProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-            <BrowserRouter>
-              <ScrollToTop />
-              <Routes>
-                {/* Admin routes - no navbar/footer */}
-                <Route path="/admin" element={<AdminLogin />} />
-                <Route path="/admin/dashboard" element={<AdminDashboard />} />
-                <Route path="/verify" element={<VerifyPage />} />
+      <SiteSettingsProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <ScrollToTop />
+            <Routes>
+              {/* Admin routes - no navbar/footer */}
+              <Route path="/admin" element={<AdminLogin />} />
+              <Route path="/admin/dashboard" element={<AdminDashboard />} />
+              <Route path="/verify" element={<VerifyPage />} />
 
-                {/* Main site routes */}
-                <Route
-                  path="*"
-                  element={
-                    <>
-                      <Navbar />
-                      <main className="min-h-screen">
-                        <Routes>
-                          <Route path="/" element={<Index />} />
-                          <Route path="/search" element={<SearchPage />} />
-                          <Route path="/anime/:id" element={<AnimeDetail />} />
-                          <Route path="/watch/:episodeId" element={<WatchPage />} />
-                          <Route path="/category/:name" element={<CategoryPage />} />
-                          <Route path="/genre/:name" element={<GenrePage />} />
-                          <Route path="/schedule" element={<SchedulePage />} />
-                          <Route path="/hindi" element={<HindiPage />} />
-                          <Route path="/recent" element={<RecentPage />} />
-                          <Route path="/explore" element={<ExplorePage />} />
-                          <Route path="/manhwa" element={<ManhwaPage />} />
-                          <Route path="/policy/:type" element={<PolicyPage />} />
-                          <Route path="/login" element={<LoginPage />} />
-                          <Route path="/watchlist" element={<WatchlistPage />} />
-                          <Route path="*" element={<Index />} />
-                        </Routes>
-                      </main>
-                      <Footer />
-                    </>
-                  }
-                />
-              </Routes>
-            </BrowserRouter>
-          </TooltipProvider>
-        </SiteSettingsProvider>
-      </AuthProvider>
+              {/* Main site routes */}
+              <Route
+                path="*"
+                element={
+                  <>
+                    <Navbar />
+                    <main className="min-h-screen">
+                      <Routes>
+                        <Route path="/" element={<Index />} />
+                        <Route path="/search" element={<SearchPage />} />
+                        <Route path="/anime/:id" element={<AnimeDetail />} />
+                        <Route path="/watch/:episodeId" element={<WatchPage />} />
+                        <Route path="/category/:name" element={<CategoryPage />} />
+                        <Route path="/genre/:name" element={<GenrePage />} />
+                        <Route path="/schedule" element={<SchedulePage />} />
+                        <Route path="/hindi" element={<HindiPage />} />
+                        <Route path="/recent" element={<RecentPage />} />
+                        <Route path="/explore" element={<ExplorePage />} />
+                        <Route path="/manhwa" element={<ManhwaPage />} />
+                        <Route path="/policy/:type" element={<PolicyPage />} />
+                        <Route path="/login" element={<LoginPage />} />
+                        <Route path="/watchlist" element={<WatchlistPage />} />
+                        <Route path="*" element={<Index />} />
+                      </Routes>
+                    </main>
+                    <Footer />
+                    <CookieConsent />
+                  </>
+                }
+              />
+            </Routes>
+          </BrowserRouter>
+        </TooltipProvider>
+      </SiteSettingsProvider>
     </SupabaseAuthProvider>
   </QueryClientProvider>
 );

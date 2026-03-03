@@ -1,13 +1,13 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
 import { Search, Menu, X, User, LogOut, BookmarkPlus, Send } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
+import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { api, AnimeItem } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function Navbar() {
-  const { user, logout } = useAuth();
+  const { user, logout } = useSupabaseAuth();
   const { settings } = useSiteSettings();
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<AnimeItem[]>([]);
@@ -17,6 +17,8 @@ export default function Navbar() {
   const navigate = useNavigate();
   const searchRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+
+  const displayName = user?.user_metadata?.username || user?.email?.split("@")[0] || "User";
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -80,7 +82,7 @@ export default function Navbar() {
             <Link
               key={l.to}
               to={l.to}
-              className="text-sm text-muted-foreground hover:text-primary transition-colors"
+              className="text-sm text-muted-foreground hover:text-primary transition-colors font-body"
             >
               {l.label}
             </Link>
@@ -98,7 +100,7 @@ export default function Navbar() {
                 value={query}
                 onChange={(e) => handleSearch(e.target.value)}
                 onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-                className="w-full h-9 pl-9 pr-4 rounded-lg bg-secondary text-sm text-foreground placeholder:text-muted-foreground border border-border focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full h-9 pl-9 pr-4 rounded-lg bg-secondary text-sm text-foreground placeholder:text-muted-foreground border border-border focus:outline-none focus:ring-1 focus:ring-primary font-body"
               />
             </div>
           </form>
@@ -121,7 +123,7 @@ export default function Navbar() {
                       <img src={s.poster} alt={s.name} className="w-10 h-14 object-cover rounded" />
                     )}
                     <div className="min-w-0">
-                      <p className="text-sm text-foreground line-clamp-1">{s.name}</p>
+                      <p className="text-sm text-foreground line-clamp-1 font-body">{s.name}</p>
                       {s.jname && <p className="text-xs text-muted-foreground line-clamp-1">{s.jname}</p>}
                     </div>
                   </Link>
@@ -149,10 +151,10 @@ export default function Navbar() {
             <div className="relative">
               <button
                 onClick={() => setUserMenu(!userMenu)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary text-sm text-foreground hover:bg-secondary/80 transition-colors"
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary text-sm text-foreground hover:bg-secondary/80 transition-colors font-body"
               >
                 <User className="w-4 h-4" />
-                <span className="hidden sm:inline">{user.username}</span>
+                <span className="hidden sm:inline">{displayName}</span>
               </button>
               <AnimatePresence>
                 {userMenu && (
@@ -215,7 +217,7 @@ export default function Navbar() {
                     placeholder="Search anime..."
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    className="w-full h-9 pl-9 pr-4 rounded-lg bg-secondary text-sm text-foreground placeholder:text-muted-foreground border border-border focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full h-9 pl-9 pr-4 rounded-lg bg-secondary text-sm text-foreground placeholder:text-muted-foreground border border-border focus:outline-none focus:ring-1 focus:ring-primary font-body"
                   />
                 </div>
               </form>
@@ -224,7 +226,7 @@ export default function Navbar() {
                   key={l.to}
                   to={l.to}
                   onClick={() => setMobileMenu(false)}
-                  className="block text-sm text-muted-foreground hover:text-primary transition-colors py-1"
+                  className="block text-sm text-muted-foreground hover:text-primary transition-colors py-1 font-body"
                 >
                   {l.label}
                 </Link>

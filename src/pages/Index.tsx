@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { store, ContinueWatchingItem } from "@/lib/store";
-import { useAuth } from "@/hooks/useAuth";
+import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import AnimeCard from "@/components/AnimeCard";
 import AnimeSection from "@/components/AnimeSection";
 import SkeletonCard from "@/components/SkeletonCard";
@@ -12,7 +12,7 @@ import { X, Trash2 } from "lucide-react";
 
 export default function Index() {
   const { data, isLoading } = useQuery({ queryKey: ["home"], queryFn: api.getHome, staleTime: 5 * 60 * 1000 });
-  const { user } = useAuth();
+  const { user } = useSupabaseAuth();
   const [continueWatching, setContinueWatching] = useState<ContinueWatchingItem[]>([]);
 
   useEffect(() => {

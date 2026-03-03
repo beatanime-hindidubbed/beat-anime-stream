@@ -148,11 +148,14 @@ export default function VideoPlayer({ src, tracks, intro, outro, onTimeUpdate, o
     return () => { if (ambientFrameRef.current) cancelAnimationFrame(ambientFrameRef.current); };
   }, [ambientEnabled]);
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts — skip if user is typing in an input/textarea/contenteditable
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const v = videoRef.current;
       if (!v) return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      const isEditable = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (e.target as HTMLElement)?.isContentEditable;
+      if (isEditable) return; // Don't capture keys when user is typing
       if (e.code === "Space") { e.preventDefault(); togglePlay(); }
       if (e.code === "ArrowRight") { v.currentTime = Math.min(v.duration, v.currentTime + 10); flashCenter("ff"); }
       if (e.code === "ArrowLeft") { v.currentTime = Math.max(0, v.currentTime - 10); flashCenter("rw"); }

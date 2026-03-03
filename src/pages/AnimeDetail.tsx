@@ -2,7 +2,7 @@ import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { store } from "@/lib/store";
-import { useAuth } from "@/hooks/useAuth";
+import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import AnimeCard from "@/components/AnimeCard";
 import AnimeDownloadButton from "@/components/AnimeDownloadButton";
 import DownloadButton from "@/components/DownloadButton";
@@ -13,7 +13,7 @@ import { motion } from "framer-motion";
 
 export default function AnimeDetail() {
   const { id } = useParams<{ id: string }>();
-  const { user } = useAuth();
+  const { user } = useSupabaseAuth();
   const [inWatchlist, setInWatchlist] = useState(() => id ? store.isInWatchlist(id) : false);
 
   const { data: info, isLoading } = useQuery({
