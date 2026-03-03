@@ -1,11 +1,11 @@
 import { store, WatchlistItem } from "@/lib/store";
-import { useAuth } from "@/hooks/useAuth";
+import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { Link, Navigate } from "react-router-dom";
 import { Trash2 } from "lucide-react";
 import { useState } from "react";
 
 export default function WatchlistPage() {
-  const { user } = useAuth();
+  const { user } = useSupabaseAuth();
   const [list, setList] = useState<WatchlistItem[]>(store.getWatchlist());
 
   if (!user) return <Navigate to="/login" replace />;

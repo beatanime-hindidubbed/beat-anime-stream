@@ -2,7 +2,7 @@ import { useParams, Link, useSearchParams, useNavigate } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { store } from "@/lib/store";
-import { useAuth } from "@/hooks/useAuth";
+import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import VideoPlayer from "@/components/VideoPlayer";
 import DownloadButton from "@/components/DownloadButton";
@@ -109,7 +109,7 @@ export default function WatchPage() {
   const prevEp = currentIdx > 0 ? episodes[currentIdx - 1] : null;
   const nextEp = currentIdx < episodes.length - 1 ? episodes[currentIdx + 1] : null;
 
-  const { user } = useAuth();
+  const { user } = useSupabaseAuth();
   const animeName = info?.anime?.info?.name || animeId;
   const animePoster = info?.anime?.info?.poster;
 
