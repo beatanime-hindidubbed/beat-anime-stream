@@ -49,17 +49,6 @@ function makeUrlAccessor(encoded: string): () => string {
   };
 }
 
-// ── Layer 3: freeze React DevTools serialisation of the src prop ───────────
-function sealProp<T extends object>(obj: T, key: keyof T) {
-  try {
-    Object.defineProperty(obj, key, {
-      get: () => "[protected]",
-      configurable: false,
-      enumerable: false,
-    });
-  } catch { /* read-only env, skip */ }
-}
-
 export default function VideoPlayer({ src, tracks, intro, outro, onTimeUpdate, onEnded, startTime, ambientMode = false, autoPlayNext = true, onAutoPlayToggle }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -107,7 +96,7 @@ export default function VideoPlayer({ src, tracks, intro, outro, onTimeUpdate, o
     getUrl.current = makeUrlAccessor(encodedSrc.current);
   }, [src]);
 
-  // ── Layer 4: Disable right-click context menu on video ───────────────────
+  // ── Layer 3: Disable right-click context menu on video ───────────────────
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -119,8 +108,6 @@ export default function VideoPlayer({ src, tracks, intro, outro, onTimeUpdate, o
   // ── HLS setup ─────────────────────────────────────────────────────────────
   useEffect(() => {
     const video = videoRef.current;
-    // ── Layer 3 applied: seal the .src property so DevTools can't read it ──
-    if (video) sealProp(video, "src" as keyof HTMLVideoElement);
 
     // Decode URL only at mount time into a local variable — never stored in state
     let realSrc: string;
@@ -139,7 +126,7 @@ export default function VideoPlayer({ src, tracks, intro, outro, onTimeUpdate, o
         abrEwmaDefaultEstimate: 500000,
         abrBandWidthFactor: 0.95,
         abrBandWidthUpFactor: 0.7,
-        // ── Layer 5: never expose the raw URL in XHR/fetch ──────────────
+        // ── Layer 4: never expose raw URL in XHR credentials ────────────
         xhrSetup: (xhr) => {
           xhr.withCredentials = false;
         },
@@ -153,12 +140,10 @@ export default function VideoPlayer({ src, tracks, intro, outro, onTimeUpdate, o
         setQualityLevels(levels);
         setCurrentQuality(-1); // start on Auto
       });
-      hls.on(Hls.Events.LEVEL_SWITCHED, (_e, data) => {
-        // Track current level when HLS auto-switches
-      });
       hlsRef.current = hls;
       return () => { hls.destroy(); hlsRef.current = null; };
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      // Safari native HLS
       video.src = realSrc;
       if (startTime) video.currentTime = startTime;
       video.play().catch(() => {});
