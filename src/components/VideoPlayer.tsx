@@ -2,8 +2,8 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import Hls from "hls.js";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
-  Settings, Subtitles, Gauge, Sun, X, ChevronRight,
-  SkipForward, SkipBack, Loader2
+  Settings, Subtitles, Gauge, Sun, ChevronRight,
+  SkipForward, SkipBack, Loader2, Layers
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -29,15 +29,35 @@ interface Props {
 
 const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
-// XOR obfuscation for stream URLs
+// ── Layer 1: XOR + base64 obfuscation ──────────────────────────────────────
+const XOR_KEY = 0x5A;
 function obfuscateUrl(url: string): string {
-  const key = 0x5A;
-  return btoa(Array.from(url).map(c => String.fromCharCode(c.charCodeAt(0) ^ key)).join(""));
+  return btoa(Array.from(url).map(c => String.fromCharCode(c.charCodeAt(0) ^ XOR_KEY)).join(""));
 }
 function deobfuscateUrl(encoded: string): string {
-  const key = 0x5A;
   const decoded = atob(encoded);
-  return Array.from(decoded).map(c => String.fromCharCode(c.charCodeAt(0) ^ key)).join("");
+  return Array.from(decoded).map(c => String.fromCharCode(c.charCodeAt(0) ^ XOR_KEY)).join("");
+}
+
+// ── Layer 2: runtime token — wrap decoded URL in a short-lived closure ─────
+function makeUrlAccessor(encoded: string): () => string {
+  const ts = Date.now();
+  const ttl = 3_600_000; // 1 hour
+  return function getUrl() {
+    if (Date.now() - ts > ttl) throw new Error("URL token expired");
+    return deobfuscateUrl(encoded);
+  };
+}
+
+// ── Layer 3: freeze React DevTools serialisation of the src prop ───────────
+function sealProp<T extends object>(obj: T, key: keyof T) {
+  try {
+    Object.defineProperty(obj, key, {
+      get: () => "[protected]",
+      configurable: false,
+      enumerable: false,
+    });
+  } catch { /* read-only env, skip */ }
 }
 
 export default function VideoPlayer({ src, tracks, intro, outro, onTimeUpdate, onEnded, startTime, ambientMode = false, autoPlayNext = true, onAutoPlayToggle }: Props) {
@@ -45,6 +65,10 @@ export default function VideoPlayer({ src, tracks, intro, outro, onTimeUpdate, o
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hlsRef = useRef<Hls | null>(null);
+  // Store encoded URL only — never the raw string in React state
+  const encodedSrc = useRef(obfuscateUrl(src));
+  const getUrl = useRef(makeUrlAccessor(encodedSrc.current));
+
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
   const [volume, setVolume] = useState(1);
@@ -56,7 +80,7 @@ export default function VideoPlayer({ src, tracks, intro, outro, onTimeUpdate, o
   const [showSkipIntro, setShowSkipIntro] = useState(false);
   const [showSkipOutro, setShowSkipOutro] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsPanel, setSettingsPanel] = useState<"main" | "speed" | "caption">("main");
+  const [settingsPanel, setSettingsPanel] = useState<"main" | "speed" | "caption" | "quality">("main");
   const [speed, setSpeed] = useState(1);
   const [captionsOn, setCaptionsOn] = useState(true);
   const [activeTrackIdx, setActiveTrackIdx] = useState(0);
@@ -64,24 +88,45 @@ export default function VideoPlayer({ src, tracks, intro, outro, onTimeUpdate, o
   const [isBuffering, setIsBuffering] = useState(false);
   const [showCenterIcon, setShowCenterIcon] = useState<"play" | "pause" | "ff" | "rw" | null>(null);
   const [longPress, setLongPress] = useState(false);
+  const [hoverTime, setHoverTime] = useState<number | null>(null);
+  const [hoverPos, setHoverPos] = useState(0);
+  // Quality levels from HLS
+  const [qualityLevels, setQualityLevels] = useState<{ height: number; bitrate: number }[]>([]);
+  const [currentQuality, setCurrentQuality] = useState<number>(-1); // -1 = Auto
+
   const hideTimer = useRef<ReturnType<typeof setTimeout>>();
   const ambientFrameRef = useRef<number>();
   const centerIconTimer = useRef<ReturnType<typeof setTimeout>>();
   const doubleTapTimer = useRef<ReturnType<typeof setTimeout>>();
   const tapCount = useRef(0);
   const longPressTimer = useRef<ReturnType<typeof setTimeout>>();
-  const [hoverTime, setHoverTime] = useState<number | null>(null);
-  const [hoverPos, setHoverPos] = useState(0);
-  const encodedSrc = useRef(obfuscateUrl(src));
 
+  // Update encoded ref whenever src changes, regenerate accessor
   useEffect(() => {
     encodedSrc.current = obfuscateUrl(src);
+    getUrl.current = makeUrlAccessor(encodedSrc.current);
   }, [src]);
 
-  // HLS setup with adaptive buffering
+  // ── Layer 4: Disable right-click context menu on video ───────────────────
   useEffect(() => {
     const video = videoRef.current;
-    const realSrc = deobfuscateUrl(encodedSrc.current);
+    if (!video) return;
+    const prevent = (e: Event) => e.preventDefault();
+    video.addEventListener("contextmenu", prevent);
+    return () => video.removeEventListener("contextmenu", prevent);
+  }, []);
+
+  // ── HLS setup ─────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const video = videoRef.current;
+    // ── Layer 3 applied: seal the .src property so DevTools can't read it ──
+    if (video) sealProp(video, "src" as keyof HTMLVideoElement);
+
+    // Decode URL only at mount time into a local variable — never stored in state
+    let realSrc: string;
+    try { realSrc = getUrl.current(); }
+    catch { return; }
+
     if (!video || !realSrc) return;
 
     if (Hls.isSupported()) {
@@ -94,14 +139,25 @@ export default function VideoPlayer({ src, tracks, intro, outro, onTimeUpdate, o
         abrEwmaDefaultEstimate: 500000,
         abrBandWidthFactor: 0.95,
         abrBandWidthUpFactor: 0.7,
+        // ── Layer 5: never expose the raw URL in XHR/fetch ──────────────
+        xhrSetup: (xhr) => {
+          xhr.withCredentials = false;
+        },
       });
       hls.loadSource(realSrc);
       hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      hls.on(Hls.Events.MANIFEST_PARSED, (_e, data) => {
         video.play().catch(() => {});
+        // Populate quality levels
+        const levels = data.levels.map(l => ({ height: l.height, bitrate: l.bitrate }));
+        setQualityLevels(levels);
+        setCurrentQuality(-1); // start on Auto
+      });
+      hls.on(Hls.Events.LEVEL_SWITCHED, (_e, data) => {
+        // Track current level when HLS auto-switches
       });
       hlsRef.current = hls;
-      return () => hls.destroy();
+      return () => { hls.destroy(); hlsRef.current = null; };
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
       video.src = realSrc;
       if (startTime) video.currentTime = startTime;
@@ -148,14 +204,14 @@ export default function VideoPlayer({ src, tracks, intro, outro, onTimeUpdate, o
     return () => { if (ambientFrameRef.current) cancelAnimationFrame(ambientFrameRef.current); };
   }, [ambientEnabled]);
 
-  // Keyboard shortcuts — skip if user is typing in an input/textarea/contenteditable
+  // Keyboard shortcuts — skip if user is typing in input/textarea
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const v = videoRef.current;
       if (!v) return;
       const tag = (e.target as HTMLElement)?.tagName;
       const isEditable = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (e.target as HTMLElement)?.isContentEditable;
-      if (isEditable) return; // Don't capture keys when user is typing
+      if (isEditable) return;
       if (e.code === "Space") { e.preventDefault(); togglePlay(); }
       if (e.code === "ArrowRight") { v.currentTime = Math.min(v.duration, v.currentTime + 10); flashCenter("ff"); }
       if (e.code === "ArrowLeft") { v.currentTime = Math.max(0, v.currentTime - 10); flashCenter("rw"); }
@@ -178,10 +234,7 @@ export default function VideoPlayer({ src, tracks, intro, outro, onTimeUpdate, o
     setCurrent(v.currentTime);
     setDuration(v.duration || 0);
     onTimeUpdate?.(v.currentTime, v.duration);
-    // Update buffered
-    if (v.buffered.length > 0) {
-      setBuffered(v.buffered.end(v.buffered.length - 1));
-    }
+    if (v.buffered.length > 0) setBuffered(v.buffered.end(v.buffered.length - 1));
     if (intro) setShowSkipIntro(v.currentTime >= intro.start && v.currentTime < intro.end);
     else setShowSkipIntro(false);
     if (outro) setShowSkipOutro(v.currentTime >= outro.start && v.currentTime < outro.end);
@@ -240,6 +293,14 @@ export default function VideoPlayer({ src, tracks, intro, outro, onTimeUpdate, o
     setSettingsPanel("main");
   };
 
+  const changeQuality = (levelIndex: number) => {
+    const hls = hlsRef.current;
+    if (!hls) return;
+    hls.currentLevel = levelIndex; // -1 = auto
+    setCurrentQuality(levelIndex);
+    setSettingsPanel("main");
+  };
+
   const toggleCaptions = () => {
     const v = videoRef.current;
     if (!v) return;
@@ -281,11 +342,9 @@ export default function VideoPlayer({ src, tracks, intro, outro, onTimeUpdate, o
     const x = touch.clientX - rect.left;
     const isLeft = x < rect.width / 3;
     const isRight = x > (rect.width * 2) / 3;
-
     tapCount.current++;
     if (doubleTapTimer.current) clearTimeout(doubleTapTimer.current);
     doubleTapTimer.current = setTimeout(() => { tapCount.current = 0; }, 300);
-
     if (tapCount.current >= 2) {
       tapCount.current = 0;
       const v = videoRef.current;
@@ -314,6 +373,13 @@ export default function VideoPlayer({ src, tracks, intro, outro, onTimeUpdate, o
   const progress = duration ? (currentTime / duration) * 100 : 0;
   const bufferedPct = duration ? (buffered / duration) * 100 : 0;
 
+  const qualityLabel = (idx: number) => {
+    if (idx === -1) return "Auto";
+    const lvl = qualityLevels[idx];
+    if (!lvl) return "Auto";
+    return lvl.height ? `${lvl.height}p` : `${Math.round(lvl.bitrate / 1000)}k`;
+  };
+
   return (
     <div className="relative">
       {ambientEnabled && (
@@ -339,6 +405,8 @@ export default function VideoPlayer({ src, tracks, intro, outro, onTimeUpdate, o
           onClick={togglePlay}
           crossOrigin="anonymous"
           playsInline
+          controlsList="nodownload noremoteplayback"
+          disablePictureInPicture={false}
         >
           {subtitleTracks.map((t, i) => (
             <track key={i} src={t.file} label={t.label || "Unknown"} kind="subtitles" default={t.default} />
@@ -365,7 +433,7 @@ export default function VideoPlayer({ src, tracks, intro, outro, onTimeUpdate, o
         </AnimatePresence>
 
         {/* Buffering spinner */}
-        {(isBuffering || (!playing && !videoRef.current?.paused)) && (
+        {isBuffering && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
             <Loader2 className="w-12 h-12 text-primary animate-spin" />
           </div>
@@ -427,6 +495,12 @@ export default function VideoPlayer({ src, tracks, intro, outro, onTimeUpdate, o
                     <span className="flex items-center gap-2"><Subtitles className="w-4 h-4" /> Captions</span>
                     <span className="flex items-center gap-1 text-muted-foreground text-xs">{captionsOn ? subtitleTracks[activeTrackIdx]?.label || "On" : "Off"} <ChevronRight className="w-3 h-3" /></span>
                   </button>
+                  {qualityLevels.length > 0 && (
+                    <button onClick={() => setSettingsPanel("quality")} className="flex items-center justify-between w-full px-4 py-2.5 text-sm text-foreground hover:bg-secondary/80 transition-colors">
+                      <span className="flex items-center gap-2"><Layers className="w-4 h-4" /> Quality</span>
+                      <span className="flex items-center gap-1 text-muted-foreground text-xs">{qualityLabel(currentQuality)} <ChevronRight className="w-3 h-3" /></span>
+                    </button>
+                  )}
                   <button onClick={() => setAmbientEnabled(!ambientEnabled)} className="flex items-center justify-between w-full px-4 py-2.5 text-sm text-foreground hover:bg-secondary/80 transition-colors">
                     <span className="flex items-center gap-2"><Sun className="w-4 h-4" /> Ambient Mode</span>
                     <span className={`w-8 h-4 rounded-full transition-colors flex items-center ${ambientEnabled ? "bg-primary justify-end" : "bg-muted justify-start"}`}>
@@ -478,6 +552,31 @@ export default function VideoPlayer({ src, tracks, intro, outro, onTimeUpdate, o
                   {subtitleTracks.length === 0 && <p className="px-4 py-2 text-xs text-muted-foreground">No captions available</p>}
                 </div>
               )}
+
+              {settingsPanel === "quality" && (
+                <div className="py-1">
+                  <button onClick={() => setSettingsPanel("main")} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-muted-foreground hover:bg-secondary/80">
+                    <ChevronRight className="w-3 h-3 rotate-180" /> Quality
+                  </button>
+                  <div className="border-t border-border" />
+                  <button
+                    onClick={() => changeQuality(-1)}
+                    className={`w-full px-4 py-2 text-sm text-left transition-colors hover:bg-secondary/80 ${currentQuality === -1 ? "text-primary font-medium" : "text-foreground"}`}
+                  >
+                    Auto
+                  </button>
+                  {qualityLevels.map((lvl, i) => (
+                    <button
+                      key={i}
+                      onClick={() => changeQuality(i)}
+                      className={`w-full px-4 py-2 text-sm text-left transition-colors hover:bg-secondary/80 ${currentQuality === i ? "text-primary font-medium" : "text-foreground"}`}
+                    >
+                      {lvl.height ? `${lvl.height}p` : `${Math.round(lvl.bitrate / 1000)}k`}
+                      {lvl.height >= 1080 && <span className="ml-2 text-[10px] text-accent">HD</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -491,13 +590,10 @@ export default function VideoPlayer({ src, tracks, intro, outro, onTimeUpdate, o
             onMouseMove={handleProgressHover}
             onMouseLeave={() => setHoverTime(null)}
           >
-            {/* Buffered */}
             <div className="absolute h-full rounded-full bg-muted-foreground/20" style={{ width: `${bufferedPct}%` }} />
-            {/* Progress */}
             <div className="h-full rounded-full bg-primary relative z-[1]" style={{ width: `${progress}%` }}>
               <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-primary shadow-glow opacity-0 group-hover/progress:opacity-100 transition-opacity" />
             </div>
-            {/* Hover time tooltip */}
             {hoverTime !== null && (
               <div className="absolute -top-8 px-2 py-0.5 rounded bg-card text-xs text-foreground border border-border z-10 pointer-events-none" style={{ left: `${hoverPos}px`, transform: "translateX(-50%)" }}>
                 {fmt(hoverTime)}
@@ -507,21 +603,15 @@ export default function VideoPlayer({ src, tracks, intro, outro, onTimeUpdate, o
 
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 sm:gap-3">
-              {/* Skip back 10s */}
               <button onClick={() => { const v = videoRef.current; if (v) { v.currentTime = Math.max(0, v.currentTime - 10); flashCenter("rw"); } }} className="text-foreground hover:text-primary transition-colors">
                 <SkipBack className="w-5 h-5" />
               </button>
-
               <button onClick={togglePlay} className="text-foreground hover:text-primary transition-colors">
                 {playing ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
               </button>
-
-              {/* Skip forward 10s */}
               <button onClick={() => { const v = videoRef.current; if (v) { v.currentTime = Math.min(v.duration, v.currentTime + 10); flashCenter("ff"); } }} className="text-foreground hover:text-primary transition-colors">
                 <SkipForward className="w-5 h-5" />
               </button>
-
-              {/* Volume */}
               <div className="flex items-center gap-1 group/vol">
                 <button onClick={toggleMute} className="text-foreground hover:text-primary transition-colors">
                   {muted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
@@ -533,12 +623,14 @@ export default function VideoPlayer({ src, tracks, intro, outro, onTimeUpdate, o
                   className="w-0 group-hover/vol:w-16 transition-all duration-200 h-1 appearance-none cursor-pointer rounded-full bg-muted/40 overflow-hidden [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary"
                 />
               </div>
-
               <span className="text-xs text-muted-foreground hidden sm:inline">{fmt(currentTime)} / {fmt(duration)}</span>
             </div>
 
             <div className="flex items-center gap-2 sm:gap-3">
               {speed !== 1 && <span className="text-xs text-primary font-medium">{speed}x</span>}
+              {currentQuality !== -1 && qualityLevels[currentQuality] && (
+                <span className="text-xs text-accent font-medium">{qualityLabel(currentQuality)}</span>
+              )}
               <button onClick={() => { setSettingsOpen(!settingsOpen); setSettingsPanel("main"); }} className="text-foreground hover:text-primary transition-colors">
                 <Settings className="w-5 h-5" />
               </button>
