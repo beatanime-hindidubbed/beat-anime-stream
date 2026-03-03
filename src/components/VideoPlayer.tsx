@@ -29,12 +29,6 @@ interface Props {
 
 const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SECURITY — 3 layers
-// Layer 1: Rotating 8-byte XOR cipher + string reverse + base64
-// Layer 2: 1-hour TTL closure  (URL decoded only when HLS needs it, never in state)
-// Layer 3: Non-enumerable sealed property  (invisible in DevTools inspector)
-// ─────────────────────────────────────────────────────────────────────────────
 const XOR_KEYS = [0x5A, 0x3F, 0x71, 0xA2, 0x1D, 0xE8, 0x4C, 0x93];
 
 function obfuscateUrl(url: string): string {
@@ -55,7 +49,6 @@ function deobfuscateUrl(encoded: string): string {
   } catch { return ""; }
 }
 
-// Layer 2 — 1-hour TTL closure
 function makeUrlAccessor(encoded: string): () => string {
   const created = Date.now();
   const TTL = 3_600_000;
@@ -65,13 +58,12 @@ function makeUrlAccessor(encoded: string): () => string {
   };
 }
 
-// Layer 3 — non-enumerable sealed property (hidden in DevTools)
 function sealAsHidden(obj: object, key: string, displayValue: string) {
   try {
     Object.defineProperty(obj, key, {
       get: () => displayValue,
-      set: () => {},        // no-op setter keeps HLS.js happy
-      enumerable: false,    // invisible in DevTools object inspector
+      set: () => {},
+      enumerable: false,
       configurable: false,
     });
   } catch { /* read-only env — skip */ }
@@ -86,14 +78,15 @@ export default function VideoPlayer({
   const canvasRef    = useRef<HTMLCanvasElement>(null);
   const hlsRef       = useRef<Hls | null>(null);
 
-  // Hidden video + HLS for seek-preview thumbnails
   const previewVideoRef  = useRef<HTMLVideoElement>(null);
   const previewHlsRef    = useRef<Hls | null>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const previewSeekTimer = useRef<ReturnType<typeof setTimeout>>();
+  // Track the last seek target to avoid redundant seeks
+  const lastPreviewSeek  = useRef<number>(-999);
+  const previewSeeking   = useRef(false);
   const [previewReady, setPreviewReady] = useState(false);
 
-  // Encoded URL refs — raw URL never stored in React state
   const encodedSrc = useRef(obfuscateUrl(src));
   const getUrl     = useRef(makeUrlAccessor(encodedSrc.current));
 
@@ -120,8 +113,9 @@ export default function VideoPlayer({
   const [currentQuality, setCurrentQuality] = useState<number>(-1);
   const [hoverTime, setHoverTime]     = useState<number | null>(null);
   const [hoverPct, setHoverPct]       = useState(0);
+  // Canvas has a frame drawn flag
+  const [previewHasFrame, setPreviewHasFrame] = useState(false);
 
-  // Derived: volume bar fill percentage
   const volumeFill = muted ? 0 : volume * 100;
 
   const hideTimer       = useRef<ReturnType<typeof setTimeout>>();
@@ -130,7 +124,6 @@ export default function VideoPlayer({
   const doubleTapTimer  = useRef<ReturnType<typeof setTimeout>>();
   const tapCount        = useRef(0);
   const longPressTimer  = useRef<ReturnType<typeof setTimeout>>();
-  // Spacebar hold state (ref not state — avoids stale closure issues)
   const spaceHeld       = useRef(false);
   const spaceWas2x      = useRef(false);
 
@@ -139,7 +132,6 @@ export default function VideoPlayer({
     getUrl.current     = makeUrlAccessor(encodedSrc.current);
   }, [src]);
 
-  // Right-click disabled
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -165,7 +157,6 @@ export default function VideoPlayer({
       });
       hls.loadSource(realSrc);
       hls.attachMedia(video);
-      // Layer 3: seal internal stream reference after attach
       sealAsHidden(video, "_streamUrl", "[protected]");
       hls.on(Hls.Events.MANIFEST_PARSED, (_e, data) => {
         video.play().catch(() => {});
@@ -181,7 +172,7 @@ export default function VideoPlayer({
     }
   }, [src, startTime]);
 
-  // ── Preview HLS (thumbnail seek) ─────────────────────────────────────
+  // ── Preview HLS ───────────────────────────────────────────────────────
   useEffect(() => {
     const preview = previewVideoRef.current;
     let realSrc: string;
@@ -190,27 +181,41 @@ export default function VideoPlayer({
 
     if (Hls.isSupported()) {
       const hls = new Hls({
-        maxBufferLength: 5, maxMaxBufferLength: 10,
-        startPosition: -1, enableWorker: false,
+        maxBufferLength: 8,
+        maxMaxBufferLength: 20,
+        startPosition: -1,
+        enableWorker: false,
+        // Use lowest quality for preview thumbnails — loads faster
+        startLevel: 0,
+        capLevelToPlayerSize: false,
         xhrSetup: (xhr) => { xhr.withCredentials = false; },
       });
       hls.loadSource(realSrc);
       hls.attachMedia(preview);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => { preview.pause(); setPreviewReady(true); });
+      hls.on(Hls.Events.MANIFEST_PARSED, (_e, data) => {
+        // Force lowest quality level for preview speed
+        hls.currentLevel = 0;
+        preview.pause();
+        setPreviewReady(true);
+      });
       previewHlsRef.current = hls;
-      return () => { hls.destroy(); previewHlsRef.current = null; };
+      return () => { hls.destroy(); previewHlsRef.current = null; setPreviewReady(false); };
     }
   }, [src]);
 
-  // Draw preview frame to canvas on seeked
+  // Draw preview frame to canvas on seeked — with flag
   useEffect(() => {
     const preview = previewVideoRef.current;
     if (!preview) return;
     const onSeeked = () => {
+      previewSeeking.current = false;
       const canvas = previewCanvasRef.current;
       if (!canvas) return;
       const ctx = canvas.getContext("2d");
-      if (ctx) ctx.drawImage(preview, 0, 0, canvas.width, canvas.height);
+      if (ctx) {
+        ctx.drawImage(preview, 0, 0, canvas.width, canvas.height);
+        setPreviewHasFrame(true);
+      }
     };
     preview.addEventListener("seeked", onSeeked);
     return () => preview.removeEventListener("seeked", onSeeked);
@@ -247,7 +252,7 @@ export default function VideoPlayer({
     return () => { if (ambientFrameRef.current) cancelAnimationFrame(ambientFrameRef.current); };
   }, [ambientEnabled]);
 
-  // ── Keyboard: hold Space = 2×, tap Space = play/pause ────────────────
+  // ── Keyboard ─────────────────────────────────────────────────────────
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const v = videoRef.current;
@@ -257,10 +262,9 @@ export default function VideoPlayer({
 
       if (e.code === "Space") {
         e.preventDefault();
-        if (spaceHeld.current) return; // already held — ignore repeat events
+        if (spaceHeld.current) return;
         spaceHeld.current = true;
         spaceWas2x.current = false;
-        // After 300 ms of holding → activate 2×
         longPressTimer.current = setTimeout(() => {
           if (!spaceHeld.current) return;
           spaceWas2x.current = true;
@@ -285,11 +289,9 @@ export default function VideoPlayer({
 
       const v = videoRef.current;
       if (wasHoldFor2x) {
-        // Held long → restore speed, do NOT toggle play/pause
         if (v) v.playbackRate = speed;
         setLongPressActive(false);
       } else {
-        // Quick tap → normal play/pause
         if (v) {
           if (v.paused) { v.play(); setPlaying(true); flashCenter("play"); }
           else          { v.pause(); setPlaying(false); flashCenter("pause"); }
@@ -347,6 +349,9 @@ export default function VideoPlayer({
     v.currentTime = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) * duration;
   };
 
+  // ── FAST preview seek ─────────────────────────────────────────────────
+  // Seek immediately (no debounce) when mouse moves on progress bar.
+  // Only skip if already seeking to the same spot (within 0.3s) or mid-seek.
   const handleProgressHover = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!duration) return;
     const rect = e.currentTarget.getBoundingClientRect();
@@ -354,14 +359,32 @@ export default function VideoPlayer({
     const t    = pct * duration;
     setHoverTime(t);
     setHoverPct(pct * 100);
-    // Debounced seek on preview video
-    if (previewReady && previewVideoRef.current) {
+
+    if (!previewReady || !previewVideoRef.current) return;
+    // Skip if already seeking very close to this time
+    if (Math.abs(lastPreviewSeek.current - t) < 0.5) return;
+    // If already in a seek, debounce very briefly (30ms) so we don't queue up seeks
+    if (previewSeeking.current) {
       if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
       previewSeekTimer.current = setTimeout(() => {
         const pv = previewVideoRef.current;
-        if (pv && Math.abs(pv.currentTime - t) > 0.5) pv.currentTime = t;
-      }, 80);
+        if (!pv) return;
+        lastPreviewSeek.current = t;
+        previewSeeking.current  = true;
+        pv.currentTime = t;
+      }, 30);
+      return;
     }
+    // Not currently seeking — seek immediately
+    if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
+    lastPreviewSeek.current = t;
+    previewSeeking.current  = true;
+    previewVideoRef.current.currentTime = t;
+  };
+
+  const handleProgressLeave = () => {
+    setHoverTime(null);
+    if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
   };
 
   const toggleFullscreen = () => {
@@ -403,7 +426,6 @@ export default function VideoPlayer({
     hideTimer.current = setTimeout(() => { if (playing) setShowControls(false); }, 3000);
   };
 
-  // Mobile double-tap seek
   const handleTouchEnd = (e: React.TouchEvent) => {
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect || !videoRef.current) return;
@@ -419,7 +441,6 @@ export default function VideoPlayer({
     }
   };
 
-  // Mobile long-press 2×
   const handleTouchStart = () => {
     longPressTimer.current = setTimeout(() => {
       const v = videoRef.current;
@@ -446,7 +467,6 @@ export default function VideoPlayer({
     return lvl.height ? `${lvl.height}p` : `${Math.round(lvl.bitrate / 1000)}k`;
   };
 
-  // Clamp preview bubble so it never bleeds off the edges
   const PREVIEW_W = 160;
   const previewLeft = `clamp(${PREVIEW_W / 2}px, ${hoverPct}%, calc(100% - ${PREVIEW_W / 2}px))`;
 
@@ -456,7 +476,7 @@ export default function VideoPlayer({
         <canvas ref={canvasRef} className="absolute -inset-8 w-[calc(100%+4rem)] h-[calc(100%+4rem)] opacity-50 blur-3xl scale-110 pointer-events-none -z-10 rounded-3xl" />
       )}
 
-      {/* Hidden preview video for seek thumbnails */}
+      {/* Hidden preview video */}
       <video ref={previewVideoRef} className="hidden" muted playsInline preload="auto" />
 
       <div
@@ -510,7 +530,7 @@ export default function VideoPlayer({
           </div>
         )}
 
-        {/* 2× persistent badge */}
+        {/* 2× badge */}
         <AnimatePresence>
           {longPressActive && (
             <motion.div
@@ -630,22 +650,20 @@ export default function VideoPlayer({
           )}
         </AnimatePresence>
 
-        {/* ── Controls overlay ───────────────────────────────────────────── */}
+        {/* ── Controls overlay ─────────────────────────────────────────────── */}
         <div className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent pt-8 pb-3 px-4 transition-opacity duration-300 ${showControls ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
 
-          {/* ── Seek bar ──────────────────────────────────────────────────── */}
+          {/* ── Seek bar ─────────────────────────────────────────────────────── */}
           <div
             className="w-full mb-3 cursor-pointer group/progress relative"
             style={{ height: "18px", display: "flex", alignItems: "center" }}
             onClick={seek}
             onMouseMove={handleProgressHover}
-            onMouseLeave={() => setHoverTime(null)}
+            onMouseLeave={handleProgressLeave}
           >
             {/* Track */}
             <div className="absolute inset-x-0 h-1 rounded-full bg-white/25 group-hover/progress:h-1.5 transition-all duration-150 overflow-hidden" style={{ top: "50%", transform: "translateY(-50%)" }}>
-              {/* Buffered */}
               <div className="absolute top-0 left-0 h-full bg-white/35 rounded-full" style={{ width: `${bufferedPct}%` }} />
-              {/* Played */}
               <div className="absolute top-0 left-0 h-full bg-primary rounded-full" style={{ width: `${progress}%` }} />
             </div>
             {/* Thumb */}
@@ -654,13 +672,13 @@ export default function VideoPlayer({
               style={{ left: `${progress}%`, top: "50%", transform: `translateX(-50%) translateY(-50%)` }}
             />
 
-            {/* ── YouTube-style preview thumbnail ─────────────────────── */}
+            {/* ── Fast preview thumbnail ─────────────────────────────────── */}
             {hoverTime !== null && (
               <div
-                className="absolute bottom-6 flex flex-col items-center gap-1.5 pointer-events-none z-20 -translate-x-1/2"
+                className="absolute bottom-6 flex flex-col items-center gap-1 pointer-events-none z-20 -translate-x-1/2"
                 style={{ left: previewLeft }}
               >
-                <div className="rounded-lg overflow-hidden border-2 border-white/20 shadow-2xl bg-black ring-1 ring-white/10">
+                <div className={`rounded-lg overflow-hidden border-2 border-white/20 shadow-2xl bg-black ring-1 ring-white/10 transition-opacity duration-100 ${previewHasFrame ? "opacity-100" : "opacity-60"}`}>
                   <canvas ref={previewCanvasRef} width={160} height={90} className="block" />
                 </div>
                 <span className="text-xs text-white font-semibold px-2 py-0.5 rounded bg-black/80 backdrop-blur-sm shadow">
@@ -670,7 +688,7 @@ export default function VideoPlayer({
             )}
           </div>
 
-          {/* ── Bottom row ─────────────────────────────────────────────── */}
+          {/* ── Bottom row ──────────────────────────────────────────────── */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 sm:gap-3">
               <button onClick={() => { const v = videoRef.current; if (v) { v.currentTime = Math.max(0, v.currentTime - 10); flashCenter("rw"); } }} className="text-white/80 hover:text-white transition-colors">
@@ -683,24 +701,19 @@ export default function VideoPlayer({
                 <SkipForward className="w-5 h-5" />
               </button>
 
-              {/* ── Volume bar ─────────────────────────────────────────── */}
+              {/* Volume */}
               <div className="flex items-center gap-2 group/vol">
                 <button onClick={toggleMute} className="text-white/80 hover:text-white transition-colors flex-shrink-0">
                   {muted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
                 </button>
-                {/* Custom filled track — always visible */}
                 <div className="relative w-20 cursor-pointer" style={{ height: "18px", display: "flex", alignItems: "center" }}>
-                  {/* Track background */}
                   <div className="absolute inset-x-0 h-1 rounded-full bg-white/25 overflow-hidden group-hover/vol:h-1.5 transition-all duration-150" style={{ top: "50%", transform: "translateY(-50%)" }}>
-                    {/* Filled portion */}
                     <div className="absolute top-0 left-0 h-full bg-white rounded-full transition-all duration-75" style={{ width: `${volumeFill}%` }} />
                   </div>
-                  {/* Thumb */}
                   <div
                     className="absolute w-3 h-3 rounded-full bg-white shadow opacity-0 group-hover/vol:opacity-100 transition-opacity pointer-events-none z-10 -translate-x-1/2"
                     style={{ left: `${volumeFill}%`, top: "50%", transform: `translateX(-50%) translateY(-50%)` }}
                   />
-                  {/* Invisible range input for drag */}
                   <input
                     type="range" min={0} max={1} step={0.02}
                     value={muted ? 0 : volume}
