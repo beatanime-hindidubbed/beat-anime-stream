@@ -5,6 +5,7 @@ import { store } from "@/lib/store";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import VideoPlayer from "@/components/VideoPlayer";
+import HindiVideoPlayer from "@/components/HindiVideoPlayer";
 import DownloadButton from "@/components/DownloadButton";
 import BackButton from "@/components/BackButton";
 import AnimeCard from "@/components/AnimeCard";
@@ -76,7 +77,10 @@ export default function WatchPage() {
   // Hindi-specific state
   const [hindiSources, setHindiSources] = useState<HindiSource[]>([]);
   const [selectedHindiSource, setSelectedHindiSource] = useState<HindiSource | null>(null);
-  const [hindiIframeSrc, setHindiIframeSrc] = useState<string | null>(null);
+
+  // Derived: what the HindiVideoPlayer actually receives
+  const [hindiHlsSrc, setHindiHlsSrc] = useState<string | undefined>(undefined);
+  const [hindiEmbedSrc, setHindiEmbedSrc] = useState<string | undefined>(undefined);
 
   const langRef = useRef<HTMLDivElement>(null);
   const { settings } = useSiteSettings();
@@ -113,6 +117,20 @@ export default function WatchPage() {
   const animeName = info?.anime?.info?.name || animeId;
   const animePoster = info?.anime?.info?.poster;
 
+  // ── Apply hindi source to player state ─────────────────────────────────
+  const applyHindiSource = (src: HindiSource) => {
+    setSelectedHindiSource(src);
+    setStreamResult(null);
+    if (src.isHLS) {
+      setHindiHlsSrc(src.url);
+      setHindiEmbedSrc(undefined);
+    } else {
+      // Embed source — no sandbox, no proxy needed
+      setHindiHlsSrc(undefined);
+      setHindiEmbedSrc(src.url);
+    }
+  };
+
   // ── Hindi stream loader ──────────────────────────────────────────────────
   useEffect(() => {
     if (category !== "dub" || !info || !currentEp) return;
@@ -124,7 +142,8 @@ export default function WatchPage() {
       setStreamResult(null);
       setHindiSources([]);
       setSelectedHindiSource(null);
-      setHindiIframeSrc(null);
+      setHindiHlsSrc(undefined);
+      setHindiEmbedSrc(undefined);
       setRetryMessage("Fetching Hindi sources...");
 
       try {
@@ -132,15 +151,11 @@ export default function WatchPage() {
         if (cancelled) return;
 
         setHindiSources(sources);
-        const firstHLS = sources.find((s) => s.isHLS) || sources[0];
 
+        // Prefer HLS sources first, fall back to embed
+        const firstHLS = sources.find((s) => s.isHLS) || sources[0];
         if (firstHLS) {
-          setSelectedHindiSource(firstHLS);
-          if (firstHLS.isHLS) {
-            setStreamResult({ type: "hls", url: firstHLS.url, server: firstHLS.name, category: "dub", tracks: [] } as any);
-          } else {
-            setHindiIframeSrc(firstHLS.url);
-          }
+          applyHindiSource(firstHLS);
         } else {
           setStreamError("all_failed");
         }
@@ -165,6 +180,8 @@ export default function WatchPage() {
       setStreamError(null);
       setStreamResult(null);
       setHindiSources([]);
+      setHindiHlsSrc(undefined);
+      setHindiEmbedSrc(undefined);
       setRetryMessage("");
 
       for (let i = 0; i < HIANIME_SERVERS.length; i++) {
@@ -187,17 +204,6 @@ export default function WatchPage() {
     fetchStream();
     return () => { cancelled = true; };
   }, [fullEpisodeId, category, retryKey]);
-
-  const switchHindiSource = (src: HindiSource) => {
-    setSelectedHindiSource(src);
-    setStreamResult(null);
-    setHindiIframeSrc(null);
-    if (src.isHLS) {
-      setStreamResult({ type: "hls", url: src.url, server: src.name, category: "dub", tracks: [] } as any);
-    } else {
-      setHindiIframeSrc(src.url);
-    }
-  };
 
   const handleTimeUpdate = useCallback(
     (time: number, duration: number) => {
@@ -269,20 +275,21 @@ export default function WatchPage() {
       );
     }
 
-    if (hindiIframeSrc) {
+    // ── Hindi DUB mode → use HindiVideoPlayer ──────────────────────────
+    if (category === "dub" && (hindiHlsSrc || hindiEmbedSrc)) {
       return (
-        <div className="aspect-video rounded-lg overflow-hidden bg-black">
-          <iframe
-            src={hindiIframeSrc}
-            className="w-full h-full"
-            allowFullScreen
-            allow="autoplay; encrypted-media; fullscreen"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
-          />
-        </div>
+        <HindiVideoPlayer
+          src={hindiHlsSrc}
+          embedSrc={hindiEmbedSrc}
+          sources={hindiSources}
+          onSourceChange={applyHindiSource}
+          onTimeUpdate={handleTimeUpdate}
+          onEnded={() => { if (nextEp) navigate(`/watch/${nextEp.episodeId}`); }}
+        />
       );
     }
 
+    // ── Sub / Raw → use standard VideoPlayer ───────────────────────────
     if (streamResult?.type === "hls") {
       return (
         <VideoPlayer
@@ -311,7 +318,7 @@ export default function WatchPage() {
       <div className="mb-4">{renderPlayer()}</div>
 
       {/* Stream info */}
-      {(streamResult || hindiIframeSrc) && (
+      {(streamResult || hindiHlsSrc || hindiEmbedSrc) && (
         <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground">
           <Server className="w-3 h-3" />
           <span>
@@ -321,7 +328,9 @@ export default function WatchPage() {
             </span>
             {" · "}
             <span className={category === "dub" ? "text-orange-400 font-medium" : ""}>
-              {category === "dub" ? "🇮🇳 हिंदी DUB" : (streamResult?.category || category).toUpperCase()}
+              {category === "dub"
+                ? `🇮🇳 हिंदी DUB${selectedHindiSource && !selectedHindiSource.isHLS ? " (Embed)" : " (HLS)"}`
+                : (streamResult?.category || category).toUpperCase()}
             </span>
           </span>
         </div>
@@ -384,7 +393,7 @@ export default function WatchPage() {
             {hindiSources.map((src) => (
               <button
                 key={src.name}
-                onClick={() => switchHindiSource(src)}
+                onClick={() => applyHindiSource(src)}
                 className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
                   selectedHindiSource?.name === src.name
                     ? "bg-orange-500 text-white"
