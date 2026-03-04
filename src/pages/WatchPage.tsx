@@ -408,22 +408,8 @@ export default function WatchPage() {
           </AnimatePresence>
         </div>
 
-        {/* Server selector */}
-        ) : category !== "dub" ? (
-          <div className="flex items-center gap-1 border border-border rounded-lg p-0.5">
-            {HIANIME_SERVERS.map((srv) => (
-              <button
-                key={srv}
-                onClick={() => { setSelectedServer(srv); setRetryKey((k) => k + 1); }}
-                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
-                  selectedServer === srv ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {srv.toUpperCase()}
-              </button>
-            ))}
-          </div>
-        ) : null}
+
+
 
         <button
           onClick={() => setShowEpList(!showEpList)}
