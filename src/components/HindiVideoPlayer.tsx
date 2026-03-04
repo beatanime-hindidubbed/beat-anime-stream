@@ -32,6 +32,8 @@ interface Props {
 
 const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
+const HINDI_PROXY = "https://beat-anime-api.onrender.com/api/v1/hindiapi/proxy";
+
 // ─── Obfuscation helpers (identical to VideoPlayer) ────────────────────────
 const XOR_KEYS = [0x5A, 0x3F, 0x71, 0xA2, 0x1D, 0xE8, 0x4C, 0x93];
 function obfuscate(url: string) {
@@ -190,11 +192,10 @@ export default function HindiVideoPlayer({
 
     if (Hls.isSupported()) {
       const hls = new Hls({
-        maxBufferLength: 20, maxMaxBufferLength: 60,
-        startPosition: startTime || -1, enableWorker: true,
-        lowLatencyMode: false, abrEwmaDefaultEstimate: 500000,
-        abrBandWidthFactor: 0.95, abrBandWidthUpFactor: 0.7,
         xhrSetup: (xhr) => { xhr.withCredentials = false; },
+        maxBufferSize: 60 * 1000 * 1000,
+        maxBufferLength: 30,
+        startPosition: startTime || -1,
       });
       hls.loadSource(realSrc);
       hls.attachMedia(video);
@@ -205,8 +206,11 @@ export default function HindiVideoPlayer({
       });
       hls.on(Hls.Events.ERROR, (_e, data) => {
         if (data.fatal) {
-          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
-          else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
+          // Exact tester logic: on fatal error, retry with proxy after 1s
+          setTimeout(() => {
+            const proxiedUrl = HINDI_PROXY + "?url=" + encodeURIComponent(realSrc);
+            hls.loadSource(proxiedUrl);
+          }, 1000);
         }
       });
       hlsRef.current = hls;
