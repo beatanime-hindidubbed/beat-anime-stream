@@ -10,6 +10,12 @@ import { useQuery } from "@tanstack/react-query";
 import { api, HomeData } from "@/lib/api";
 import { X, Trash2 } from "lucide-react";
 
+function dedup(arr?: any[]) {
+  if (!arr) return [];
+  const seen = new Set<string>();
+  return arr.filter(a => { if (seen.has(a.id)) return false; seen.add(a.id); return true; });
+}
+
 export default function Index() {
   const { data, isLoading } = useQuery({ queryKey: ["home"], queryFn: api.getHome, staleTime: 5 * 60 * 1000 });
   const { user } = useSupabaseAuth();
@@ -87,13 +93,13 @@ export default function Index() {
 
         <AnimeSection title="Top Airing" linkTo="/category/top-airing">
           <div className={grid}>
-            {isLoading ? skeletons : data?.topAiringAnimes?.slice(0, 6).map((a, i) => <AnimeCard key={a.id} anime={a} index={i} />)}
+            {isLoading ? skeletons : dedup(data?.topAiringAnimes).slice(0, 6).map((a, i) => <AnimeCard key={a.id} anime={a} index={i} />)}
           </div>
         </AnimeSection>
 
         <AnimeSection title="Most Popular" linkTo="/category/most-popular">
           <div className={grid}>
-            {isLoading ? skeletons : data?.mostPopularAnimes?.slice(0, 6).map((a, i) => <AnimeCard key={a.id} anime={a} index={i} />)}
+            {isLoading ? skeletons : dedup(data?.mostPopularAnimes).slice(0, 6).map((a, i) => <AnimeCard key={a.id} anime={a} index={i} />)}
           </div>
         </AnimeSection>
       </div>

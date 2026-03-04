@@ -432,7 +432,12 @@ export default function WatchPage() {
           )}
         </div>
         {currentEp?.episodeId && (
-          <DownloadButton episodeId={currentEp.episodeId} episodeNumber={currentEp.number} />
+          <DownloadButton
+            episodeId={currentEp.episodeId}
+            episodeNumber={currentEp.number}
+            animeName={animeName}
+            streamUrl={streamResult?.url}
+          />
         )}
       </div>
 

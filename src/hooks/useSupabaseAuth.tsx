@@ -21,11 +21,16 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const checkAdmin = useCallback(async (userId: string) => {
-    const { data } = await supabase.rpc("has_role", { _user_id: userId, _role: "admin" });
-    setIsAdmin(!!data);
+    try {
+      const { data } = await supabase.rpc("has_role", { _user_id: userId, _role: "admin" });
+      setIsAdmin(!!data);
+    } catch {
+      setIsAdmin(false);
+    }
   }, []);
 
   useEffect(() => {
+    // Set up auth listener first
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, sess) => {
       setSession(sess);
       setUser(sess?.user ?? null);
@@ -37,10 +42,13 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     });
 
+    // Then get initial session
     supabase.auth.getSession().then(({ data: { session: sess } }) => {
       setSession(sess);
       setUser(sess?.user ?? null);
       if (sess?.user) checkAdmin(sess.user.id);
+      setLoading(false);
+    }).catch(() => {
       setLoading(false);
     });
 
@@ -48,19 +56,42 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
   }, [checkAdmin]);
 
   const login = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return { error: error.message };
-    return {};
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        // Provide user-friendly error messages
+        if (error.message.includes("Invalid login")) return { error: "Invalid email or password" };
+        if (error.message.includes("Email not confirmed")) return { error: "Please verify your email before logging in" };
+        return { error: error.message };
+      }
+      return {};
+    } catch (err: any) {
+      // Handle network/fetch errors
+      if (err?.message?.includes("fetch") || err?.name === "TypeError") {
+        return { error: "Network error. Please check your connection and try again." };
+      }
+      return { error: "Something went wrong. Please try again." };
+    }
   }, []);
 
   const register = useCallback(async (email: string, password: string, username: string) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { username }, emailRedirectTo: window.location.origin },
-    });
-    if (error) return { error: error.message };
-    return {};
+    try {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { username }, emailRedirectTo: window.location.origin },
+      });
+      if (error) {
+        if (error.message.includes("already registered")) return { error: "This email is already registered. Try logging in." };
+        return { error: error.message };
+      }
+      return {};
+    } catch (err: any) {
+      if (err?.message?.includes("fetch") || err?.name === "TypeError") {
+        return { error: "Network error. Please check your connection and try again." };
+      }
+      return { error: "Something went wrong. Please try again." };
+    }
   }, []);
 
   const logout = useCallback(async () => {
