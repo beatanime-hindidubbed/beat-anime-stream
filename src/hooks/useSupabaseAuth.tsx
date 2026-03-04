@@ -6,7 +6,6 @@ interface AuthCtx {
   user: User | null;
   session: Session | null;
   isAdmin: boolean;
-  isPremium: boolean;
   loading: boolean;
   login: (email: string, password: string) => Promise<{ error?: string }>;
   register: (email: string, password: string, username: string) => Promise<{ error?: string }>;
@@ -19,7 +18,6 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [isPremium, setIsPremium] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const checkAdmin = useCallback(async (userId: string) => {
@@ -31,37 +29,15 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const checkPremium = useCallback(async (userId: string) => {
-    try {
-      // Check if user has premium role or premium subscription
-      const { data: roleData } = await supabase.rpc("has_role", { _user_id: userId, _role: "premium" });
-      
-      // Also check profile for premium flag
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("is_premium")
-        .eq("user_id", userId)
-        .single();
-      
-      setIsPremium(!!roleData || !!profileData?.is_premium);
-    } catch {
-      setIsPremium(false);
-    }
-  }, []);
-
   useEffect(() => {
     // Set up auth listener first
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, sess) => {
       setSession(sess);
       setUser(sess?.user ?? null);
       if (sess?.user) {
-        setTimeout(() => {
-          checkAdmin(sess.user.id);
-          checkPremium(sess.user.id);
-        }, 0);
+        setTimeout(() => checkAdmin(sess.user.id), 0);
       } else {
         setIsAdmin(false);
-        setIsPremium(false);
       }
       setLoading(false);
     });
@@ -70,17 +46,14 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(({ data: { session: sess } }) => {
       setSession(sess);
       setUser(sess?.user ?? null);
-      if (sess?.user) {
-        checkAdmin(sess.user.id);
-        checkPremium(sess.user.id);
-      }
+      if (sess?.user) checkAdmin(sess.user.id);
       setLoading(false);
     }).catch(() => {
       setLoading(false);
     });
 
     return () => subscription.unsubscribe();
-  }, [checkAdmin, checkPremium]);
+  }, [checkAdmin]);
 
   const login = useCallback(async (email: string, password: string) => {
     try {
@@ -126,7 +99,7 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, session, isAdmin, isPremium, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, session, isAdmin, loading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

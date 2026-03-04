@@ -53,18 +53,22 @@ const Ctx = createContext<SiteSettingsCtx>({
 export function SiteSettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<SiteSettings>(DEFAULTS);
 
+  // Load from Supabase
   useEffect(() => {
     supabase
       .from("site_settings")
       .select("*")
-      .then(({ data, error }) => {
-        if (error || !data?.length) return;
+      .then(({ data }) => {
+        if (!data?.length) return;
         const map: Record<string, any> = {};
-        data.forEach((row) => { map[row.key] = row.value; });
+        data.forEach((row) => {
+          map[row.key] = row.value;
+        });
         setSettings((prev) => ({ ...prev, ...map }));
       });
   }, []);
 
+  // Apply theme whenever it changes
   useEffect(() => {
     applyTheme(settings.theme);
   }, [settings.theme]);
@@ -82,12 +86,15 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
     [settings]
   );
 
+  // Track per-anime fail counts across users using supabase
   const reportAnimeFail = useCallback(
     async (animeId: string) => {
+      // Use local storage to track per-user counts too
       const lsKey = `fail_${animeId}`;
       const localCount = parseInt(localStorage.getItem(lsKey) || "0") + 1;
       localStorage.setItem(lsKey, String(localCount));
 
+      // Also track globally in supabase site_settings
       try {
         const { data } = await supabase
           .from("site_settings")
@@ -98,8 +105,12 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
         const globalCount = ((data?.value as number) || 0) + 1;
         await supabase
           .from("site_settings")
-          .upsert({ key: `anime_fail_${animeId}`, value: globalCount }, { onConflict: "key" });
+          .upsert(
+            { key: `anime_fail_${animeId}`, value: globalCount },
+            { onConflict: "key" }
+          );
 
+        // If threshold exceeded, add to hidden list
         if (globalCount >= settings.failCountThreshold) {
           const hidden = [...(settings.hiddenAnimes || [])];
           if (!hidden.includes(animeId)) {
@@ -128,6 +139,7 @@ export function useSiteSettings() {
   return useContext(Ctx);
 }
 
+// Apply CSS vars based on theme
 function applyTheme(theme: ThemeType) {
   const root = document.documentElement.style;
 

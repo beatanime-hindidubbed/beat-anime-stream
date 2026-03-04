@@ -49,8 +49,7 @@ const THEMES: { key: ThemeType; label: string; colors: string[] }[] = [
 
 export default function AdminDashboard() {
   const { user, isAdmin, loading: authLoading, logout } = useSupabaseAuth();
-  const { settings, updateSettings, addApi, removeApi } = useSiteSettings();
-  const [newApiUrl, setNewApiUrl] = useState("");
+  const { settings, updateSettings } = useSiteSettings();
   const navigate = useNavigate();
   const [tab, setTab] = useState<"stats" | "branding" | "ads" | "api" | "users" | "policy">("stats");
   const [ads, setAds] = useState<Ad[]>([]);
@@ -143,10 +142,7 @@ export default function AdminDashboard() {
   };
 
   const checkApis = async () => {
-    const pool = (settings.apiPool && settings.apiPool.length > 0)
-      ? settings.apiPool
-      : ["https://beat-anime-api.onrender.com/api/v1"];
-    const base = pool[0];
+    const base = "https://beat-anime-api.onrender.com/api/v1";
     const results: Record<string, "ok" | "fail" | "loading"> = {};
     API_ENDPOINTS.forEach(e => { results[e.name] = "loading"; });
     setApiHealth({ ...results });
@@ -497,74 +493,26 @@ export default function AdminDashboard() {
 
         {/* API Health */}
         {tab === "api" && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-            {/* API Pool Management */}
-            <div className="p-5 rounded-xl bg-card border border-border">
-              <h2 className="font-display text-base font-bold text-foreground mb-4 flex items-center gap-2">
-                <Activity className="w-4 h-4 text-primary" /> API Pool
-              </h2>
-              <div className="space-y-2 mb-4">
-                {(settings.apiPool || []).map((url, i) => (
-                  <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-secondary/50 border border-border">
-                    <span className="text-xs font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded">API{i + 1}</span>
-                    <span className="flex-1 text-xs font-mono text-foreground/80 truncate">{url}</span>
-                    <button
-                      onClick={() => removeApi(url)}
-                      disabled={(settings.apiPool || []).length <= 1}
-                      className="flex-shrink-0 p-1 rounded text-muted-foreground hover:text-destructive disabled:opacity-30 transition-colors"
-                      title="Remove API"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <input
-                  value={newApiUrl}
-                  onChange={e => setNewApiUrl(e.target.value)}
-                  placeholder="https://your-api.onrender.com/api/v1"
-                  className="flex-1 h-9 px-3 rounded-lg bg-secondary text-foreground text-sm border border-border focus:ring-1 focus:ring-primary focus:outline-none font-mono"
-                />
-                <button
-                  onClick={async () => {
-                    const url = newApiUrl.trim();
-                    if (!url) return;
-                    await addApi(url);
-                    setNewApiUrl("");
-                  }}
-                  disabled={!newApiUrl.trim()}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
-                >
-                  <Plus className="w-4 h-4" /> Add
-                </button>
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">Minimum 1 API required. Changes apply immediately across the app.</p>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-display text-lg font-bold text-foreground">API Health</h2>
+              <button onClick={checkApis} className="px-4 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm">Refresh</button>
             </div>
-
-            {/* Health Check */}
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="font-display text-lg font-bold text-foreground">Health Check</h2>
-                <button onClick={checkApis} className="px-4 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm">Refresh</button>
-              </div>
-              <p className="text-xs text-muted-foreground mb-3">Checking primary API: {(settings.apiPool || [])[0] || "—"}</p>
-              <div className="space-y-3">
-                {API_ENDPOINTS.map(ep => (
-                  <div key={ep.name} className="flex items-center justify-between p-4 rounded-xl bg-card border border-border">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{ep.name}</p>
-                      <p className="text-xs text-muted-foreground font-mono">{ep.url}</p>
-                    </div>
-                    <div>
-                      {apiHealth[ep.name] === "loading" && <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />}
-                      {apiHealth[ep.name] === "ok" && <CheckCircle className="w-5 h-5 text-primary" />}
-                      {apiHealth[ep.name] === "fail" && <XCircle className="w-5 h-5 text-destructive" />}
-                      {!apiHealth[ep.name] && <span className="text-xs text-muted-foreground">—</span>}
-                    </div>
+            <div className="space-y-3">
+              {API_ENDPOINTS.map(ep => (
+                <div key={ep.name} className="flex items-center justify-between p-4 rounded-xl bg-card border border-border">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{ep.name}</p>
+                    <p className="text-xs text-muted-foreground font-mono">{ep.url}</p>
                   </div>
-                ))}
-              </div>
+                  <div>
+                    {apiHealth[ep.name] === "loading" && <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />}
+                    {apiHealth[ep.name] === "ok" && <CheckCircle className="w-5 h-5 text-primary" />}
+                    {apiHealth[ep.name] === "fail" && <XCircle className="w-5 h-5 text-destructive" />}
+                    {!apiHealth[ep.name] && <span className="text-xs text-muted-foreground">—</span>}
+                  </div>
+                </div>
+              ))}
             </div>
           </motion.div>
         )}

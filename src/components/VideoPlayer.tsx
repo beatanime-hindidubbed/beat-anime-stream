@@ -99,6 +99,7 @@ export default function VideoPlayer({
   const [previewHasFrame, setPreviewHasFrame] = useState(false);
   const [previewReady, setPreviewReady] = useState(false);
   const [isMobile, setIsMobile]     = useState(false);
+  // Mini player (YouTube-style scroll follow)
   const [miniPlayer, setMiniPlayer] = useState(false);
 
   // Timer refs
@@ -114,6 +115,7 @@ export default function VideoPlayer({
   const touchStartPos   = useRef({ x: 0, y: 0 });
   const touchMoved      = useRef(false);
   const touchOnSeekBar  = useRef(false);
+  // Track last playing state before fullscreen / visibility changes
   const wasPlayingRef   = useRef(false);
 
   // Detect mobile
@@ -128,13 +130,17 @@ export default function VideoPlayer({
   useEffect(() => {
     if (!wrapperRef.current) return;
     const observer = new IntersectionObserver(
-      ([entry]) => { setMiniPlayer(!entry.isIntersecting && playing); },
+      ([entry]) => {
+        // Show mini player only when playing and scrolled out of view
+        setMiniPlayer(!entry.isIntersecting && playing);
+      },
       { threshold: 0.2 }
     );
     observer.observe(wrapperRef.current);
     return () => observer.disconnect();
   }, [playing]);
 
+  // Update mini player state when playing changes
   useEffect(() => {
     if (!wrapperRef.current) return;
     const rect = wrapperRef.current.getBoundingClientRect();
@@ -157,14 +163,16 @@ export default function VideoPlayer({
     return () => v.removeEventListener("contextmenu", prevent);
   }, []);
 
-  // ── FIX: Handle visibility change ────────────────────────────────────────
+  // ── FIX: Handle visibility change (mobile tab switch / fullscreen) ────
   useEffect(() => {
     const handleVisibility = () => {
       const v = videoRef.current;
       if (!v) return;
       if (document.hidden) {
+        // Store state but DON'T pause — let browser handle it
         wasPlayingRef.current = !v.paused;
       } else {
+        // Page became visible again — restore play state if needed
         if (wasPlayingRef.current && v.paused && !isBuffering) {
           v.play().catch(() => {});
         }
@@ -174,14 +182,14 @@ export default function VideoPlayer({
     return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, [isBuffering]);
 
-  // ── FIX: Handle fullscreen changes without pausing ────────────────────────
+  // ── FIX: Handle fullscreen changes on mobile without pausing ─────────
   useEffect(() => {
     const handler = () => {
-      // Check both standard and webkit fullscreen
-      const isFs = !!document.fullscreenElement || !!(document as any).webkitFullscreenElement;
+      const isFs = !!document.fullscreenElement;
       setFullscreen(isFs);
       const v = videoRef.current;
       if (!v) return;
+      // After fullscreen transition, resume if we were playing
       if (wasPlayingRef.current && v.paused) {
         setTimeout(() => {
           if (wasPlayingRef.current && v.paused) {
@@ -192,25 +200,16 @@ export default function VideoPlayer({
     };
     document.addEventListener("fullscreenchange", handler);
     document.addEventListener("webkitfullscreenchange", handler);
-    // iOS: listen on the video element itself for webkitbeginfullscreen/webkitendfullscreen
-    const v = videoRef.current;
-    if (v) {
-      v.addEventListener("webkitbeginfullscreen", () => setFullscreen(true));
-      v.addEventListener("webkitendfullscreen", () => {
-        setFullscreen(false);
-        if (wasPlayingRef.current && v.paused) {
-          setTimeout(() => { if (wasPlayingRef.current) v.play().catch(() => {}); }, 200);
-        }
-      });
-    }
     return () => {
       document.removeEventListener("fullscreenchange", handler);
       document.removeEventListener("webkitfullscreenchange", handler);
     };
   }, []);
 
-  // Track wasPlayingRef
-  useEffect(() => { wasPlayingRef.current = playing; }, [playing]);
+  // Track wasPlayingRef continuously
+  useEffect(() => {
+    wasPlayingRef.current = playing;
+  }, [playing]);
 
   // ── Main HLS ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -234,10 +233,14 @@ export default function VideoPlayer({
         setQualityLevels(data.levels.map(l => ({ height: l.height, bitrate: l.bitrate })));
         setCurrentQuality(-1);
       });
+      // FIX: handle HLS errors gracefully
       hls.on(Hls.Events.ERROR, (_e, data) => {
         if (data.fatal) {
-          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) { hls.startLoad(); }
-          else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) { hls.recoverMediaError(); }
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+            hls.startLoad();
+          } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+            hls.recoverMediaError();
+          }
         }
       });
       hlsRef.current = hls;
@@ -249,7 +252,7 @@ export default function VideoPlayer({
     }
   }, [src, startTime]);
 
-  // ── Preview HLS (desktop only) ────────────────────────────────────────────
+  // ── Preview HLS (desktop only) ────────────────────────────────────────
   useEffect(() => {
     if (isMobile) return;
     const preview = previewVideoRef.current;
@@ -418,16 +421,16 @@ export default function VideoPlayer({
     v.currentTime = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) * duration;
   };
 
-  // ── Seek bar touch ────────────────────────────────────────────────────────
+  // ── Seek bar touch ────────────────────────────────────────────────────
   const handleSeekBarTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     touchOnSeekBar.current = true;
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
     touchMoved.current = true;
     const v = videoRef.current;
     if (!v || !duration) return;
-    const rect  = e.currentTarget.getBoundingClientRect();
+    const rect = e.currentTarget.getBoundingClientRect();
     const touch = e.touches[0];
-    const pct   = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
+    const pct = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
     v.currentTime = pct * duration;
   };
 
@@ -435,9 +438,9 @@ export default function VideoPlayer({
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
     const v = videoRef.current;
     if (!v || !duration) return;
-    const rect  = e.currentTarget.getBoundingClientRect();
+    const rect = e.currentTarget.getBoundingClientRect();
     const touch = e.touches[0];
-    const pct   = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
+    const pct = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
     v.currentTime = pct * duration;
     e.stopPropagation();
   };
@@ -450,13 +453,13 @@ export default function VideoPlayer({
     const touch = e.changedTouches[0];
     if (touch) {
       const rect = e.currentTarget.getBoundingClientRect();
-      const pct  = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
+      const pct = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
       v.currentTime = pct * duration;
     }
     e.stopPropagation();
   };
 
-  // ── Preview thumbnail hover (desktop only) ────────────────────────────────
+  // ── Preview thumbnail hover (desktop only) ────────────────────────────
   const handleProgressHover = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!duration || isMobile) return;
     const rect = e.currentTarget.getBoundingClientRect();
@@ -489,29 +492,17 @@ export default function VideoPlayer({
     if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
   };
 
-  // ── FIXED toggleFullscreen — works on iOS Safari without pausing ──────────
   const toggleFullscreen = () => {
-    const v = videoRef.current;
-    const container = containerRef.current;
+    if (!containerRef.current) return;
     wasPlayingRef.current = playing;
-
-    if (!document.fullscreenElement && !(document as any).webkitFullscreenElement) {
-      // iOS Safari: use webkitEnterFullscreen directly on the video element
-      if (v && (v as any).webkitEnterFullscreen) {
-        (v as any).webkitEnterFullscreen();
-        return;
-      }
-      container?.requestFullscreen?.().catch(() => {
-        if ((container as any)?.webkitRequestFullscreen) {
-          (container as any).webkitRequestFullscreen();
-        }
+    if (!document.fullscreenElement) {
+      containerRef.current.requestFullscreen().catch(() => {
+        // Fallback for iOS Safari
+        const v = containerRef.current as any;
+        if (v?.webkitRequestFullscreen) v.webkitRequestFullscreen();
       });
     } else {
-      if (document.fullscreenElement) {
-        document.exitFullscreen().catch(() => {});
-      } else if ((document as any).webkitExitFullscreen) {
-        (document as any).webkitExitFullscreen();
-      }
+      document.exitFullscreen().catch(() => {});
     }
   };
 
@@ -550,7 +541,7 @@ export default function VideoPlayer({
     hideTimer.current = setTimeout(() => { if (playing) setShowControls(false); }, 3500);
   };
 
-  // ── Touch: double-tap to seek, long-press for 2x ──────────────────────────
+  // ── Touch: double-tap to seek, long-press for 2x ─────────────────────
   const handleContainerTouchStart = (e: React.TouchEvent) => {
     if (touchOnSeekBar.current) return;
     touchStartTime.current = Date.now();
@@ -624,7 +615,7 @@ export default function VideoPlayer({
 
   return (
     <div ref={wrapperRef} className="relative">
-      {/* ── YouTube-style mini/pip player ──────────────────────────────────── */}
+      {/* ── YouTube-style mini/pip player ─────────────────────────────── */}
       <AnimatePresence>
         {miniPlayer && !fullscreen && (
           <motion.div
@@ -636,6 +627,14 @@ export default function VideoPlayer({
             onClick={() => wrapperRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })}
             style={{ aspectRatio: "16/9" }}
           >
+            {/* Mirror the actual video element */}
+            <video
+              ref={undefined}
+              className="w-full h-full object-cover pointer-events-none"
+              src={videoRef.current?.src}
+              style={{ display: "none" }}
+            />
+            {/* We clone by referencing the same HLS stream — instead show the main video as picture */}
             <div className="w-full h-full bg-black flex items-center justify-center relative">
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="text-white/60 text-xs text-center px-3">
@@ -646,6 +645,7 @@ export default function VideoPlayer({
                 </div>
               </div>
             </div>
+            {/* Mini controls bar */}
             <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 to-transparent p-2 flex items-center gap-2">
               <button
                 onClick={(e) => { e.stopPropagation(); togglePlay(); }}
@@ -692,6 +692,7 @@ export default function VideoPlayer({
           crossOrigin="anonymous"
           playsInline
           controlsList="nodownload noremoteplayback"
+          // FIX: prevent mobile browser from auto-pausing on fullscreen
           x-webkit-airplay="allow"
         >
           {subtitleTracks.map((t, i) => (
@@ -699,22 +700,7 @@ export default function VideoPlayer({
           ))}
         </video>
 
-        {/* ── WATERMARK ───────────────────────────────────────────────────── */}
-        <div className="absolute top-3 right-3 z-[6] pointer-events-none select-none">
-          <span
-            className="text-white font-semibold tracking-wide drop-shadow-lg"
-            style={{
-              fontSize: "clamp(9px, 1.2vw, 13px)",
-              opacity: 0.28,
-              textShadow: "0 1px 4px rgba(0,0,0,0.8)",
-              letterSpacing: "0.04em",
-            }}
-          >
-            t.me/BeatAnime
-          </span>
-        </div>
-
-        {/* ── Center flash icon ────────────────────────────────────────────── */}
+        {/* ── Center flash icon ─────────────────────────────────────── */}
         <AnimatePresence>
           {showCenterIcon && (
             <motion.div key="ci"
@@ -734,7 +720,7 @@ export default function VideoPlayer({
           )}
         </AnimatePresence>
 
-        {/* ── Buffering / Paused overlay ───────────────────────────────────── */}
+        {/* ── Buffering / Paused overlay ────────────────────────────── */}
         {(isBuffering || (!playing && currentTime > 0 && !showCenterIcon)) && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
             {isBuffering ? (
@@ -752,7 +738,7 @@ export default function VideoPlayer({
           </div>
         )}
 
-        {/* ── 2× badge ────────────────────────────────────────────────────── */}
+        {/* ── 2× badge ──────────────────────────────────────────────── */}
         <AnimatePresence>
           {longPressActive && (
             <motion.div key="2xbadge"
@@ -764,33 +750,31 @@ export default function VideoPlayer({
           )}
         </AnimatePresence>
 
-        {/* ── Skip Intro — FIXED: above seek bar (bottom-36 on mobile, bottom-28 desktop) ── */}
+        {/* ── Skip Intro / Outro ────────────────────────────────────── */}
         <AnimatePresence>
           {showSkipIntro && (
             <motion.button key="skip-intro"
               initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
               onClick={() => { if (videoRef.current && intro) videoRef.current.currentTime = intro.end; }}
-              className="absolute bottom-36 sm:bottom-28 right-3 sm:right-4 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold hover:scale-105 active:scale-95 transition-transform z-10 flex items-center gap-2 shadow-lg"
+              className="absolute bottom-24 sm:bottom-20 right-3 sm:right-4 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold hover:scale-105 active:scale-95 transition-transform z-10 flex items-center gap-2 shadow-lg"
             >
               <SkipForward className="w-4 h-4" /> Skip Intro
             </motion.button>
           )}
         </AnimatePresence>
-
-        {/* ── Skip Outro — FIXED: above seek bar ── */}
         <AnimatePresence>
           {showSkipOutro && (
             <motion.button key="skip-outro"
               initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
               onClick={() => { if (videoRef.current && outro) videoRef.current.currentTime = outro.end; }}
-              className="absolute bottom-36 sm:bottom-28 right-3 sm:right-4 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold hover:scale-105 active:scale-95 transition-transform z-10 flex items-center gap-2 shadow-lg"
+              className="absolute bottom-24 sm:bottom-20 right-3 sm:right-4 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold hover:scale-105 active:scale-95 transition-transform z-10 flex items-center gap-2 shadow-lg"
             >
               <SkipForward className="w-4 h-4" /> Skip Outro
             </motion.button>
           )}
         </AnimatePresence>
 
-        {/* ── Settings panel ──────────────────────────────────────────────── */}
+        {/* ── Settings panel ────────────────────────────────────────── */}
         <AnimatePresence>
           {settingsOpen && showControls && (
             <motion.div key="settings"
@@ -802,7 +786,7 @@ export default function VideoPlayer({
               {settingsPanel === "main" && (
                 <div className="py-1.5">
                   {[
-                    { label: "Speed",    icon: Gauge,    value: `${speed}x`,                                                                        action: () => setSettingsPanel("speed") },
+                    { label: "Speed", icon: Gauge, value: `${speed}x`, action: () => setSettingsPanel("speed") },
                     { label: "Captions", icon: Subtitles, value: captionsOn ? subtitleTracks[activeTrackIdx]?.label || "On" : "Off", action: () => setSettingsPanel("caption") },
                   ].map(item => (
                     <button key={item.label} onClick={item.action}
@@ -821,8 +805,8 @@ export default function VideoPlayer({
                     </button>
                   )}
                   {[
-                    { label: "Ambient",  icon: Sun,         value: ambientEnabled, toggle: () => setAmbientEnabled(!ambientEnabled) },
-                    { label: "Autoplay", icon: SkipForward,  value: autoPlayNext,   toggle: () => onAutoPlayToggle?.(!autoPlayNext) },
+                    { label: "Ambient", icon: Sun, value: ambientEnabled, toggle: () => setAmbientEnabled(!ambientEnabled) },
+                    { label: "Autoplay", icon: SkipForward, value: autoPlayNext, toggle: () => onAutoPlayToggle?.(!autoPlayNext) },
                   ].map(item => (
                     <button key={item.label} onClick={item.toggle}
                       className="flex items-center justify-between w-full px-4 py-3 text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
@@ -897,15 +881,16 @@ export default function VideoPlayer({
           )}
         </AnimatePresence>
 
-        {/* ══════════════════════════════════════════════════════════════════════
-            CONTROLS OVERLAY
-            ══════════════════════════════════════════════════════════════════════ */}
+        {/* ══════════════════════════════════════════════════════════════
+            CONTROLS OVERLAY — Beautiful redesigned UI
+            ══════════════════════════════════════════════════════════════ */}
         <div className={`absolute inset-x-0 bottom-0 transition-opacity duration-300 z-20 ${showControls ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
-          <div className="absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.6) 30%, rgba(0,0,0,0.1) 60%, transparent 100%)" }} />
+          {/* Multi-layer gradient for depth */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent pointer-events-none" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.6) 30%, rgba(0,0,0,0.1) 60%, transparent 100%)" }} />
 
           <div className="relative px-3 sm:px-5 pb-3 sm:pb-4 pt-12">
 
-            {/* ── Seek bar ──────────────────────────────────────────────────── */}
+            {/* ── Seek bar — YouTube-style thick hover ──────────────── */}
             <div
               className="w-full mb-3 sm:mb-3.5 cursor-pointer group/progress relative"
               style={{ height: "32px", display: "flex", alignItems: "center" }}
@@ -916,13 +901,23 @@ export default function VideoPlayer({
               onTouchMove={handleSeekBarTouchMove}
               onTouchEnd={handleSeekBarTouchEnd}
             >
+              {/* Track — thickens on hover like YouTube */}
               <div
                 className="absolute inset-x-0 rounded-full overflow-hidden transition-all duration-150"
-                style={{ height: "4px", top: "50%", transform: "translateY(-50%)", background: "rgba(255,255,255,0.15)" }}
+                style={{
+                  height: "4px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "rgba(255,255,255,0.15)",
+                }}
               >
+                <style>{`.group\\/progress:hover .seek-track { height: 6px !important; }`}</style>
+                {/* We use inline group-hover via CSS trick */}
                 <div className="seek-track absolute inset-0 rounded-full overflow-hidden transition-all duration-150" style={{ height: "100%" }}>
+                  {/* Buffered */}
                   <div className="absolute top-0 left-0 h-full bg-white/30 rounded-full"
                     style={{ width: `${bufferedPct}%`, transition: "width 0.5s linear" }} />
+                  {/* Played — premium gradient */}
                   <div className="absolute top-0 left-0 h-full rounded-full"
                     style={{
                       width: `${progress}%`,
@@ -933,24 +928,26 @@ export default function VideoPlayer({
                 </div>
               </div>
 
-              {/* Thumb */}
+              {/* Thumb — appears on hover */}
               <div
                 className="absolute rounded-full pointer-events-none opacity-0 group-hover/progress:opacity-100 transition-all duration-150"
                 style={{
                   width: "14px", height: "14px",
-                  left: `${progress}%`, top: "50%",
+                  left: `${progress}%`,
+                  top: "50%",
                   transform: "translateX(-50%) translateY(-50%)",
                   background: "white",
                   boxShadow: "0 0 0 3px hsl(var(--primary) / 0.4), 0 2px 8px rgba(0,0,0,0.8)",
                 }}
               />
 
-              {/* ── Preview thumbnail (desktop) ──────────────────────────── */}
+              {/* ── Preview thumbnail (desktop) ────────────────────── */}
               {!isMobile && hoverTime !== null && (
                 <div
                   className="absolute bottom-8 flex-col items-center gap-1.5 pointer-events-none z-20 -translate-x-1/2 hidden sm:flex"
                   style={{ left: previewLeft }}
                 >
+                  {/* Time indicator line */}
                   <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-px h-6 bg-white/40" style={{ bottom: "-24px" }} />
                   <div className={`rounded-xl overflow-hidden border border-white/20 shadow-2xl bg-black/90 transition-opacity duration-75 ${previewHasFrame ? "opacity-100" : "opacity-40"}`}
                     style={{ boxShadow: "0 12px 32px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,255,255,0.1)" }}>
@@ -963,7 +960,7 @@ export default function VideoPlayer({
               )}
             </div>
 
-            {/* ── Bottom controls row ───────────────────────────────────────── */}
+            {/* ── Bottom controls row ───────────────────────────────── */}
             <div className="flex items-center justify-between gap-1">
 
               {/* ── Left group ── */}
@@ -977,7 +974,7 @@ export default function VideoPlayer({
                   <SkipBack className="relative w-4.5 h-4.5 sm:w-4 sm:h-4" />
                 </button>
 
-                {/* Play/Pause */}
+                {/* Play/Pause — larger, more prominent */}
                 <button
                   onClick={togglePlay}
                   className="relative w-11 h-11 sm:w-10 sm:h-10 flex items-center justify-center transition-all rounded-full group/btn overflow-hidden"
@@ -997,7 +994,7 @@ export default function VideoPlayer({
                   <SkipForward className="relative w-4.5 h-4.5 sm:w-4 sm:h-4" />
                 </button>
 
-                {/* Volume (desktop) */}
+                {/* Volume — desktop with smooth slider */}
                 <div className="hidden sm:flex items-center gap-1 group/vol">
                   <button
                     onClick={toggleMute}
@@ -1006,6 +1003,7 @@ export default function VideoPlayer({
                     <span className="absolute inset-0 rounded-full bg-white/0 group-hover/btn:bg-white/10 transition-colors" />
                     {muted || volume === 0 ? <VolumeX className="relative w-4 h-4" /> : <Volume2 className="relative w-4 h-4" />}
                   </button>
+                  {/* Volume slider — expands on hover */}
                   <div className="w-0 overflow-hidden group-hover/vol:w-16 transition-all duration-200 ease-out">
                     <div className="relative w-16 cursor-pointer" style={{ height: "18px", display: "flex", alignItems: "center" }}>
                       <div className="absolute inset-x-0 rounded-full bg-white/20 overflow-hidden"
@@ -1019,7 +1017,7 @@ export default function VideoPlayer({
                   </div>
                 </div>
 
-                {/* Time display */}
+                {/* Time display — refined */}
                 <div className="hidden xs:flex items-center ml-1.5">
                   <span className="text-[11px] sm:text-xs font-medium tabular-nums" style={{ color: "rgba(255,255,255,0.9)" }}>
                     {fmt(currentTime)}
@@ -1033,11 +1031,13 @@ export default function VideoPlayer({
 
               {/* ── Right group ── */}
               <div className="flex items-center gap-0.5">
+                {/* Speed badge */}
                 {speed !== 1 && (
                   <span className="text-[10px] sm:text-xs text-primary font-bold px-1.5 py-0.5 rounded-md bg-primary/15 border border-primary/20">
                     {speed}×
                   </span>
                 )}
+                {/* Quality badge */}
                 {currentQuality !== -1 && qualityLevels[currentQuality] && (
                   <span className="hidden sm:inline text-[10px] text-accent font-medium px-1.5 py-0.5 rounded-md bg-accent/10 border border-accent/20">
                     {qualityLabel(currentQuality)}
@@ -1073,7 +1073,7 @@ export default function VideoPlayer({
               </div>
             </div>
 
-            {/* Mobile time display */}
+            {/* Mobile time display below controls */}
             <div className="sm:hidden flex justify-center mt-1">
               <span className="text-[10px] tabular-nums" style={{ color: "rgba(255,255,255,0.4)" }}>
                 {fmt(currentTime)} / {fmt(duration)}
