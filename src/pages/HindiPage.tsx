@@ -11,11 +11,6 @@ const LANGUAGES = [
   { key: "telugu", label: "Telugu", searchTerms: ["telugu dub"] },
 ];
 
-// Strict filter: only show anime that has at least 1 dub episode confirmed
-function hasDub(a: AnimeItem): boolean {
-  return typeof a.episodes?.dub === "number" && a.episodes.dub > 0;
-}
-
 export default function HindiPage() {
   const [activeLang, setActiveLang] = useState("hindi");
   const [animes, setAnimes] = useState<AnimeItem[]>([]);
@@ -33,45 +28,41 @@ export default function HindiPage() {
       const results: AnimeItem[] = [];
 
       if (pg === 1) {
-        // Pull from multiple categories and strictly filter for dub
+        // Same API calls as original — just filter strictly for dub > 0
         const searches = await Promise.allSettled([
           api.getCategory("most-popular", 1),
-          api.getCategory("top-airing", 1),
-          api.getCategory("most-favorite", 1),
           api.search("dub", 1),
+          api.getCategory("top-airing", 1),
         ]);
 
         for (const s of searches) {
           if (s.status !== "fulfilled") continue;
           const items = s.value?.animes || [];
           items.forEach((a: AnimeItem) => {
-            // Strict check: must have dub episodes property > 0
-            if (!seenIds.current.has(a.id) && hasDub(a)) {
+            // STRICT filter: only show if episodes.dub exists AND is > 0
+            if (
+              !seenIds.current.has(a.id) &&
+              typeof a.episodes?.dub === "number" &&
+              a.episodes.dub > 0
+            ) {
               seenIds.current.add(a.id);
               results.push(a);
             }
           });
         }
       } else {
-        // Paginate through most-popular (reliable dub data)
-        const [popData, favData] = await Promise.allSettled([
-          api.getCategory("most-popular", pg),
-          api.getCategory("most-favorite", pg),
-        ]);
-
-        for (const d of [popData, favData]) {
-          if (d.status !== "fulfilled") continue;
-          (d.value?.animes || []).forEach((a: AnimeItem) => {
-            if (!seenIds.current.has(a.id) && hasDub(a)) {
-              seenIds.current.add(a.id);
-              results.push(a);
-            }
-          });
-        }
-
-        // If we got no dub anime from this page, we're likely at the end
-        const rawCount = (popData.status === "fulfilled" ? popData.value?.animes?.length : 0) || 0;
-        setHasMore(rawCount >= 20);
+        const data = await api.getCategory("most-popular", pg);
+        (data?.animes || []).forEach((a: AnimeItem) => {
+          if (
+            !seenIds.current.has(a.id) &&
+            typeof a.episodes?.dub === "number" &&
+            a.episodes.dub > 0
+          ) {
+            seenIds.current.add(a.id);
+            results.push(a);
+          }
+        });
+        setHasMore((data?.animes?.length || 0) >= 20);
       }
 
       setAnimes(prev => reset ? results : [...prev, ...results]);
@@ -116,7 +107,7 @@ export default function HindiPage() {
           </div>
           <div>
             <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground">Hindi & Regional Anime</h1>
-            <p className="text-sm text-muted-foreground">Only anime with confirmed Hindi dub episodes</p>
+            <p className="text-sm text-muted-foreground">Anime with dub episodes — watch in your language</p>
           </div>
         </div>
       </motion.div>
@@ -141,8 +132,8 @@ export default function HindiPage() {
       {/* Info banner */}
       <div className="bg-primary/10 border border-primary/20 rounded-xl px-4 py-3 mb-6">
         <p className="text-sm text-primary">
-          🎙️ Only showing anime with <span className="font-bold">confirmed DUB</span> episodes.
-          Switch to <span className="font-bold">Hindi (Dub)</span> on the watch page for {langConfig.label} audio.
+          🎙️ Showing anime with <span className="font-bold">DUB</span> episodes available.
+          Default playback: <span className="font-bold">{langConfig.label} dub</span> with English subtitles when available.
         </p>
       </div>
 
