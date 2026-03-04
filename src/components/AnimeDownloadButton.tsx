@@ -1,6 +1,8 @@
-import { useState, useRef, useCallback } from "react";
-import { Loader2, Package, X, ChevronDown, Download, Zap, Clock, Wifi } from "lucide-react";
+import { useState, useRef, useCallback, useEffect } from "react";
+import { Loader2, Package, X, ChevronDown, Download, Zap, Clock, Wifi, AlertCircle, Crown, Lock } from "lucide-react";
 import { api } from "@/lib/api";
+import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
+import { useSiteSettings } from "@/hooks/useSiteSettings";
 
 interface Props {
   animeId: string;
@@ -16,19 +18,31 @@ interface EpStatus {
   progress: number;
   apiIdx: number;
   bytes: number;
+  retryCount: number;
 }
 
-// ─── 4 API Pool (Option 7: Load balancing) ───────────────────────────────────
-const API_POOL = [
-  "https://beat-anime-api.onrender.com/api/v1",
-  "https://beat-anime-api-2.onrender.com/api/v1",
-  "https://beat-anime-api-3.onrender.com/api/v1",
-  "https://beat-anime-api-4.onrender.com/api/v1",
+const PARALLEL_EPISODES = 5;   // Max 5 simultaneous downloads
+const PARALLEL_SEGMENTS  = 16; // 16 HLS segments at once per episode
+const SEGMENT_DELAY_MS   = 8;
+const MAX_BATCH_SIZE = 24;      // Max episodes per batch
+const COOLDOWN_MS = 5 * 60 * 1000; // 5 minute cooldown
+const SPAM_THRESHOLD = 3;       // 3 bulk downloads in 1 minute = spam
+
+// Quality presets
+const QUALITY_PRESETS = [
+  { label: "Auto (Best)", value: "auto" },
+  { label: "1080p", value: "1080" },
+  { label: "720p", value: "720" },
+  { label: "480p", value: "480" },
+  { label: "360p", value: "360" },
 ];
 
-const PARALLEL_EPISODES = 4;   // Option 2: 4 episodes at once, one per API
-const PARALLEL_SEGMENTS  = 16; // Option 1: 16 HLS segments at once per episode
-const SEGMENT_DELAY_MS   = 8;  // brief pause between batches to avoid rate limits
+// Language options
+const LANGUAGE_OPTIONS = [
+  { label: "Sub", value: "sub" },
+  { label: "Dub", value: "dub" },
+  { label: "Both (try Sub first)", value: "both" },
+];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const proxyify = (base: string, raw: string, ref = "https://megacloud.blog/") =>
@@ -122,6 +136,8 @@ function buildZip(files: { name: string; data: Uint8Array }[]): Uint8Array {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function AnimeDownloadButton({ animeId, animeName, totalEpisodes, className = "" }: Props) {
+  const { user, isPremium } = useSupabaseAuth();
+  const { settings } = useSiteSettings();
   const [phase, setPhase]           = useState<"idle" | "running" | "zipping" | "done" | "error">("idle");
   const [epStatuses, setEpStatuses] = useState<EpStatus[]>([]);
   const [overallPct, setOverallPct] = useState(0);
@@ -131,7 +147,15 @@ export default function AnimeDownloadButton({ animeId, animeName, totalEpisodes,
   const [speed, setSpeed]           = useState("--");
   const [eta, setEta]               = useState("--");
   const [elapsed, setElapsed]       = useState("--");
-  const [apiStats, setApiStats]     = useState([0, 0, 0, 0]);
+  const [apiStats, setApiStats]     = useState<number[]>([]);
+  const [activeDownloads, setActiveDownloads] = useState(0);
+  const [cooldownUntil, setCooldownUntil] = useState(0);
+  const [quality, setQuality]       = useState("auto");
+  const [language, setLanguage]     = useState("sub");
+  const [showBatchSelect, setShowBatchSelect] = useState(false);
+  const [customStart, setCustomStart] = useState(1);
+  const [customEnd, setCustomEnd]   = useState(24);
+  const [apiPool, setApiPool]       = useState<string[]>([]);
 
   const abortRef   = useRef(false);
   const startRef   = useRef(0);
@@ -141,6 +165,66 @@ export default function AnimeDownloadButton({ animeId, animeName, totalEpisodes,
   const timerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const safeName = animeName.replace(/[^a-z0-9\-_ ]/gi, "_");
+
+  // Load API pool from settings
+  useEffect(() => {
+    const pool = settings.apiPool || [
+      "https://beat-anime-api.onrender.com/api/v1",
+      "https://beat-anime-api-2.onrender.com/api/v1",
+      "https://beat-anime-api-3.onrender.com/api/v1",
+      "https://beat-anime-api-4.onrender.com/api/v1",
+    ];
+    setApiPool(pool);
+    setApiStats(new Array(pool.length).fill(0));
+  }, [settings.apiPool]);
+
+  // Check access permissions
+  const canDownload = () => {
+    if (settings.bulkDownloadAccess === "all") return true;
+    if (settings.bulkDownloadAccess === "logged-in" && user) return true;
+    if (settings.bulkDownloadAccess === "premium" && isPremium) return true;
+    return false;
+  };
+
+  // Spam detection
+  const checkSpam = () => {
+    const now = Date.now();
+    const key = "bulk_dl_history";
+    const history: number[] = JSON.parse(localStorage.getItem(key) || "[]");
+    const recent = history.filter(t => now - t < 60000); // Last minute
+    
+    if (recent.length >= SPAM_THRESHOLD) {
+      const cooldown = now + COOLDOWN_MS;
+      setCooldownUntil(cooldown);
+      localStorage.setItem("bulk_dl_cooldown", String(cooldown));
+      return true;
+    }
+    
+    recent.push(now);
+    localStorage.setItem(key, JSON.stringify(recent));
+    return false;
+  };
+
+  // Check cooldown
+  useEffect(() => {
+    const saved = localStorage.getItem("bulk_dl_cooldown");
+    if (saved) {
+      const time = parseInt(saved);
+      if (Date.now() < time) setCooldownUntil(time);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (cooldownUntil > Date.now()) {
+      const timer = setInterval(() => {
+        if (Date.now() >= cooldownUntil) {
+          setCooldownUntil(0);
+          clearInterval(timer);
+        }
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [cooldownUntil]);
 
   const updateEp = useCallback((idx: number, patch: Partial<EpStatus>) =>
     setEpStatuses(prev => prev.map((e, i) => i === idx ? { ...e, ...patch } : e)), []);
@@ -173,7 +257,7 @@ export default function AnimeDownloadButton({ animeId, animeName, totalEpisodes,
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
   };
 
-  /** Download all segments of one episode from one API */
+  /** Download episode with quality filtering and retry logic */
   const fetchEpisodeBlob = async (
     episodeId: string,
     apiBase: string,
@@ -181,10 +265,14 @@ export default function AnimeDownloadButton({ animeId, animeName, totalEpisodes,
     signal: { aborted: boolean }
   ): Promise<Uint8Array | null> => {
 
-    // Find a working stream source
+    // Find a working stream source - try preferred language first
     let proxyUrl = "";
+    const preferredLang = language === "both" ? "sub" : language;
+    const fallbackLang = preferredLang === "sub" ? "dub" : "sub";
+    const languagesToTry = language === "both" ? [preferredLang, fallbackLang] : [preferredLang];
+    
     for (const srv of ["hd-2", "hd-1", "vidstreaming", "megacloud"]) {
-      for (const cat of ["sub", "dub"]) {
+      for (const cat of languagesToTry) {
         if (signal.aborted) return null;
         try {
           const r = await fetch(`${apiBase}/hianime/episode/sources?animeEpisodeId=${encodeURIComponent(episodeId)}&server=${srv}&category=${cat}`);
@@ -206,17 +294,45 @@ export default function AnimeDownloadButton({ animeId, animeName, totalEpisodes,
     let m3u8Text = await m3u8Res.text();
     let mediaOriginal = originalUrl;
 
-    // Master playlist → pick highest bandwidth stream
+    // Master playlist → pick quality
     if (m3u8Text.includes("#EXT-X-STREAM-INF")) {
       const lines = m3u8Text.split("\n").map(l => l.trim());
       let bestBW = -1, bestUri = "";
-      for (let i = 0; i < lines.length; i++) {
-        if (lines[i].startsWith("#EXT-X-STREAM-INF")) {
-          const bw = parseInt(lines[i].match(/BANDWIDTH=(\d+)/)?.[1] || "0");
-          const uri = lines[i + 1];
-          if (uri && !uri.startsWith("#") && bw > bestBW) { bestBW = bw; bestUri = uri; }
+      
+      if (quality === "auto") {
+        // Pick highest bandwidth
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i].startsWith("#EXT-X-STREAM-INF")) {
+            const bw = parseInt(lines[i].match(/BANDWIDTH=(\d+)/)?.[1] || "0");
+            const uri = lines[i + 1];
+            if (uri && !uri.startsWith("#") && bw > bestBW) { bestBW = bw; bestUri = uri; }
+          }
+        }
+      } else {
+        // Pick specific quality
+        const targetRes = quality;
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i].startsWith("#EXT-X-STREAM-INF")) {
+            const resolution = lines[i].match(/RESOLUTION=\d+x(\d+)/)?.[1];
+            const uri = lines[i + 1];
+            if (uri && !uri.startsWith("#") && resolution === targetRes) {
+              bestUri = uri;
+              break;
+            }
+          }
+        }
+        // Fallback to best if quality not found
+        if (!bestUri) {
+          for (let i = 0; i < lines.length; i++) {
+            if (lines[i].startsWith("#EXT-X-STREAM-INF")) {
+              const bw = parseInt(lines[i].match(/BANDWIDTH=(\d+)/)?.[1] || "0");
+              const uri = lines[i + 1];
+              if (uri && !uri.startsWith("#") && bw > bestBW) { bestBW = bw; bestUri = uri; }
+            }
+          }
         }
       }
+      
       if (!bestUri || signal.aborted) return null;
       mediaOriginal = resolveUrl(originalUrl, bestUri);
       const mediaRes = await fetch(proxyify(apiBase, mediaOriginal, referer));
@@ -232,7 +348,7 @@ export default function AnimeDownloadButton({ animeId, animeName, totalEpisodes,
 
     if (!segments.length || signal.aborted) return null;
 
-    // ── OPTION 1: Parallel segment batches ──────────────────────────────────
+    // Download segments in parallel batches
     const chunks: (Uint8Array | null)[] = new Array(segments.length).fill(null);
     let segsDone = 0;
 
@@ -272,40 +388,73 @@ export default function AnimeDownloadButton({ animeId, animeName, totalEpisodes,
     return merged;
   };
 
-  const handleDownloadAll = async () => {
+  const handleDownloadBatch = async (startEp: number, endEp: number) => {
+    if (!canDownload()) {
+      setStatusMsg(!user ? "Login required" : !isPremium ? "Premium required" : "Access denied");
+      return;
+    }
+
+    if (activeDownloads >= PARALLEL_EPISODES) {
+      setStatusMsg(`Max ${PARALLEL_EPISODES} downloads at once`);
+      return;
+    }
+
+    if (cooldownUntil > Date.now()) {
+      const remaining = Math.ceil((cooldownUntil - Date.now()) / 1000);
+      setStatusMsg(`Cooldown: ${fmtTime(remaining)} remaining`);
+      return;
+    }
+
+    if (checkSpam()) {
+      setStatusMsg("Too many requests. 5 min cooldown.");
+      return;
+    }
+
     setPhase("running");
+    setActiveDownloads(prev => prev + 1);
     abortRef.current = false;
     bytesRef.current = 0;
     doneRef.current  = 0;
     setDlBytes(0); setSpeed("--"); setEta("--"); setElapsed("--");
-    setApiStats([0, 0, 0, 0]); setOverallPct(0); setShowLog(true);
+    setApiStats(new Array(apiPool.length).fill(0));
+    setOverallPct(0); setShowLog(true);
     startRef.current = Date.now();
     startTicker();
 
     try {
       setStatusMsg("Fetching episode list…");
       const epData   = await api.getEpisodes(animeId);
-      const episodes = epData?.episodes || [];
-      if (!episodes.length) { setStatusMsg("No episodes found."); setPhase("error"); stopTicker(); return; }
+      const allEpisodes = epData?.episodes || [];
+      
+      // Filter to requested range
+      const episodes = allEpisodes.filter(ep => 
+        (ep.number || 0) >= startEp && (ep.number || 0) <= endEp
+      );
+
+      if (!episodes.length) { 
+        setStatusMsg("No episodes in range."); 
+        setPhase("error"); 
+        stopTicker(); 
+        setActiveDownloads(prev => prev - 1);
+        return; 
+      }
 
       totalRef.current = episodes.length;
 
       setEpStatuses(episodes.map(ep => ({
         num: ep.number || 0,
         title: ep.title || `Episode ${ep.number}`,
-        state: "pending", progress: 0, apiIdx: 0, bytes: 0,
+        state: "pending", progress: 0, apiIdx: 0, bytes: 0, retryCount: 0,
       })));
 
       const collected: ({ name: string; data: Uint8Array } | null)[] = new Array(episodes.length).fill(null);
       const signal = { aborted: false };
 
-      // ── OPTION 2 + 7: Parallel episodes, each worker pinned to one API ─────
+      // Smart API load balancing
+      const apiLoads = new Array(apiPool.length).fill(0);
       const queue = { next: 0 };
 
       const worker = async (workerIdx: number) => {
-        const apiIdx  = workerIdx % API_POOL.length;
-        const apiBase = API_POOL[apiIdx];
-
         while (true) {
           if (abortRef.current || signal.aborted) break;
           const epIdx = queue.next++;
@@ -319,48 +468,85 @@ export default function AnimeDownloadButton({ animeId, animeName, totalEpisodes,
             continue;
           }
 
+          // Pick least loaded API
+          const apiIdx = apiLoads.indexOf(Math.min(...apiLoads));
+          const apiBase = apiPool[apiIdx];
+          apiLoads[apiIdx]++;
+
           setApiStats(prev => { const n = [...prev]; n[apiIdx]++; return n; });
           updateEp(epIdx, { state: "fetching", apiIdx });
 
-          try {
-            updateEp(epIdx, { state: "downloading", apiIdx });
-            const blob = await fetchEpisodeBlob(ep.episodeId, apiBase, epIdx, signal);
+          let success = false;
+          let retries = 0;
+          const maxRetries = 2;
 
-            if (blob && blob.length > 0) {
-              collected[epIdx] = {
-                name: `${safeName}-EP${String(ep.number ?? epIdx + 1).padStart(3, "0")}.ts`,
-                data: blob,
-              };
-              updateEp(epIdx, { state: "done", progress: 100 });
-            } else {
-              updateEp(epIdx, { state: "failed" });
+          while (!success && retries <= maxRetries && !signal.aborted) {
+            try {
+              updateEp(epIdx, { state: "downloading", apiIdx, retryCount: retries });
+              const blob = await fetchEpisodeBlob(ep.episodeId, apiBase, epIdx, signal);
+
+              if (blob && blob.length > 0) {
+                collected[epIdx] = {
+                  name: `${safeName}-EP${String(ep.number ?? epIdx + 1).padStart(3, "0")}.ts`,
+                  data: blob,
+                };
+                updateEp(epIdx, { state: "done", progress: 100 });
+                success = true;
+              } else if (retries < maxRetries) {
+                retries++;
+                updateEp(epIdx, { retryCount: retries });
+                await new Promise(r => setTimeout(r, 1000));
+              } else {
+                updateEp(epIdx, { state: "failed" });
+              }
+            } catch {
+              if (retries < maxRetries) {
+                retries++;
+                updateEp(epIdx, { retryCount: retries });
+                await new Promise(r => setTimeout(r, 1000));
+              } else {
+                updateEp(epIdx, { state: "failed" });
+              }
             }
-          } catch {
-            updateEp(epIdx, { state: "failed" });
           }
 
+          apiLoads[apiIdx]--;
           doneRef.current++;
           setOverallPct(Math.round((doneRef.current / episodes.length) * 100));
           setStatusMsg(`${doneRef.current}/${episodes.length} episodes done`);
         }
       };
 
-      // Start all 4 workers simultaneously
-      await Promise.all(Array.from({ length: PARALLEL_EPISODES }, (_, i) => worker(i)));
+      // Start workers (max PARALLEL_EPISODES)
+      const workerCount = Math.min(PARALLEL_EPISODES, episodes.length);
+      await Promise.all(Array.from({ length: workerCount }, (_, i) => worker(i)));
 
       if (abortRef.current) {
-        stopTicker(); setPhase("idle"); setEpStatuses([]);
-        setStatusMsg("Cancelled."); return;
+        stopTicker(); 
+        setPhase("idle"); 
+        setEpStatuses([]);
+        setStatusMsg("Cancelled."); 
+        setActiveDownloads(prev => prev - 1);
+        return;
       }
 
       // Build ZIP
       setPhase("zipping"); setStatusMsg("Building ZIP…");
       const validFiles = collected.filter((f): f is { name: string; data: Uint8Array } => f !== null);
-      if (!validFiles.length) { setStatusMsg("No episodes downloaded."); setPhase("error"); stopTicker(); return; }
+      if (!validFiles.length) { 
+        setStatusMsg("No episodes downloaded."); 
+        setPhase("error"); 
+        stopTicker(); 
+        setActiveDownloads(prev => prev - 1);
+        return; 
+      }
 
       const zip  = buildZip(validFiles);
       const blobUrl = URL.createObjectURL(new Blob([zip], { type: "application/zip" }));
-      const a = Object.assign(document.createElement("a"), { href: blobUrl, download: `${safeName}-all-episodes.zip` });
+      const a = Object.assign(document.createElement("a"), { 
+        href: blobUrl, 
+        download: `${safeName}-EP${startEp}-${endEp}-${language}-${quality}.zip` 
+      });
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
 
@@ -369,12 +555,22 @@ export default function AnimeDownloadButton({ animeId, animeName, totalEpisodes,
       setElapsed(fmtTime(totalSec)); setEta("Done");
       setStatusMsg(`✓ ${validFiles.length} episodes · ${fmtBytes(bytesRef.current)} · ${fmtTime(totalSec)}`);
       setPhase("done");
+      setActiveDownloads(prev => prev - 1);
 
     } catch (err: any) {
       stopTicker();
       setStatusMsg(err?.message || "An error occurred.");
       setPhase("error");
+      setActiveDownloads(prev => prev - 1);
     }
+  };
+
+  const retryFailed = async (epIdx: number) => {
+    const ep = epStatuses[epIdx];
+    if (!ep || ep.state !== "failed") return;
+    
+    updateEp(epIdx, { state: "fetching", retryCount: 0 });
+    // Implement retry logic here
   };
 
   const handleCancel = () => { abortRef.current = true; setStatusMsg("Cancelling…"); };
@@ -382,28 +578,82 @@ export default function AnimeDownloadButton({ animeId, animeName, totalEpisodes,
   const handleReset = () => {
     stopTicker();
     setPhase("idle"); setEpStatuses([]); setOverallPct(0); setStatusMsg(""); setShowLog(false);
-    setDlBytes(0); setSpeed("--"); setEta("--"); setElapsed("--"); setApiStats([0, 0, 0, 0]);
+    setDlBytes(0); setSpeed("--"); setEta("--"); setElapsed("--"); 
+    setApiStats(new Array(apiPool.length).fill(0));
   };
 
   const dotColor = (s: EpStatus["state"]) =>
     ({ done: "bg-green-500", failed: "bg-red-500/80", downloading: "bg-primary", fetching: "bg-accent animate-pulse", pending: "bg-muted-foreground/20" })[s];
 
-  const API_COLORS = ["text-cyan-400", "text-violet-400", "text-amber-400", "text-emerald-400"];
+  const API_COLORS = ["text-cyan-400", "text-violet-400", "text-amber-400", "text-emerald-400", "text-rose-400", "text-blue-400"];
   const isRunning  = phase === "running" || phase === "zipping";
+
+  // Generate batch options
+  const totalEps = totalEpisodes || 0;
+  const batches = [];
+  for (let i = 1; i <= totalEps; i += 30) {
+    const end = Math.min(i + 29, totalEps);
+    batches.push({ start: i, end, label: `Episodes ${i}-${end}` });
+  }
 
   return (
     <div className={`flex flex-col gap-3 ${className}`}>
 
+      {/* ── Access check banner ── */}
+      {!canDownload() && (
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-accent/10 border border-accent/20 text-accent">
+          {!user ? <Lock className="w-4 h-4" /> : <Crown className="w-4 h-4" />}
+          <span className="text-sm font-medium">
+            {!user ? "Login to download" : !isPremium ? "Premium required for bulk download" : "Access restricted"}
+          </span>
+        </div>
+      )}
+
+      {/* ── Cooldown banner ── */}
+      {cooldownUntil > Date.now() && (
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive">
+          <AlertCircle className="w-4 h-4" />
+          <span className="text-sm font-medium">
+            Cooldown: {fmtTime((cooldownUntil - Date.now()) / 1000)} remaining
+          </span>
+        </div>
+      )}
+
       {/* ── Action buttons ── */}
       <div className="flex items-center gap-2 flex-wrap">
-        {phase === "idle" && (
-          <button
-            onClick={handleDownloadAll}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-accent text-sm font-semibold text-accent-foreground hover:opacity-90 active:scale-95 transition-all shadow-md"
-          >
-            <Package className="w-4 h-4" />
-            Download All as ZIP{totalEpisodes ? ` (${totalEpisodes} eps)` : ""}
-          </button>
+        {phase === "idle" && canDownload() && cooldownUntil <= Date.now() && (
+          <>
+            {/* Quality selector */}
+            <select 
+              value={quality} 
+              onChange={e => setQuality(e.target.value)}
+              className="h-10 px-3 rounded-xl bg-secondary text-secondary-foreground text-sm border border-border"
+            >
+              {QUALITY_PRESETS.map(q => (
+                <option key={q.value} value={q.value}>{q.label}</option>
+              ))}
+            </select>
+
+            {/* Language selector */}
+            <select 
+              value={language} 
+              onChange={e => setLanguage(e.target.value)}
+              className="h-10 px-3 rounded-xl bg-secondary text-secondary-foreground text-sm border border-border"
+            >
+              {LANGUAGE_OPTIONS.map(l => (
+                <option key={l.value} value={l.value}>{l.label}</option>
+              ))}
+            </select>
+
+            {/* Batch selection toggle */}
+            <button
+              onClick={() => setShowBatchSelect(!showBatchSelect)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-secondary text-sm font-medium text-secondary-foreground hover:bg-secondary/80"
+            >
+              <Package className="w-4 h-4" />
+              {showBatchSelect ? "Hide Options" : "Select Episodes"}
+            </button>
+          </>
         )}
 
         {isRunning && (
@@ -415,6 +665,9 @@ export default function AnimeDownloadButton({ animeId, animeName, totalEpisodes,
             <button onClick={handleCancel} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-destructive/20 text-destructive text-sm font-medium hover:bg-destructive/30 transition-colors">
               <X className="w-4 h-4" /> Cancel
             </button>
+            <div className="px-3 py-2 rounded-xl bg-card/60 border border-border text-xs text-muted-foreground">
+              {activeDownloads}/{PARALLEL_EPISODES} active
+            </div>
           </>
         )}
 
@@ -438,11 +691,77 @@ export default function AnimeDownloadButton({ animeId, animeName, totalEpisodes,
         )}
       </div>
 
+      {/* ── Batch selection ── */}
+      {showBatchSelect && phase === "idle" && (
+        <div className="p-4 rounded-xl bg-card/60 border border-border space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-foreground">Select Episode Range</h3>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="px-2 py-1 rounded bg-primary/10 text-primary font-medium">
+                {QUALITY_PRESETS.find(q => q.value === quality)?.label}
+              </span>
+              <span className="px-2 py-1 rounded bg-accent/10 text-accent font-medium">
+                {LANGUAGE_OPTIONS.find(l => l.value === language)?.label}
+              </span>
+            </div>
+          </div>
+          
+          {/* Preset batches */}
+          {batches.length > 1 && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {batches.map(batch => (
+                <button
+                  key={batch.start}
+                  onClick={() => handleDownloadBatch(batch.start, batch.end)}
+                  className="px-3 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-sm font-medium transition-colors"
+                >
+                  {batch.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Custom range */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <input
+              type="number"
+              min={1}
+              max={totalEps}
+              value={customStart}
+              onChange={e => setCustomStart(Math.max(1, Math.min(totalEps, parseInt(e.target.value) || 1)))}
+              className="w-20 h-9 px-2 rounded-lg bg-secondary text-foreground text-sm border border-border"
+              placeholder="From"
+            />
+            <span className="text-muted-foreground text-sm">to</span>
+            <input
+              type="number"
+              min={customStart}
+              max={Math.min(customStart + MAX_BATCH_SIZE - 1, totalEps)}
+              value={customEnd}
+              onChange={e => setCustomEnd(Math.max(customStart, Math.min(customStart + MAX_BATCH_SIZE - 1, parseInt(e.target.value) || customStart)))}
+              className="w-20 h-9 px-2 rounded-lg bg-secondary text-foreground text-sm border border-border"
+              placeholder="To"
+            />
+            <button
+              onClick={() => handleDownloadBatch(customStart, customEnd)}
+              disabled={customEnd - customStart + 1 > MAX_BATCH_SIZE}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-accent text-sm font-semibold text-accent-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Download className="w-4 h-4" />
+              Download ({customEnd - customStart + 1} eps)
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Max {MAX_BATCH_SIZE} episodes per batch
+          </p>
+        </div>
+      )}
+
       {/* ── Live stats bar ── */}
       {isRunning && (
         <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 sm:gap-4 px-4 py-3 rounded-xl bg-card/60 border border-border text-xs">
 
-          {/* Progress bar — full width on mobile */}
+          {/* Progress bar */}
           <div className="col-span-2 sm:flex-1 sm:min-w-40">
             <div className="flex justify-between mb-1.5 font-medium">
               <span className="text-muted-foreground">Progress</span>
@@ -456,25 +775,21 @@ export default function AnimeDownloadButton({ animeId, animeName, totalEpisodes,
             </div>
           </div>
 
-          {/* ETA */}
           <div className="flex items-center gap-1.5 text-muted-foreground">
             <Clock className="w-3.5 h-3.5 text-primary flex-shrink-0" />
             <span>ETA <span className="text-foreground font-semibold">{eta}</span></span>
           </div>
 
-          {/* Elapsed */}
           <div className="flex items-center gap-1.5 text-muted-foreground">
             <Clock className="w-3.5 h-3.5 opacity-40 flex-shrink-0" />
             <span>Elapsed <span className="text-foreground font-semibold">{elapsed}</span></span>
           </div>
 
-          {/* Speed */}
           <div className="flex items-center gap-1.5 text-muted-foreground">
             <Zap className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
             <span className="text-foreground font-semibold">{speed}</span>
           </div>
 
-          {/* Downloaded */}
           <div className="flex items-center gap-1.5 text-muted-foreground">
             <Download className="w-3.5 h-3.5 flex-shrink-0" />
             <span className="text-foreground font-semibold">{fmtBytes(dlBytes)}</span>
@@ -483,14 +798,14 @@ export default function AnimeDownloadButton({ animeId, animeName, totalEpisodes,
           {/* API load balancer */}
           <div className="flex items-center gap-1.5 text-muted-foreground col-span-2 sm:col-span-1">
             <Wifi className="w-3.5 h-3.5 flex-shrink-0" />
-            <div className="flex items-center gap-1">
-              {API_POOL.map((_, i) => (
+            <div className="flex items-center gap-1 flex-wrap">
+              {apiStats.map((count, i) => (
                 <span
                   key={i}
-                  title={`API ${i + 1}: ${apiStats[i]} eps`}
-                  className={`${API_COLORS[i]} font-bold text-[11px] px-1.5 py-0.5 rounded bg-white/5`}
+                  title={`API ${i + 1}: ${count} eps`}
+                  className={`${API_COLORS[i % API_COLORS.length]} font-bold text-[11px] px-1.5 py-0.5 rounded bg-white/5`}
                 >
-                  {apiStats[i]}
+                  {count}
                 </span>
               ))}
               <span className="text-muted-foreground/50 text-[10px] ml-0.5">eps/api</span>
@@ -507,8 +822,8 @@ export default function AnimeDownloadButton({ animeId, animeName, totalEpisodes,
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold">Episodes</span>
               <div className="flex items-center gap-1">
-                {API_POOL.map((_, i) => (
-                  <span key={i} className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${API_COLORS[i]} bg-white/5`}>
+                {apiPool.slice(0, 6).map((_, i) => (
+                  <span key={i} className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${API_COLORS[i % API_COLORS.length]} bg-white/5`}>
                     API{i + 1}
                   </span>
                 ))}
@@ -530,14 +845,24 @@ export default function AnimeDownloadButton({ animeId, animeName, totalEpisodes,
                   {String(ep.num).padStart(2, "0")}
                 </span>
                 {(ep.state === "downloading" || ep.state === "fetching") && (
-                  <span className={`text-[9px] font-bold px-1 py-0.5 rounded flex-shrink-0 ${API_COLORS[ep.apiIdx]} bg-white/5`}>
+                  <span className={`text-[9px] font-bold px-1 py-0.5 rounded flex-shrink-0 ${API_COLORS[ep.apiIdx % API_COLORS.length]} bg-white/5`}>
                     API{ep.apiIdx + 1}
                   </span>
                 )}
                 <span className="text-foreground/80 flex-1 truncate">{ep.title}</span>
+                {ep.retryCount > 0 && (
+                  <span className="text-[10px] text-amber-400">Retry {ep.retryCount}</span>
+                )}
                 <span className="flex-shrink-0 w-14 text-right tabular-nums">
                   {ep.state === "done"        && <span className="text-green-400">✓ Done</span>}
-                  {ep.state === "failed"      && <span className="text-red-400/80">✗ Fail</span>}
+                  {ep.state === "failed"      && (
+                    <button
+                      onClick={() => retryFailed(i)}
+                      className="text-red-400/80 hover:text-red-400 text-[10px]"
+                    >
+                      ↻ Retry
+                    </button>
+                  )}
                   {ep.state === "pending"     && <span className="text-muted-foreground/40">—</span>}
                   {ep.state === "fetching"    && <span className="text-accent animate-pulse">Finding</span>}
                   {ep.state === "downloading" && <span className="text-primary font-semibold">{ep.progress}%</span>}
