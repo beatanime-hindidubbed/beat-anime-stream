@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
-import { useSiteSettings, ThemeType } from "@/hooks/useSiteSettings";
+import { useSiteSettings, ThemeType, AccessLevel } from "@/hooks/useSiteSettings";
 import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
 import {
   BarChart3, Settings, Image, Activity, LogOut, Plus, Trash2,
   ToggleLeft, ToggleRight, Save, Loader2, CheckCircle, XCircle, Globe,
-  Users, Shield, UserPlus, UserMinus, Palette, Type, FileText
+  Users, Shield, UserPlus, UserMinus, Palette, Type, FileText, Download,
+  Server, Crown
 } from "lucide-react";
 
 interface Ad {
@@ -26,6 +27,7 @@ interface UserRole {
   user_id: string;
   role: string;
   username?: string;
+  is_premium?: boolean;
 }
 
 const API_ENDPOINTS = [
@@ -37,7 +39,12 @@ const API_ENDPOINTS = [
 
 const PLACEMENTS = ["banner-top", "sidebar", "in-feed", "footer", "popup"];
 const SIZES = ["banner", "square", "leaderboard", "skyscraper"];
-const ROLES = ["admin", "moderator", "user"] as const;
+const ROLES = ["admin", "moderator", "user", "premium"] as const;
+const ACCESS_LEVELS: { value: AccessLevel; label: string }[] = [
+  { value: "all", label: "Everyone" },
+  { value: "logged-in", label: "Logged-in Users" },
+  { value: "premium", label: "Premium Only" },
+];
 
 const THEMES: { key: ThemeType; label: string; colors: string[] }[] = [
   { key: "classic", label: "Classic", colors: ["#00e5c8", "#ff4d9e"] },
@@ -49,9 +56,9 @@ const THEMES: { key: ThemeType; label: string; colors: string[] }[] = [
 
 export default function AdminDashboard() {
   const { user, isAdmin, loading: authLoading, logout } = useSupabaseAuth();
-  const { settings, updateSettings } = useSiteSettings();
+  const { settings, updateSettings, addApi, removeApi } = useSiteSettings();
   const navigate = useNavigate();
-  const [tab, setTab] = useState<"stats" | "branding" | "ads" | "api" | "users" | "policy">("stats");
+  const [tab, setTab] = useState<"stats" | "branding" | "ads" | "api" | "users" | "policy" | "downloads">("stats");
   const [ads, setAds] = useState<Ad[]>([]);
   const [apiHealth, setApiHealth] = useState<Record<string, "ok" | "fail" | "loading">>({});
   const [saving, setSaving] = useState(false);
@@ -61,6 +68,7 @@ export default function AdminDashboard() {
   const [addingUser, setAddingUser] = useState(false);
   const [userError, setUserError] = useState("");
   const [brandingSaved, setBrandingSaved] = useState(false);
+  const [newApiUrl, setNewApiUrl] = useState("");
 
   // Local branding state
   const [brandName, setBrandName] = useState(settings.siteName);
@@ -105,8 +113,8 @@ export default function AdminDashboard() {
     const enriched: UserRole[] = [];
     for (const r of roles) {
       const { data: profile } = await supabase
-        .from("profiles").select("username").eq("user_id", r.user_id).single();
-      enriched.push({ ...r, username: profile?.username || "Unknown" });
+        .from("profiles").select("username, is_premium").eq("user_id", r.user_id).single();
+      enriched.push({ ...r, username: profile?.username || "Unknown", is_premium: profile?.is_premium || false });
     }
     setUserRoles(enriched);
   };
@@ -141,17 +149,30 @@ export default function AdminDashboard() {
     setUserRoles(prev => prev.filter(r => r.id !== id));
   };
 
+  const togglePremium = async (userId: string, currentStatus: boolean) => {
+    const { error } = await supabase
+      .from("profiles")
+      .update({ is_premium: !currentStatus })
+      .eq("user_id", userId);
+    
+    if (!error) loadUserRoles();
+  };
+
   const checkApis = async () => {
-    const base = "https://beat-anime-api.onrender.com/api/v1";
     const results: Record<string, "ok" | "fail" | "loading"> = {};
     API_ENDPOINTS.forEach(e => { results[e.name] = "loading"; });
     setApiHealth({ ...results });
-    for (const ep of API_ENDPOINTS) {
-      try {
-        const res = await fetch(`${base}${ep.url}`, { signal: AbortSignal.timeout(10000) });
-        results[ep.name] = res.ok ? "ok" : "fail";
-      } catch { results[ep.name] = "fail"; }
-      setApiHealth({ ...results });
+    
+    for (const api of settings.apiPool) {
+      for (const ep of API_ENDPOINTS) {
+        try {
+          const res = await fetch(`${api}${ep.url}`, { signal: AbortSignal.timeout(10000) });
+          results[`${api}-${ep.name}`] = res.ok ? "ok" : "fail";
+        } catch { 
+          results[`${api}-${ep.name}`] = "fail"; 
+        }
+        setApiHealth({ ...results });
+      }
     }
   };
 
@@ -195,6 +216,17 @@ export default function AdminDashboard() {
     setTimeout(() => setBrandingSaved(false), 2000);
   };
 
+  const handleAddApi = async () => {
+    if (!newApiUrl.trim()) return;
+    try {
+      const url = new URL(newApiUrl.trim());
+      await addApi(url.toString());
+      setNewApiUrl("");
+    } catch {
+      alert("Invalid URL format");
+    }
+  };
+
   if (authLoading) return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -204,10 +236,11 @@ export default function AdminDashboard() {
   const tabs = [
     { key: "stats", label: "Stats", icon: BarChart3 },
     { key: "branding", label: "Branding", icon: Palette },
+    { key: "downloads", label: "Downloads", icon: Download },
     { key: "policy", label: "Policies", icon: FileText },
     { key: "ads", label: "Ads", icon: Image },
     { key: "users", label: "Users", icon: Users },
-    { key: "api", label: "API", icon: Activity },
+    { key: "api", label: "APIs", icon: Activity },
   ] as const;
 
   return (
@@ -243,8 +276,8 @@ export default function AdminDashboard() {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             {[
               { label: "Active Ads", value: ads.filter(a => a.is_active).length, color: "text-primary" },
-              { label: "Total Ads", value: ads.length, color: "text-foreground" },
-              { label: "Current Theme", value: settings.theme, color: "text-accent" },
+              { label: "Total APIs", value: settings.apiPool.length, color: "text-accent" },
+              { label: "Current Theme", value: settings.theme, color: "text-foreground" },
               { label: "Team Members", value: userRoles.length, color: "text-muted-foreground" },
             ].map(s => (
               <div key={s.label} className="p-6 rounded-xl bg-card border border-border">
@@ -252,6 +285,64 @@ export default function AdminDashboard() {
                 <p className={`text-2xl font-display font-bold capitalize ${s.color}`}>{s.value}</p>
               </div>
             ))}
+          </motion.div>
+        )}
+
+        {/* Downloads */}
+        {tab === "downloads" && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+            <div className="p-6 rounded-xl bg-card border border-border">
+              <h2 className="font-display text-lg font-bold text-foreground mb-4 flex items-center gap-2">
+                <Download className="w-5 h-5" /> Download Permissions
+              </h2>
+              
+              <div className="space-y-4">
+                {/* Single episode download */}
+                <div>
+                  <label className="text-sm font-medium text-foreground block mb-2">
+                    Single Episode Download
+                  </label>
+                  <select
+                    value={settings.downloadAccess}
+                    onChange={e => updateSettings({ downloadAccess: e.target.value as AccessLevel })}
+                    className="w-full max-w-xs h-10 px-3 rounded-lg bg-secondary text-foreground border border-border"
+                  >
+                    {ACCESS_LEVELS.map(level => (
+                      <option key={level.value} value={level.value}>{level.label}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground mt-1">Who can download individual episodes</p>
+                </div>
+
+                {/* Bulk download */}
+                <div>
+                  <label className="text-sm font-medium text-foreground block mb-2">
+                    Bulk Download (ZIP)
+                  </label>
+                  <select
+                    value={settings.bulkDownloadAccess}
+                    onChange={e => updateSettings({ bulkDownloadAccess: e.target.value as AccessLevel })}
+                    className="w-full max-w-xs h-10 px-3 rounded-lg bg-secondary text-foreground border border-border"
+                  >
+                    {ACCESS_LEVELS.map(level => (
+                      <option key={level.value} value={level.value}>{level.label}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground mt-1">Who can use bulk download feature</p>
+                </div>
+              </div>
+
+              <div className="mt-6 p-4 rounded-lg bg-primary/10 border border-primary/20">
+                <h3 className="text-sm font-medium text-primary mb-2">Current Settings</h3>
+                <ul className="text-xs text-foreground space-y-1">
+                  <li>• Single Download: <span className="font-semibold">{ACCESS_LEVELS.find(l => l.value === settings.downloadAccess)?.label}</span></li>
+                  <li>• Bulk Download: <span className="font-semibold">{ACCESS_LEVELS.find(l => l.value === settings.bulkDownloadAccess)?.label}</span></li>
+                  <li>• Max Simultaneous Downloads: <span className="font-semibold">5</span></li>
+                  <li>• Max Episodes per Batch: <span className="font-semibold">24</span></li>
+                  <li>• Spam Protection: <span className="font-semibold">3 downloads/min = 5min cooldown</span></li>
+                </ul>
+              </div>
+            </div>
           </motion.div>
         )}
 
@@ -468,10 +559,13 @@ export default function AdminDashboard() {
                 <div key={ur.id} className="flex items-center justify-between p-4 rounded-xl bg-card border border-border">
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center">
-                      <Shield className="w-4 h-4 text-primary" />
+                      {ur.is_premium ? <Crown className="w-4 h-4 text-amber-400" /> : <Shield className="w-4 h-4 text-primary" />}
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-foreground">{ur.username}</p>
+                      <p className="text-sm font-medium text-foreground flex items-center gap-2">
+                        {ur.username}
+                        {ur.is_premium && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-400/20 text-amber-400">PREMIUM</span>}
+                      </p>
                       <p className="text-xs text-muted-foreground font-mono">{ur.user_id.slice(0, 8)}...</p>
                     </div>
                   </div>
@@ -479,6 +573,13 @@ export default function AdminDashboard() {
                     <span className={`px-2.5 py-1 rounded-md text-xs font-medium ${ur.role === "admin" ? "bg-accent/20 text-accent" : ur.role === "moderator" ? "bg-primary/20 text-primary" : "bg-secondary text-secondary-foreground"}`}>
                       {ur.role}
                     </span>
+                    <button 
+                      onClick={() => togglePremium(ur.user_id, ur.is_premium || false)}
+                      className={`p-1.5 rounded-lg transition-colors ${ur.is_premium ? 'bg-amber-400/20 text-amber-400 hover:bg-amber-400/30' : 'bg-secondary text-muted-foreground hover:bg-secondary/80'}`}
+                      title={ur.is_premium ? "Remove premium" : "Grant premium"}
+                    >
+                      <Crown className="w-4 h-4" />
+                    </button>
                     {ur.user_id !== user?.id && (
                       <button onClick={() => removeUserRole(ur.id)} className="p-1.5 rounded-lg hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors">
                         <UserMinus className="w-4 h-4" />
@@ -491,28 +592,90 @@ export default function AdminDashboard() {
           </motion.div>
         )}
 
-        {/* API Health */}
+        {/* API Management */}
         {tab === "api" && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-display text-lg font-bold text-foreground">API Health</h2>
-              <button onClick={checkApis} className="px-4 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm">Refresh</button>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+            
+            {/* Add new API */}
+            <div className="p-4 rounded-xl bg-card border border-border">
+              <h3 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
+                <Server className="w-4 h-4" /> Add New API Endpoint
+              </h3>
+              <p className="text-xs text-muted-foreground mb-3">
+                More APIs = better load distribution and faster downloads
+              </p>
+              <div className="flex gap-3">
+                <input 
+                  value={newApiUrl}
+                  onChange={e => setNewApiUrl(e.target.value)}
+                  placeholder="https://beat-anime-api-5.onrender.com/api/v1"
+                  className="flex-1 h-9 px-3 rounded-lg bg-secondary text-foreground text-sm border border-border focus:ring-1 focus:ring-primary focus:outline-none"
+                />
+                <button 
+                  onClick={handleAddApi}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium"
+                >
+                  <Plus className="w-4 h-4" /> Add
+                </button>
+              </div>
             </div>
-            <div className="space-y-3">
-              {API_ENDPOINTS.map(ep => (
-                <div key={ep.name} className="flex items-center justify-between p-4 rounded-xl bg-card border border-border">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{ep.name}</p>
-                    <p className="text-xs text-muted-foreground font-mono">{ep.url}</p>
+
+            {/* API Pool */}
+            <div className="p-6 rounded-xl bg-card border border-border">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-display text-lg font-bold text-foreground">API Pool ({settings.apiPool.length} endpoints)</h2>
+                <button onClick={checkApis} className="px-4 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm">Refresh</button>
+              </div>
+              
+              <div className="space-y-3">
+                {settings.apiPool.map((api, idx) => (
+                  <div key={api} className="p-4 rounded-xl bg-secondary/40 border border-border">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-1 rounded bg-primary/20 text-primary text-xs font-bold">
+                          API {idx + 1}
+                        </span>
+                        <span className="text-xs text-foreground font-mono">{api}</span>
+                      </div>
+                      {settings.apiPool.length > 1 && (
+                        <button 
+                          onClick={() => removeApi(api)}
+                          className="p-1.5 rounded-lg hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                    
+                    {/* Health checks for this API */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                      {API_ENDPOINTS.map(ep => {
+                        const key = `${api}-${ep.name}`;
+                        const status = apiHealth[key];
+                        return (
+                          <div key={ep.name} className="flex items-center justify-between px-2 py-1.5 rounded bg-card text-xs">
+                            <span className="text-muted-foreground">{ep.name}</span>
+                            {status === "loading" && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
+                            {status === "ok" && <CheckCircle className="w-3 h-3 text-green-400" />}
+                            {status === "fail" && <XCircle className="w-3 h-3 text-red-400" />}
+                            {!status && <span className="text-muted-foreground/40">—</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div>
-                    {apiHealth[ep.name] === "loading" && <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />}
-                    {apiHealth[ep.name] === "ok" && <CheckCircle className="w-5 h-5 text-primary" />}
-                    {apiHealth[ep.name] === "fail" && <XCircle className="w-5 h-5 text-destructive" />}
-                    {!apiHealth[ep.name] && <span className="text-xs text-muted-foreground">—</span>}
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
+
+              <div className="mt-4 p-4 rounded-lg bg-accent/10 border border-accent/20">
+                <h3 className="text-sm font-medium text-accent mb-2">Load Distribution Info</h3>
+                <ul className="text-xs text-foreground space-y-1">
+                  <li>• Episodes are distributed across all APIs automatically</li>
+                  <li>• Each API handles parallel segment downloads (16 segments at once)</li>
+                  <li>• Failed episodes auto-retry on different APIs</li>
+                  <li>• More APIs = faster bulk downloads and better reliability</li>
+                </ul>
+              </div>
             </div>
           </motion.div>
         )}
