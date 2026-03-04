@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, ReactNode 
 import { supabase } from "@/integrations/supabase/client";
 
 export type ThemeType = "classic" | "cyberpunk" | "neon" | "sakura" | "minimal";
+export type AccessLevel = "all" | "logged-in" | "premium";
 
 export interface SiteSettings {
   siteName: string;
@@ -16,6 +17,9 @@ export interface SiteSettings {
   telegramGroup: string;
   hiddenAnimes: string[];
   failCountThreshold: number;
+  downloadAccess: AccessLevel;          // Who can download single episodes
+  bulkDownloadAccess: AccessLevel;      // Who can bulk download
+  apiPool: string[];                    // Array of API endpoints
 }
 
 const DEFAULTS: SiteSettings = {
@@ -34,6 +38,14 @@ const DEFAULTS: SiteSettings = {
   telegramGroup: "https://t.me/beat_discussion_group",
   hiddenAnimes: [],
   failCountThreshold: 5,
+  downloadAccess: "logged-in",
+  bulkDownloadAccess: "premium",
+  apiPool: [
+    "https://beat-anime-api.onrender.com/api/v1",
+    "https://beat-anime-api-2.onrender.com/api/v1",
+    "https://beat-anime-api-3.onrender.com/api/v1",
+    "https://beat-anime-api-4.onrender.com/api/v1",
+  ],
 };
 
 interface SiteSettingsCtx {
@@ -41,6 +53,8 @@ interface SiteSettingsCtx {
   updateSettings: (partial: Partial<SiteSettings>) => Promise<void>;
   reportAnimeFail: (animeId: string) => void;
   isHidden: (animeId: string) => boolean;
+  addApi: (url: string) => Promise<void>;
+  removeApi: (url: string) => Promise<void>;
 }
 
 const Ctx = createContext<SiteSettingsCtx>({
@@ -48,27 +62,25 @@ const Ctx = createContext<SiteSettingsCtx>({
   updateSettings: async () => {},
   reportAnimeFail: () => {},
   isHidden: () => false,
+  addApi: async () => {},
+  removeApi: async () => {},
 });
 
 export function SiteSettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<SiteSettings>(DEFAULTS);
 
-  // Load from Supabase
   useEffect(() => {
     supabase
       .from("site_settings")
       .select("*")
-      .then(({ data }) => {
-        if (!data?.length) return;
+      .then(({ data, error }) => {
+        if (error || !data?.length) return;
         const map: Record<string, any> = {};
-        data.forEach((row) => {
-          map[row.key] = row.value;
-        });
+        data.forEach((row) => { map[row.key] = row.value; });
         setSettings((prev) => ({ ...prev, ...map }));
       });
   }, []);
 
-  // Apply theme whenever it changes
   useEffect(() => {
     applyTheme(settings.theme);
   }, [settings.theme]);
@@ -86,15 +98,12 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
     [settings]
   );
 
-  // Track per-anime fail counts across users using supabase
   const reportAnimeFail = useCallback(
     async (animeId: string) => {
-      // Use local storage to track per-user counts too
       const lsKey = `fail_${animeId}`;
       const localCount = parseInt(localStorage.getItem(lsKey) || "0") + 1;
       localStorage.setItem(lsKey, String(localCount));
 
-      // Also track globally in supabase site_settings
       try {
         const { data } = await supabase
           .from("site_settings")
@@ -105,12 +114,8 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
         const globalCount = ((data?.value as number) || 0) + 1;
         await supabase
           .from("site_settings")
-          .upsert(
-            { key: `anime_fail_${animeId}`, value: globalCount },
-            { onConflict: "key" }
-          );
+          .upsert({ key: `anime_fail_${animeId}`, value: globalCount }, { onConflict: "key" });
 
-        // If threshold exceeded, add to hidden list
         if (globalCount >= settings.failCountThreshold) {
           const hidden = [...(settings.hiddenAnimes || [])];
           if (!hidden.includes(animeId)) {
@@ -128,8 +133,27 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
     [settings.hiddenAnimes]
   );
 
+  const addApi = useCallback(
+    async (url: string) => {
+      const pool = [...settings.apiPool];
+      if (!pool.includes(url)) {
+        pool.push(url);
+        await updateSettings({ apiPool: pool });
+      }
+    },
+    [settings, updateSettings]
+  );
+
+  const removeApi = useCallback(
+    async (url: string) => {
+      const pool = settings.apiPool.filter(api => api !== url);
+      await updateSettings({ apiPool: pool });
+    },
+    [settings, updateSettings]
+  );
+
   return (
-    <Ctx.Provider value={{ settings, updateSettings, reportAnimeFail, isHidden }}>
+    <Ctx.Provider value={{ settings, updateSettings, reportAnimeFail, isHidden, addApi, removeApi }}>
       {children}
     </Ctx.Provider>
   );
@@ -139,7 +163,6 @@ export function useSiteSettings() {
   return useContext(Ctx);
 }
 
-// Apply CSS vars based on theme
 function applyTheme(theme: ThemeType) {
   const root = document.documentElement.style;
 
