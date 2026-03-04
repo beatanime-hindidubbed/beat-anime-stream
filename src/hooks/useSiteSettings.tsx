@@ -143,7 +143,7 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
 
   const removeApi = useCallback(
     async (url: string) => {
-      const pool = (settings.apiPool || []).filter(api => api !== url);
+      const pool = (settings.apiPool || []).filter((api) => api !== url);
       await updateSettings({ apiPool: pool });
     },
     [settings, updateSettings]
