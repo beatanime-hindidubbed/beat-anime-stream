@@ -1,5 +1,5 @@
-import { useState, useRef } from "react";
-import { Loader2, Package, X, ChevronDown, Download } from "lucide-react";
+import { useState, useRef, useCallback } from "react";
+import { Loader2, Package, X, ChevronDown, Download, Zap, Clock, Wifi } from "lucide-react";
 import { api } from "@/lib/api";
 
 interface Props {
@@ -13,77 +13,200 @@ interface EpStatus {
   num: number;
   title: string;
   state: "pending" | "fetching" | "downloading" | "done" | "failed";
-  progress: number; // 0-100
+  progress: number;
+  apiIdx: number;
+  bytes: number;
 }
 
-const BASE = "https://beat-anime-api.onrender.com/api/v1";
-const PROXY_BASE = `${BASE}/hindiapi/proxy`;
+// ─── 4 API Pool (Option 7: Load balancing) ───────────────────────────────────
+const API_POOL = [
+  "https://beat-anime-api.onrender.com/api/v1",
+  "https://beat-anime-api-2.onrender.com/api/v1",
+  "https://beat-anime-api-3.onrender.com/api/v1",
+  "https://beat-anime-api-4.onrender.com/api/v1",
+];
 
+const PARALLEL_EPISODES = 4;   // Option 2: 4 episodes at once, one per API
+const PARALLEL_SEGMENTS  = 16; // Option 1: 16 HLS segments at once per episode
+const SEGMENT_DELAY_MS   = 8;  // brief pause between batches to avoid rate limits
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const proxyify = (base: string, raw: string, ref = "https://megacloud.blog/") =>
+  `${base}/hindiapi/proxy?url=${encodeURIComponent(raw)}&referer=${encodeURIComponent(ref)}`;
+
+const extractParam = (pUrl: string, param: string) => {
+  try { return decodeURIComponent(new URL(pUrl).searchParams.get(param) || ""); } catch { return ""; }
+};
+
+const resolveUrl = (base: string, rel: string) => {
+  if (!rel || rel.startsWith("http")) return rel;
+  try {
+    const b = new URL(base);
+    if (rel.startsWith("/")) return `${b.protocol}//${b.host}${rel}`;
+    return base.substring(0, base.lastIndexOf("/") + 1) + rel;
+  } catch { return rel; }
+};
+
+const fmtBytes = (b: number) => {
+  if (b < 1024) return `${b}B`;
+  if (b < 1048576) return `${(b / 1024).toFixed(1)}KB`;
+  if (b < 1073741824) return `${(b / 1048576).toFixed(1)}MB`;
+  return `${(b / 1073741824).toFixed(2)}GB`;
+};
+
+const fmtTime = (s: number) => {
+  if (!isFinite(s) || s <= 0) return "--";
+  if (s < 60) return `${Math.ceil(s)}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ${Math.ceil(s % 60)}s`;
+  return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
+};
+
+// ─── CRC32 + ZIP builder ──────────────────────────────────────────────────────
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let j = 0; j < 8; j++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+    t[i] = c;
+  }
+  return t;
+})();
+
+function crc32(data: Uint8Array) {
+  let c = 0xffffffff;
+  for (let i = 0; i < data.length; i++) c = (c >>> 8) ^ CRC_TABLE[(c ^ data[i]) & 0xff];
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function buildZip(files: { name: string; data: Uint8Array }[]): Uint8Array {
+  const enc = new TextEncoder();
+  const locals: Uint8Array[] = [];
+  const cds: Uint8Array[] = [];
+  const offsets: number[] = [];
+  let localOffset = 0;
+
+  for (const file of files) {
+    const nb = enc.encode(file.name);
+    const crc = crc32(file.data);
+    const sz = file.data.length;
+    const local = new Uint8Array(30 + nb.length + sz);
+    const lv = new DataView(local.buffer);
+    lv.setUint32(0, 0x04034b50, true); lv.setUint16(4, 20, true);
+    lv.setUint32(14, crc, true); lv.setUint32(18, sz, true); lv.setUint32(22, sz, true);
+    lv.setUint16(26, nb.length, true);
+    local.set(nb, 30); local.set(file.data, 30 + nb.length);
+    offsets.push(localOffset); locals.push(local); localOffset += local.length;
+
+    const cd = new Uint8Array(46 + nb.length);
+    const cv = new DataView(cd.buffer);
+    cv.setUint32(0, 0x02014b50, true); cv.setUint16(4, 20, true); cv.setUint16(6, 20, true);
+    cv.setUint32(16, crc, true); cv.setUint32(20, sz, true); cv.setUint32(24, sz, true);
+    cv.setUint16(28, nb.length, true); cv.setUint32(42, offsets[offsets.length - 1], true);
+    cd.set(nb, 46); cds.push(cd);
+  }
+
+  const cdSize = cds.reduce((s, c) => s + c.length, 0);
+  const eocd = new Uint8Array(22);
+  const ev = new DataView(eocd.buffer);
+  ev.setUint32(0, 0x06054b50, true);
+  ev.setUint16(8, files.length, true); ev.setUint16(10, files.length, true);
+  ev.setUint32(12, cdSize, true); ev.setUint32(16, localOffset, true);
+
+  const all = [...locals, ...cds, eocd];
+  const total = all.reduce((s, p) => s + p.length, 0);
+  const zip = new Uint8Array(total);
+  let pos = 0;
+  for (const p of all) { zip.set(p, pos); pos += p.length; }
+  return zip;
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 export default function AnimeDownloadButton({ animeId, animeName, totalEpisodes, className = "" }: Props) {
-  const [phase, setPhase] = useState<"idle" | "running" | "done" | "error">("idle");
+  const [phase, setPhase]           = useState<"idle" | "running" | "zipping" | "done" | "error">("idle");
   const [epStatuses, setEpStatuses] = useState<EpStatus[]>([]);
-  const [overallProgress, setOverallProgress] = useState(0);
-  const [statusMsg, setStatusMsg] = useState("");
-  const [showLog, setShowLog] = useState(false);
-  const abortRef = useRef(false);
+  const [overallPct, setOverallPct] = useState(0);
+  const [statusMsg, setStatusMsg]   = useState("");
+  const [showLog, setShowLog]       = useState(false);
+  const [dlBytes, setDlBytes]       = useState(0);
+  const [speed, setSpeed]           = useState("--");
+  const [eta, setEta]               = useState("--");
+  const [elapsed, setElapsed]       = useState("--");
+  const [apiStats, setApiStats]     = useState([0, 0, 0, 0]);
+
+  const abortRef   = useRef(false);
+  const startRef   = useRef(0);
+  const bytesRef   = useRef(0);
+  const doneRef    = useRef(0);
+  const totalRef   = useRef(0);
+  const timerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const safeName = animeName.replace(/[^a-z0-9\-_ ]/gi, "_");
 
-  const proxyify = (raw: string, ref = "https://megacloud.blog/") =>
-    `${PROXY_BASE}?url=${encodeURIComponent(raw)}&referer=${encodeURIComponent(ref)}`;
+  const updateEp = useCallback((idx: number, patch: Partial<EpStatus>) =>
+    setEpStatuses(prev => prev.map((e, i) => i === idx ? { ...e, ...patch } : e)), []);
 
-  const extractOriginalUrl = (pUrl: string) => {
-    try { return decodeURIComponent(new URL(pUrl).searchParams.get("url") || ""); } catch { return ""; }
+  const onSegmentBytes = useCallback((bytes: number) => {
+    bytesRef.current += bytes;
+    setDlBytes(bytesRef.current);
+  }, []);
+
+  const startTicker = () => {
+    timerRef.current = setInterval(() => {
+      const sec = (Date.now() - startRef.current) / 1000;
+      setElapsed(fmtTime(sec));
+      if (sec > 1 && bytesRef.current > 0) {
+        const bps = bytesRef.current / sec;
+        setSpeed(`${fmtBytes(bps)}/s`);
+        const done = doneRef.current;
+        const total = totalRef.current;
+        if (done > 0 && total > done) {
+          const avgBytes = bytesRef.current / done;
+          setEta(fmtTime(((total - done) * avgBytes) / bps));
+        } else if (done === total && total > 0) {
+          setEta("Done");
+        }
+      }
+    }, 1000);
   };
 
-  const extractReferer = (pUrl: string) => {
-    try { return decodeURIComponent(new URL(pUrl).searchParams.get("referer") || "https://megacloud.blog/"); } catch { return "https://megacloud.blog/"; }
+  const stopTicker = () => {
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
   };
 
-  const resolveSegUrl = (base: string, rel: string) => {
-    if (rel.startsWith("http")) return rel;
-    try {
-      const b = new URL(base);
-      if (rel.startsWith("/")) return `${b.protocol}//${b.host}${rel}`;
-      return base.substring(0, base.lastIndexOf("/") + 1) + rel;
-    } catch { return rel; }
-  };
-
-  const updateEp = (idx: number, patch: Partial<EpStatus>) =>
-    setEpStatuses(prev => prev.map((e, i) => i === idx ? { ...e, ...patch } : e));
-
-  /** Download one episode's HLS stream → Uint8Array (all segments concatenated) */
+  /** Download all segments of one episode from one API */
   const fetchEpisodeBlob = async (
     episodeId: string,
-    onProgress: (p: number) => void
+    apiBase: string,
+    epIdx: number,
+    signal: { aborted: boolean }
   ): Promise<Uint8Array | null> => {
-    // Try servers to get a stream URL
+
+    // Find a working stream source
     let proxyUrl = "";
-    const servers = ["hd-2", "hd-1", "vidstreaming", "megacloud"];
-    outer: for (const srv of servers) {
+    for (const srv of ["hd-2", "hd-1", "vidstreaming", "megacloud"]) {
       for (const cat of ["sub", "dub"]) {
+        if (signal.aborted) return null;
         try {
-          const r = await fetch(
-            `${BASE}/hianime/episode/sources?animeEpisodeId=${encodeURIComponent(episodeId)}&server=${srv}&category=${cat}`
-          );
+          const r = await fetch(`${apiBase}/hianime/episode/sources?animeEpisodeId=${encodeURIComponent(episodeId)}&server=${srv}&category=${cat}`);
           if (!r.ok) continue;
           const d = await r.json();
           const raw = d?.data?.sources?.[0]?.url;
-          if (raw) { proxyUrl = proxyify(raw); break outer; }
+          if (raw) { proxyUrl = proxyify(apiBase, raw); break; }
         } catch { continue; }
       }
+      if (proxyUrl) break;
     }
-    if (!proxyUrl) return null;
+    if (!proxyUrl || signal.aborted) return null;
 
-    // Fetch m3u8
-    const referer = extractReferer(proxyUrl);
-    const originalUrl = extractOriginalUrl(proxyUrl);
+    const referer     = extractParam(proxyUrl, "referer") || "https://megacloud.blog/";
+    const originalUrl = extractParam(proxyUrl, "url");
+
     const m3u8Res = await fetch(proxyUrl);
-    if (!m3u8Res.ok) return null;
+    if (!m3u8Res.ok || signal.aborted) return null;
     let m3u8Text = await m3u8Res.text();
-    let mediaProxyUrl = proxyUrl;
+    let mediaOriginal = originalUrl;
 
-    // Handle master playlist
+    // Master playlist → pick highest bandwidth stream
     if (m3u8Text.includes("#EXT-X-STREAM-INF")) {
       const lines = m3u8Text.split("\n").map(l => l.trim());
       let bestBW = -1, bestUri = "";
@@ -94,251 +217,202 @@ export default function AnimeDownloadButton({ animeId, animeName, totalEpisodes,
           if (uri && !uri.startsWith("#") && bw > bestBW) { bestBW = bw; bestUri = uri; }
         }
       }
-      if (!bestUri) return null;
-      const resolvedMedia = resolveSegUrl(originalUrl, bestUri);
-      mediaProxyUrl = proxyify(resolvedMedia, referer);
-      const mediaRes = await fetch(mediaProxyUrl);
-      if (!mediaRes.ok) return null;
+      if (!bestUri || signal.aborted) return null;
+      mediaOriginal = resolveUrl(originalUrl, bestUri);
+      const mediaRes = await fetch(proxyify(apiBase, mediaOriginal, referer));
+      if (!mediaRes.ok || signal.aborted) return null;
       m3u8Text = await mediaRes.text();
     }
 
-    // Parse segments
-    const mediaOriginal = extractOriginalUrl(mediaProxyUrl);
+    // Parse all segment URLs
     const segments: string[] = m3u8Text
-      .split("\n").map(l => l.trim()).filter(l => l && !l.startsWith("#"))
-      .map(seg => proxyify(resolveSegUrl(mediaOriginal || originalUrl, seg), referer));
+      .split("\n").map(l => l.trim())
+      .filter(l => l && !l.startsWith("#"))
+      .map(seg => proxyify(apiBase, resolveUrl(mediaOriginal, seg), referer));
 
-    if (!segments.length) return null;
+    if (!segments.length || signal.aborted) return null;
 
-    const chunks: Uint8Array[] = [];
-    for (let i = 0; i < segments.length; i++) {
-      if (abortRef.current) return null;
-      try {
-        const r = await fetch(segments[i]);
-        if (r.ok) chunks.push(new Uint8Array(await r.arrayBuffer()));
-      } catch { /* skip */ }
-      onProgress(Math.round(((i + 1) / segments.length) * 100));
-      await new Promise(r => setTimeout(r, 30)); // small delay to avoid hammering
+    // ── OPTION 1: Parallel segment batches ──────────────────────────────────
+    const chunks: (Uint8Array | null)[] = new Array(segments.length).fill(null);
+    let segsDone = 0;
+
+    for (let i = 0; i < segments.length; i += PARALLEL_SEGMENTS) {
+      if (signal.aborted) return null;
+      const batch = segments.slice(i, i + PARALLEL_SEGMENTS);
+
+      const results = await Promise.allSettled(
+        batch.map(async url => {
+          const r = await fetch(url);
+          if (!r.ok) return null;
+          return new Uint8Array(await r.arrayBuffer());
+        })
+      );
+
+      for (let j = 0; j < results.length; j++) {
+        const res = results[j];
+        if (res.status === "fulfilled" && res.value) {
+          chunks[i + j] = res.value;
+          onSegmentBytes(res.value.length);
+        }
+      }
+
+      segsDone += batch.length;
+      updateEp(epIdx, { progress: Math.round((segsDone / segments.length) * 100) });
+      if (SEGMENT_DELAY_MS) await new Promise(r => setTimeout(r, SEGMENT_DELAY_MS));
     }
 
-    if (!chunks.length) return null;
+    if (signal.aborted) return null;
 
-    const total = chunks.reduce((s, c) => s + c.length, 0);
+    const valid = chunks.filter((c): c is Uint8Array => c !== null);
+    if (!valid.length) return null;
+    const total = valid.reduce((s, c) => s + c.length, 0);
     const merged = new Uint8Array(total);
-    let offset = 0;
-    for (const c of chunks) { merged.set(c, offset); offset += c.length; }
+    let off = 0;
+    for (const c of valid) { merged.set(c, off); off += c.length; }
     return merged;
-  };
-
-  /** Build a ZIP file in-browser using the ZIP format spec (no external lib needed) */
-  const buildZip = (files: { name: string; data: Uint8Array }[]): Uint8Array => {
-    const encoder = new TextEncoder();
-    const localHeaders: Uint8Array[] = [];
-    const centralDir: Uint8Array[] = [];
-    const offsets: number[] = [];
-    let localOffset = 0;
-
-    for (const file of files) {
-      const nameBytes = encoder.encode(file.name);
-      const crc = crc32(file.data);
-      const size = file.data.length;
-
-      // Local file header
-      const local = new Uint8Array(30 + nameBytes.length + size);
-      const lv = new DataView(local.buffer);
-      lv.setUint32(0, 0x04034b50, true);  // signature
-      lv.setUint16(4, 20, true);           // version needed
-      lv.setUint16(6, 0, true);            // flags
-      lv.setUint16(8, 0, true);            // compression (stored)
-      lv.setUint16(10, 0, true);           // mod time
-      lv.setUint16(12, 0, true);           // mod date
-      lv.setUint32(14, crc, true);         // crc32
-      lv.setUint32(18, size, true);        // compressed size
-      lv.setUint32(22, size, true);        // uncompressed size
-      lv.setUint16(26, nameBytes.length, true);
-      lv.setUint16(28, 0, true);           // extra length
-      local.set(nameBytes, 30);
-      local.set(file.data, 30 + nameBytes.length);
-      localHeaders.push(local);
-      offsets.push(localOffset);
-      localOffset += local.length;
-
-      // Central directory entry
-      const cd = new Uint8Array(46 + nameBytes.length);
-      const cv = new DataView(cd.buffer);
-      cv.setUint32(0, 0x02014b50, true);  // central dir signature
-      cv.setUint16(4, 20, true);           // version made by
-      cv.setUint16(6, 20, true);           // version needed
-      cv.setUint16(8, 0, true);            // flags
-      cv.setUint16(10, 0, true);           // compression
-      cv.setUint16(12, 0, true);           // mod time
-      cv.setUint16(14, 0, true);           // mod date
-      cv.setUint32(16, crc, true);         // crc32
-      cv.setUint32(20, size, true);        // compressed size
-      cv.setUint32(24, size, true);        // uncompressed size
-      cv.setUint16(28, nameBytes.length, true);
-      cv.setUint16(30, 0, true);           // extra length
-      cv.setUint16(32, 0, true);           // comment length
-      cv.setUint16(34, 0, true);           // disk number start
-      cv.setUint16(36, 0, true);           // internal attrs
-      cv.setUint32(38, 0, true);           // external attrs
-      cv.setUint32(42, offsets[offsets.length - 1], true); // local header offset
-      cd.set(nameBytes, 46);
-      centralDir.push(cd);
-    }
-
-    const cdSize = centralDir.reduce((s, c) => s + c.length, 0);
-    const eocd = new Uint8Array(22);
-    const ev = new DataView(eocd.buffer);
-    ev.setUint32(0, 0x06054b50, true);          // end of central dir signature
-    ev.setUint16(4, 0, true);                    // disk number
-    ev.setUint16(6, 0, true);                    // disk with start of CD
-    ev.setUint16(8, files.length, true);         // entries on this disk
-    ev.setUint16(10, files.length, true);        // total entries
-    ev.setUint32(12, cdSize, true);              // central dir size
-    ev.setUint32(16, localOffset, true);         // central dir offset
-    ev.setUint16(20, 0, true);                   // comment length
-
-    // Concatenate everything
-    const allParts = [...localHeaders, ...centralDir, eocd];
-    const totalLen = allParts.reduce((s, p) => s + p.length, 0);
-    const zip = new Uint8Array(totalLen);
-    let pos = 0;
-    for (const p of allParts) { zip.set(p, pos); pos += p.length; }
-    return zip;
   };
 
   const handleDownloadAll = async () => {
     setPhase("running");
     abortRef.current = false;
-    setShowLog(true);
+    bytesRef.current = 0;
+    doneRef.current  = 0;
+    setDlBytes(0); setSpeed("--"); setEta("--"); setElapsed("--");
+    setApiStats([0, 0, 0, 0]); setOverallPct(0); setShowLog(true);
+    startRef.current = Date.now();
+    startTicker();
 
     try {
       setStatusMsg("Fetching episode list…");
-      const epData = await api.getEpisodes(animeId);
+      const epData   = await api.getEpisodes(animeId);
       const episodes = epData?.episodes || [];
-      if (!episodes.length) { setStatusMsg("No episodes found."); setPhase("error"); return; }
+      if (!episodes.length) { setStatusMsg("No episodes found."); setPhase("error"); stopTicker(); return; }
 
-      const statuses: EpStatus[] = episodes.map(ep => ({
+      totalRef.current = episodes.length;
+
+      setEpStatuses(episodes.map(ep => ({
         num: ep.number || 0,
         title: ep.title || `Episode ${ep.number}`,
-        state: "pending",
-        progress: 0,
-      }));
-      setEpStatuses(statuses);
+        state: "pending", progress: 0, apiIdx: 0, bytes: 0,
+      })));
 
-      const collectedFiles: { name: string; data: Uint8Array }[] = [];
-      let doneCount = 0;
+      const collected: ({ name: string; data: Uint8Array } | null)[] = new Array(episodes.length).fill(null);
+      const signal = { aborted: false };
 
-      for (let i = 0; i < episodes.length; i++) {
-        if (abortRef.current) break;
-        const ep = episodes[i];
-        if (!ep.episodeId) {
-          updateEp(i, { state: "failed" });
-          doneCount++;
-          continue;
-        }
+      // ── OPTION 2 + 7: Parallel episodes, each worker pinned to one API ─────
+      const queue = { next: 0 };
 
-        updateEp(i, { state: "fetching", progress: 0 });
-        setStatusMsg(`Downloading EP ${ep.number ?? i + 1} of ${episodes.length}…`);
+      const worker = async (workerIdx: number) => {
+        const apiIdx  = workerIdx % API_POOL.length;
+        const apiBase = API_POOL[apiIdx];
 
-        try {
-          updateEp(i, { state: "downloading" });
-          const blob = await fetchEpisodeBlob(ep.episodeId, p => updateEp(i, { progress: p }));
+        while (true) {
+          if (abortRef.current || signal.aborted) break;
+          const epIdx = queue.next++;
+          if (epIdx >= episodes.length) break;
 
-          if (blob && blob.length > 0) {
-            const fname = `${safeName}-EP${String(ep.number ?? i + 1).padStart(3, "0")}.ts`;
-            collectedFiles.push({ name: fname, data: blob });
-            updateEp(i, { state: "done", progress: 100 });
-          } else {
-            updateEp(i, { state: "failed", progress: 0 });
+          const ep = episodes[epIdx];
+          if (!ep.episodeId) {
+            updateEp(epIdx, { state: "failed" });
+            doneRef.current++;
+            setOverallPct(Math.round((doneRef.current / episodes.length) * 100));
+            continue;
           }
-        } catch {
-          updateEp(i, { state: "failed" });
+
+          setApiStats(prev => { const n = [...prev]; n[apiIdx]++; return n; });
+          updateEp(epIdx, { state: "fetching", apiIdx });
+
+          try {
+            updateEp(epIdx, { state: "downloading", apiIdx });
+            const blob = await fetchEpisodeBlob(ep.episodeId, apiBase, epIdx, signal);
+
+            if (blob && blob.length > 0) {
+              collected[epIdx] = {
+                name: `${safeName}-EP${String(ep.number ?? epIdx + 1).padStart(3, "0")}.ts`,
+                data: blob,
+              };
+              updateEp(epIdx, { state: "done", progress: 100 });
+            } else {
+              updateEp(epIdx, { state: "failed" });
+            }
+          } catch {
+            updateEp(epIdx, { state: "failed" });
+          }
+
+          doneRef.current++;
+          setOverallPct(Math.round((doneRef.current / episodes.length) * 100));
+          setStatusMsg(`${doneRef.current}/${episodes.length} episodes done`);
         }
+      };
 
-        doneCount++;
-        setOverallProgress(Math.round((doneCount / episodes.length) * 100));
-        await new Promise(r => setTimeout(r, 100));
+      // Start all 4 workers simultaneously
+      await Promise.all(Array.from({ length: PARALLEL_EPISODES }, (_, i) => worker(i)));
+
+      if (abortRef.current) {
+        stopTicker(); setPhase("idle"); setEpStatuses([]);
+        setStatusMsg("Cancelled."); return;
       }
 
-      if (collectedFiles.length === 0) {
-        setStatusMsg("No episodes could be downloaded.");
-        setPhase("error");
-        return;
-      }
+      // Build ZIP
+      setPhase("zipping"); setStatusMsg("Building ZIP…");
+      const validFiles = collected.filter((f): f is { name: string; data: Uint8Array } => f !== null);
+      if (!validFiles.length) { setStatusMsg("No episodes downloaded."); setPhase("error"); stopTicker(); return; }
 
-      setStatusMsg(`Building ZIP with ${collectedFiles.length} episodes…`);
-      const zip = buildZip(collectedFiles);
-      const blob = new Blob([zip], { type: "application/zip" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${safeName}-all-episodes.zip`;
-      a.style.display = "none";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 15000);
+      const zip  = buildZip(validFiles);
+      const blobUrl = URL.createObjectURL(new Blob([zip], { type: "application/zip" }));
+      const a = Object.assign(document.createElement("a"), { href: blobUrl, download: `${safeName}-all-episodes.zip` });
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
 
-      setStatusMsg(`✓ Downloaded ${collectedFiles.length} episodes as ZIP!`);
+      stopTicker();
+      const totalSec = (Date.now() - startRef.current) / 1000;
+      setElapsed(fmtTime(totalSec)); setEta("Done");
+      setStatusMsg(`✓ ${validFiles.length} episodes · ${fmtBytes(bytesRef.current)} · ${fmtTime(totalSec)}`);
       setPhase("done");
+
     } catch (err: any) {
+      stopTicker();
       setStatusMsg(err?.message || "An error occurred.");
       setPhase("error");
     }
   };
 
-  const handleCancel = () => {
-    abortRef.current = true;
-    setStatusMsg("Cancelled.");
-    setPhase("idle");
-    setEpStatuses([]);
-    setOverallProgress(0);
-  };
+  const handleCancel = () => { abortRef.current = true; setStatusMsg("Cancelling…"); };
 
   const handleReset = () => {
-    setPhase("idle");
-    setEpStatuses([]);
-    setOverallProgress(0);
-    setStatusMsg("");
-    setShowLog(false);
+    stopTicker();
+    setPhase("idle"); setEpStatuses([]); setOverallPct(0); setStatusMsg(""); setShowLog(false);
+    setDlBytes(0); setSpeed("--"); setEta("--"); setElapsed("--"); setApiStats([0, 0, 0, 0]);
   };
 
-  const stateColor = (s: EpStatus["state"]) => {
-    if (s === "done") return "bg-green-500";
-    if (s === "failed") return "bg-red-500";
-    if (s === "downloading" || s === "fetching") return "bg-primary animate-pulse";
-    return "bg-muted-foreground/30";
-  };
+  const dotColor = (s: EpStatus["state"]) =>
+    ({ done: "bg-green-500", failed: "bg-red-500/80", downloading: "bg-primary", fetching: "bg-accent animate-pulse", pending: "bg-muted-foreground/20" })[s];
+
+  const API_COLORS = ["text-cyan-400", "text-violet-400", "text-amber-400", "text-emerald-400"];
+  const isRunning  = phase === "running" || phase === "zipping";
 
   return (
     <div className={`flex flex-col gap-3 ${className}`}>
-      {/* ── Main action button ── */}
+
+      {/* ── Action buttons ── */}
       <div className="flex items-center gap-2 flex-wrap">
         {phase === "idle" && (
           <button
             onClick={handleDownloadAll}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-accent text-sm font-semibold text-accent-foreground hover:opacity-90 transition-opacity shadow-md"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-accent text-sm font-semibold text-accent-foreground hover:opacity-90 active:scale-95 transition-all shadow-md"
           >
             <Package className="w-4 h-4" />
-            Download All as ZIP {totalEpisodes ? `(${totalEpisodes} eps)` : ""}
+            Download All as ZIP{totalEpisodes ? ` (${totalEpisodes} eps)` : ""}
           </button>
         )}
 
-        {phase === "running" && (
+        {isRunning && (
           <>
-            <button
-              disabled
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-accent text-sm font-semibold text-accent-foreground opacity-80 cursor-not-allowed"
-            >
+            <button disabled className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-accent text-sm font-semibold text-accent-foreground opacity-90 cursor-not-allowed">
               <Loader2 className="w-4 h-4 animate-spin" />
-              {overallProgress}% — {statusMsg}
+              {phase === "zipping" ? "Building ZIP…" : `${overallPct}% downloading`}
             </button>
-            <button
-              onClick={handleCancel}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-destructive/20 text-destructive text-sm font-medium hover:bg-destructive/30 transition-colors"
-            >
+            <button onClick={handleCancel} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-destructive/20 text-destructive text-sm font-medium hover:bg-destructive/30 transition-colors">
               <X className="w-4 h-4" /> Cancel
             </button>
           </>
@@ -346,73 +420,131 @@ export default function AnimeDownloadButton({ animeId, animeName, totalEpisodes,
 
         {(phase === "done" || phase === "error") && (
           <>
-            <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium ${phase === "done" ? "bg-green-500/15 text-green-400" : "bg-red-500/15 text-red-400"}`}>
+            <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border ${phase === "done" ? "bg-green-500/10 text-green-400 border-green-500/20" : "bg-red-500/10 text-red-400 border-red-500/20"}`}>
               {phase === "done" ? <Download className="w-4 h-4" /> : <X className="w-4 h-4" />}
               {statusMsg}
             </div>
-            <button
-              onClick={handleReset}
-              className="px-3 py-2 rounded-xl bg-secondary text-secondary-foreground text-sm hover:bg-secondary/80 transition-colors"
-            >
+            <button onClick={handleReset} className="px-3 py-2 rounded-xl bg-secondary text-secondary-foreground text-sm hover:bg-secondary/80 transition-colors">
               Reset
             </button>
           </>
         )}
 
-        {/* Toggle log */}
         {epStatuses.length > 0 && (
-          <button
-            onClick={() => setShowLog(!showLog)}
-            className="flex items-center gap-1 px-3 py-2 rounded-xl bg-secondary/60 text-secondary-foreground text-xs hover:bg-secondary transition-colors"
-          >
+          <button onClick={() => setShowLog(v => !v)} className="flex items-center gap-1 px-3 py-2 rounded-xl bg-secondary/60 text-secondary-foreground text-xs hover:bg-secondary transition-colors">
             <ChevronDown className={`w-3 h-3 transition-transform ${showLog ? "rotate-180" : ""}`} />
-            {showLog ? "Hide" : "Show"} Progress
+            {showLog ? "Hide" : "Show"} Log
           </button>
         )}
       </div>
 
-      {/* ── Overall progress bar ── */}
-      {phase === "running" && (
-        <div className="w-full h-1.5 bg-secondary rounded-full overflow-hidden">
-          <div
-            className="h-full bg-gradient-accent rounded-full transition-all duration-300"
-            style={{ width: `${overallProgress}%` }}
-          />
+      {/* ── Live stats bar ── */}
+      {isRunning && (
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 sm:gap-4 px-4 py-3 rounded-xl bg-card/60 border border-border text-xs">
+
+          {/* Progress bar — full width on mobile */}
+          <div className="col-span-2 sm:flex-1 sm:min-w-40">
+            <div className="flex justify-between mb-1.5 font-medium">
+              <span className="text-muted-foreground">Progress</span>
+              <span className="tabular-nums">{overallPct}%</span>
+            </div>
+            <div className="h-2 bg-secondary rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-500"
+                style={{ width: `${overallPct}%`, background: "var(--gradient-accent)" }}
+              />
+            </div>
+          </div>
+
+          {/* ETA */}
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <Clock className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+            <span>ETA <span className="text-foreground font-semibold">{eta}</span></span>
+          </div>
+
+          {/* Elapsed */}
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <Clock className="w-3.5 h-3.5 opacity-40 flex-shrink-0" />
+            <span>Elapsed <span className="text-foreground font-semibold">{elapsed}</span></span>
+          </div>
+
+          {/* Speed */}
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <Zap className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+            <span className="text-foreground font-semibold">{speed}</span>
+          </div>
+
+          {/* Downloaded */}
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <Download className="w-3.5 h-3.5 flex-shrink-0" />
+            <span className="text-foreground font-semibold">{fmtBytes(dlBytes)}</span>
+          </div>
+
+          {/* API load balancer */}
+          <div className="flex items-center gap-1.5 text-muted-foreground col-span-2 sm:col-span-1">
+            <Wifi className="w-3.5 h-3.5 flex-shrink-0" />
+            <div className="flex items-center gap-1">
+              {API_POOL.map((_, i) => (
+                <span
+                  key={i}
+                  title={`API ${i + 1}: ${apiStats[i]} eps`}
+                  className={`${API_COLORS[i]} font-bold text-[11px] px-1.5 py-0.5 rounded bg-white/5`}
+                >
+                  {apiStats[i]}
+                </span>
+              ))}
+              <span className="text-muted-foreground/50 text-[10px] ml-0.5">eps/api</span>
+            </div>
+          </div>
+
         </div>
       )}
 
-      {/* ── Per-episode log ── */}
+      {/* ── Episode log ── */}
       {showLog && epStatuses.length > 0 && (
-        <div className="rounded-xl border border-border bg-card/50 overflow-hidden">
-          <div className="px-4 py-2.5 border-b border-border flex items-center justify-between">
-            <span className="text-xs font-semibold text-foreground">Episode Progress</span>
-            <span className="text-xs text-muted-foreground">
-              {epStatuses.filter(e => e.state === "done").length} / {epStatuses.length} done
+        <div className="rounded-xl border border-border bg-card/40 overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-border flex items-center justify-between bg-card/60">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold">Episodes</span>
+              <div className="flex items-center gap-1">
+                {API_POOL.map((_, i) => (
+                  <span key={i} className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${API_COLORS[i]} bg-white/5`}>
+                    API{i + 1}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <span className="text-[11px] text-muted-foreground tabular-nums">
+              {epStatuses.filter(e => e.state === "done").length}/{epStatuses.length} done
+              {epStatuses.filter(e => e.state === "failed").length > 0 &&
+                <span className="text-red-400 ml-1">· {epStatuses.filter(e => e.state === "failed").length} failed</span>
+              }
             </span>
           </div>
-          <div className="max-h-56 overflow-y-auto divide-y divide-border">
+
+          <div className="max-h-72 overflow-y-auto divide-y divide-border/40">
             {epStatuses.map((ep, i) => (
-              <div key={i} className="flex items-center gap-3 px-4 py-2">
-                {/* Status dot */}
-                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${stateColor(ep.state)}`} />
-                {/* EP label */}
-                <span className="text-xs text-muted-foreground w-10 flex-shrink-0 tabular-nums">
-                  EP {ep.num}
+              <div key={i} className={`flex items-center gap-2 px-3 py-1.5 text-[11px] transition-colors ${ep.state === "downloading" ? "bg-primary/5" : ""}`}>
+                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotColor(ep.state)}`} />
+                <span className="text-muted-foreground w-7 flex-shrink-0 tabular-nums font-mono">
+                  {String(ep.num).padStart(2, "0")}
                 </span>
-                {/* Title */}
-                <span className="text-xs text-foreground flex-1 truncate">{ep.title}</span>
-                {/* Progress or status */}
-                <span className="text-xs tabular-nums flex-shrink-0 w-16 text-right">
+                {(ep.state === "downloading" || ep.state === "fetching") && (
+                  <span className={`text-[9px] font-bold px-1 py-0.5 rounded flex-shrink-0 ${API_COLORS[ep.apiIdx]} bg-white/5`}>
+                    API{ep.apiIdx + 1}
+                  </span>
+                )}
+                <span className="text-foreground/80 flex-1 truncate">{ep.title}</span>
+                <span className="flex-shrink-0 w-14 text-right tabular-nums">
                   {ep.state === "done"        && <span className="text-green-400">✓ Done</span>}
-                  {ep.state === "failed"       && <span className="text-red-400">✗ Failed</span>}
-                  {ep.state === "pending"      && <span className="text-muted-foreground">Waiting</span>}
-                  {ep.state === "fetching"     && <span className="text-primary">Finding…</span>}
-                  {ep.state === "downloading"  && <span className="text-primary">{ep.progress}%</span>}
+                  {ep.state === "failed"      && <span className="text-red-400/80">✗ Fail</span>}
+                  {ep.state === "pending"     && <span className="text-muted-foreground/40">—</span>}
+                  {ep.state === "fetching"    && <span className="text-accent animate-pulse">Finding</span>}
+                  {ep.state === "downloading" && <span className="text-primary font-semibold">{ep.progress}%</span>}
                 </span>
-                {/* Mini progress bar for downloading */}
                 {ep.state === "downloading" && (
-                  <div className="w-16 h-1 bg-secondary rounded-full overflow-hidden flex-shrink-0">
-                    <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${ep.progress}%` }} />
+                  <div className="w-10 h-1 bg-secondary rounded-full overflow-hidden flex-shrink-0">
+                    <div className="h-full bg-primary rounded-full transition-all duration-150" style={{ width: `${ep.progress}%` }} />
                   </div>
                 )}
               </div>
@@ -420,26 +552,7 @@ export default function AnimeDownloadButton({ animeId, animeName, totalEpisodes,
           </div>
         </div>
       )}
+
     </div>
   );
-}
-
-// ── CRC32 implementation (required for valid ZIP) ─────────────────────────
-function crc32(data: Uint8Array): number {
-  const table = makeCRC32Table();
-  let crc = 0xFFFFFFFF;
-  for (let i = 0; i < data.length; i++) {
-    crc = (crc >>> 8) ^ table[(crc ^ data[i]) & 0xFF];
-  }
-  return (crc ^ 0xFFFFFFFF) >>> 0;
-}
-
-function makeCRC32Table(): Uint32Array {
-  const table = new Uint32Array(256);
-  for (let i = 0; i < 256; i++) {
-    let c = i;
-    for (let j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
-    table[i] = c;
-  }
-  return table;
 }
