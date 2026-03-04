@@ -29,6 +29,7 @@ interface HindiSource {
   headers: Record<string, string>;
 }
 
+// ── Exact same fetchHindiSources as original WatchPage ──────────────────────
 async function fetchHindiSources(animeInfo: any, episodeNumber: number): Promise<HindiSource[]> {
   const moreInfo = animeInfo?.anime?.moreInfo || animeInfo?.moreInfo || {};
   const info = animeInfo?.anime?.info || {};
@@ -47,12 +48,20 @@ async function fetchHindiSources(animeInfo: any, episodeNumber: number): Promise
 
   if (!res.ok || data.status !== 200) throw new Error(data.error || "No Hindi sources found");
 
+  // ── Exact same source extraction as tester HTML ──────────────────────
   const sources = data.data?.streams || data.data?.sources || data.data?.servers || [];
   if (!sources.length) throw new Error("No Hindi sources found");
 
   return sources.map((src: any) => ({
     name: src.provider || src.serverName || src.name || "Unknown",
-    isHLS: !!(src.dhls || src.isM3U8 || (src.url && src.url.includes(".m3u8")) || (src.streamUrl && src.streamUrl.includes(".m3u8"))),
+    // Exact same isHLS detection as tester HTML playSource()
+    isHLS: !!(
+      src.isM3U8 ||
+      src.dhls ||
+      (src.url && src.url.includes(".m3u8")) ||
+      (src.streamUrl && src.streamUrl.includes(".m3u8"))
+    ),
+    // Exact same URL extraction as tester HTML
     url: src.dhls || src.streamUrl || src.url || "",
     headers: src.headers || {},
   }));
@@ -62,7 +71,9 @@ export default function WatchPage() {
   const navigate = useNavigate();
   const { episodeId } = useParams<{ episodeId: string }>();
   const [searchParams] = useSearchParams();
-  const fullEpisodeId = episodeId ? `${episodeId}${searchParams.get("ep") ? `?ep=${searchParams.get("ep")}` : ""}` : "";
+  const fullEpisodeId = episodeId
+    ? `${episodeId}${searchParams.get("ep") ? `?ep=${searchParams.get("ep")}` : ""}`
+    : "";
 
   const [category, setCategory] = useState<string>("sub");
   const [selectedServer, setSelectedServer] = useState<string>("hd-2");
@@ -74,13 +85,12 @@ export default function WatchPage() {
   const [retryKey, setRetryKey] = useState(0);
   const [retryMessage, setRetryMessage] = useState("");
 
-  // Hindi-specific state
+  // Hindi state — same as original
   const [hindiSources, setHindiSources] = useState<HindiSource[]>([]);
   const [selectedHindiSource, setSelectedHindiSource] = useState<HindiSource | null>(null);
-
-  // Derived: what the HindiVideoPlayer actually receives
-  const [hindiHlsSrc, setHindiHlsSrc] = useState<string | undefined>(undefined);
-  const [hindiEmbedSrc, setHindiEmbedSrc] = useState<string | undefined>(undefined);
+  // NEW: instead of hindiIframeSrc as a separate state, we pass directly to HindiVideoPlayer
+  const [hindiHlsSrc, setHindiHlsSrc] = useState<string | null>(null);
+  const [hindiIframeSrc, setHindiIframeSrc] = useState<string | null>(null);
 
   const langRef = useRef<HTMLDivElement>(null);
   const { settings } = useSiteSettings();
@@ -117,21 +127,21 @@ export default function WatchPage() {
   const animeName = info?.anime?.info?.name || animeId;
   const animePoster = info?.anime?.info?.poster;
 
-  // ── Apply hindi source to player state ─────────────────────────────────
-  const applyHindiSource = (src: HindiSource) => {
+  // Switch between Hindi sources — same logic as original switchHindiSource
+  const switchHindiSource = (src: HindiSource) => {
     setSelectedHindiSource(src);
     setStreamResult(null);
+    setHindiHlsSrc(null);
+    setHindiIframeSrc(null);
     if (src.isHLS) {
       setHindiHlsSrc(src.url);
-      setHindiEmbedSrc(undefined);
     } else {
-      // Embed source — no sandbox, no proxy needed
-      setHindiHlsSrc(undefined);
-      setHindiEmbedSrc(src.url);
+      // Embed source — passed to HindiVideoPlayer which renders WITHOUT sandbox
+      setHindiIframeSrc(src.url);
     }
   };
 
-  // ── Hindi stream loader ──────────────────────────────────────────────────
+  // ── Hindi stream loader — identical logic to original ─────────────────
   useEffect(() => {
     if (category !== "dub" || !info || !currentEp) return;
     let cancelled = false;
@@ -142,8 +152,8 @@ export default function WatchPage() {
       setStreamResult(null);
       setHindiSources([]);
       setSelectedHindiSource(null);
-      setHindiHlsSrc(undefined);
-      setHindiEmbedSrc(undefined);
+      setHindiHlsSrc(null);
+      setHindiIframeSrc(null);
       setRetryMessage("Fetching Hindi sources...");
 
       try {
@@ -152,10 +162,10 @@ export default function WatchPage() {
 
         setHindiSources(sources);
 
-        // Prefer HLS sources first, fall back to embed
+        // Same as tester HTML: prefer first HLS source
         const firstHLS = sources.find((s) => s.isHLS) || sources[0];
         if (firstHLS) {
-          applyHindiSource(firstHLS);
+          switchHindiSource(firstHLS);
         } else {
           setStreamError("all_failed");
         }
@@ -170,7 +180,7 @@ export default function WatchPage() {
     return () => { cancelled = true; };
   }, [category, info, currentEp, retryKey]);
 
-  // ── HiAnime (sub/raw) stream loader ──────────────────────────────────────
+  // ── HiAnime (sub/raw) stream loader — unchanged from original ─────────
   useEffect(() => {
     if (category === "dub" || !fullEpisodeId) return;
     let cancelled = false;
@@ -180,8 +190,8 @@ export default function WatchPage() {
       setStreamError(null);
       setStreamResult(null);
       setHindiSources([]);
-      setHindiHlsSrc(undefined);
-      setHindiEmbedSrc(undefined);
+      setHindiHlsSrc(null);
+      setHindiIframeSrc(null);
       setRetryMessage("");
 
       for (let i = 0; i < HIANIME_SERVERS.length; i++) {
@@ -256,16 +266,19 @@ export default function WatchPage() {
                 : "Try switching the language or come back later"}
             </p>
             <div className="flex gap-2 justify-center flex-wrap">
-              <button onClick={() => setRetryKey((k) => k + 1)} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm">
+              <button onClick={() => setRetryKey((k) => k + 1)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm">
                 <RefreshCw className="w-4 h-4" /> Try Again
               </button>
               {category !== "sub" && (
-                <button onClick={() => setCategory("sub")} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm">
+                <button onClick={() => setCategory("sub")}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm">
                   Switch to SUB
                 </button>
               )}
               {category !== "dub" && (
-                <button onClick={() => setCategory("dub")} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm">
+                <button onClick={() => setCategory("dub")}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm">
                   Switch to HINDI
                 </button>
               )}
@@ -275,21 +288,31 @@ export default function WatchPage() {
       );
     }
 
-    // ── Hindi DUB mode → use HindiVideoPlayer ──────────────────────────
-    if (category === "dub" && (hindiHlsSrc || hindiEmbedSrc)) {
+    // ── Hindi DUB: HLS stream → HindiVideoPlayer with src ──────────────
+    if (category === "dub" && hindiHlsSrc) {
       return (
         <HindiVideoPlayer
           src={hindiHlsSrc}
-          embedSrc={hindiEmbedSrc}
-          sources={hindiSources}
-          onSourceChange={applyHindiSource}
           onTimeUpdate={handleTimeUpdate}
           onEnded={() => { if (nextEp) navigate(`/watch/${nextEp.episodeId}`); }}
         />
       );
     }
 
-    // ── Sub / Raw → use standard VideoPlayer ───────────────────────────
+    // ── Hindi DUB: Embed/iframe → HindiVideoPlayer with iframeSrc ───────
+    // KEY DIFFERENCE: HindiVideoPlayer renders this WITHOUT sandbox attribute,
+    // fixing "This video is not available due to sandboxed iframe!" error
+    if (category === "dub" && hindiIframeSrc) {
+      return (
+        <HindiVideoPlayer
+          iframeSrc={hindiIframeSrc}
+          onTimeUpdate={handleTimeUpdate}
+          onEnded={() => { if (nextEp) navigate(`/watch/${nextEp.episodeId}`); }}
+        />
+      );
+    }
+
+    // ── Sub/Raw: standard VideoPlayer — unchanged ──────────────────────
     if (streamResult?.type === "hls") {
       return (
         <VideoPlayer
@@ -314,11 +337,10 @@ export default function WatchPage() {
     <div className="container py-4 max-w-6xl">
       <BackButton />
 
-      {/* Player */}
       <div className="mb-4">{renderPlayer()}</div>
 
       {/* Stream info */}
-      {(streamResult || hindiHlsSrc || hindiEmbedSrc) && (
+      {(streamResult || hindiHlsSrc || hindiIframeSrc) && (
         <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground">
           <Server className="w-3 h-3" />
           <span>
@@ -328,9 +350,7 @@ export default function WatchPage() {
             </span>
             {" · "}
             <span className={category === "dub" ? "text-orange-400 font-medium" : ""}>
-              {category === "dub"
-                ? `🇮🇳 हिंदी DUB${selectedHindiSource && !selectedHindiSource.isHLS ? " (Embed)" : " (HLS)"}`
-                : (streamResult?.category || category).toUpperCase()}
+              {category === "dub" ? "🇮🇳 हिंदी DUB" : (streamResult?.category || category).toUpperCase()}
             </span>
           </span>
         </div>
@@ -338,15 +358,16 @@ export default function WatchPage() {
 
       {/* Controls row */}
       <div className="flex flex-wrap items-center gap-3 mb-4">
-        {/* Prev / Next */}
         <div className="flex items-center gap-2">
           {prevEp && (
-            <Link to={`/watch/${prevEp.episodeId}`} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-secondary text-sm text-secondary-foreground hover:bg-secondary/80 transition-colors">
+            <Link to={`/watch/${prevEp.episodeId}`}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-secondary text-sm text-secondary-foreground hover:bg-secondary/80 transition-colors">
               <ChevronLeft className="w-4 h-4" /> Prev
             </Link>
           )}
           {nextEp && (
-            <Link to={`/watch/${nextEp.episodeId}`} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-secondary text-sm text-secondary-foreground hover:bg-secondary/80 transition-colors">
+            <Link to={`/watch/${nextEp.episodeId}`}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-secondary text-sm text-secondary-foreground hover:bg-secondary/80 transition-colors">
               Next <ChevronRight className="w-4 h-4" />
             </Link>
           )}
@@ -393,7 +414,7 @@ export default function WatchPage() {
             {hindiSources.map((src) => (
               <button
                 key={src.name}
-                onClick={() => applyHindiSource(src)}
+                onClick={() => switchHindiSource(src)}
                 className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
                   selectedHindiSource?.name === src.name
                     ? "bg-orange-500 text-white"
