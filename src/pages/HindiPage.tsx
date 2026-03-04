@@ -6,16 +6,9 @@ import { motion } from "framer-motion";
 import { Globe } from "lucide-react";
 
 const LANGUAGES = [
-  { key: "hindi", label: "🇮🇳 Hindi", searchTerm: "hindi dub" },
-  { key: "tamil", label: " Tamil", searchTerm: "tamil dub" },
-  { key: "telugu", label: " Telugu", searchTerm: "telugu dub" },
-];
-
-// Popular anime IDs to prioritize for dub content
-const POPULAR_DUB_SEARCHES = [
-  "dragon ball", "naruto", "one piece", "bleach", "attack on titan",
-  "death note", "demon slayer", "my hero academia", "jujutsu kaisen",
-  "fullmetal alchemist", "sword art online", "fairy tail", "black clover",
+  { key: "hindi", label: "🇮🇳 Hindi", searchTerms: ["hindi dub", "hindi"] },
+  { key: "tamil", label: "Tamil", searchTerms: ["tamil dub"] },
+  { key: "telugu", label: "Telugu", searchTerms: ["telugu dub"] },
 ];
 
 export default function HindiPage() {
@@ -35,39 +28,26 @@ export default function HindiPage() {
       const results: AnimeItem[] = [];
 
       if (pg === 1) {
-        // First page: search specifically for dub content
-        const [dubCategory, searchResult] = await Promise.allSettled([
+        // Search for dub content across multiple queries
+        const searches = await Promise.allSettled([
           api.getCategory("most-popular", 1),
           api.search("dub", 1),
+          api.getCategory("top-airing", 1),
         ]);
 
-        const catItems = dubCategory.status === "fulfilled" ? dubCategory.value?.animes || [] : [];
-        const searchItems = searchResult.status === "fulfilled" ? searchResult.value?.animes || [] : [];
-
-        // Combine and filter to only dubbed anime
-        [...catItems, ...searchItems].forEach((a) => {
-          if (!seenIds.current.has(a.id) && a.episodes?.dub && a.episodes.dub > 0) {
-            seenIds.current.add(a.id);
-            results.push(a);
-          }
-        });
-
-        // Also search popular titles
-        const popularSearch = await api.search(
-          activeLang === "hindi" ? "hindi" : activeLang === "tamil" ? "tamil" : "telugu",
-          1
-        ).catch(() => ({ animes: [] as AnimeItem[] }));
-
-        (popularSearch?.animes || []).forEach((a) => {
-          if (!seenIds.current.has(a.id)) {
-            seenIds.current.add(a.id);
-            results.push(a);
-          }
-        });
+        for (const s of searches) {
+          if (s.status !== "fulfilled") continue;
+          const items = s.value?.animes || [];
+          items.forEach((a: AnimeItem) => {
+            if (!seenIds.current.has(a.id) && a.episodes?.dub && a.episodes.dub > 0) {
+              seenIds.current.add(a.id);
+              results.push(a);
+            }
+          });
+        }
       } else {
-        // Subsequent pages
         const data = await api.getCategory("most-popular", pg);
-        (data?.animes || []).forEach((a) => {
+        (data?.animes || []).forEach((a: AnimeItem) => {
           if (!seenIds.current.has(a.id) && a.episodes?.dub && a.episodes.dub > 0) {
             seenIds.current.add(a.id);
             results.push(a);
@@ -107,6 +87,8 @@ export default function HindiPage() {
     return () => obs.disconnect();
   }, [loading, hasMore, page, fetchDubbedAnime]);
 
+  const langConfig = LANGUAGES.find(l => l.key === activeLang) || LANGUAGES[0];
+
   return (
     <div className="container py-6">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
@@ -115,8 +97,8 @@ export default function HindiPage() {
             <Globe className="w-5 h-5 text-accent-foreground" />
           </div>
           <div>
-            <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground">Hindi & Regional</h1>
-            <p className="text-sm text-muted-foreground">Only dubbed anime — watch in your language</p>
+            <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground">Hindi & Regional Anime</h1>
+            <p className="text-sm text-muted-foreground">Anime with dub episodes — watch in your language</p>
           </div>
         </div>
       </motion.div>
@@ -141,8 +123,8 @@ export default function HindiPage() {
       {/* Info banner */}
       <div className="bg-primary/10 border border-primary/20 rounded-xl px-4 py-3 mb-6">
         <p className="text-sm text-primary">
-          🎙️ Showing only anime with dubbed episodes available. All anime below have{" "}
-          <span className="font-bold">DUB</span> versions.
+          🎙️ Showing anime with <span className="font-bold">DUB</span> episodes available.
+          Default playback: <span className="font-bold">{langConfig.label} dub</span> with English subtitles when available.
         </p>
       </div>
 
