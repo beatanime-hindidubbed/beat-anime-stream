@@ -407,7 +407,48 @@ export default function WatchPage() {
             )}
           </AnimatePresence>
         </div>
-        
+
+        {/* Server selector */}
+        {category === "dub" && hindiSources.length > 1 ? (
+          <div className="flex items-center gap-1 border border-orange-500/30 rounded-lg p-0.5 flex-wrap">
+            {hindiSources.map((src) => (
+              <button
+                key={src.name}
+                onClick={() => switchHindiSource(src)}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
+                  selectedHindiSource?.name === src.name
+                    ? "bg-orange-500 text-white"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {src.name}
+                {!src.isHLS && <span className="ml-1 text-[9px] opacity-60">EMBED</span>}
+              </button>
+            ))}
+          </div>
+        ) : category !== "dub" ? (
+          <div className="flex items-center gap-1 border border-border rounded-lg p-0.5">
+            {HIANIME_SERVERS.map((srv) => (
+              <button
+                key={srv}
+                onClick={() => { setSelectedServer(srv); setRetryKey((k) => k + 1); }}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
+                  selectedServer === srv ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {srv.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        <button
+          onClick={() => setShowEpList(!showEpList)}
+          className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-secondary text-sm text-secondary-foreground hover:bg-secondary/80 transition-colors ml-auto"
+        >
+          <List className="w-4 h-4" /> Episodes
+        </button>
+      </div>
 
       {/* Episode info + download */}
       <div className="flex items-start justify-between mb-4">
@@ -429,8 +470,7 @@ export default function WatchPage() {
           />
         )}
       </div>
-        
-        
+
       {/* Episode list */}
       {showEpList && (
         <div className="mb-6 max-h-64 overflow-y-auto border border-border rounded-lg p-3">
