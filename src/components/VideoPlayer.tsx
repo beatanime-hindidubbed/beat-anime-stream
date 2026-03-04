@@ -29,7 +29,7 @@ interface Props {
 
 const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
-// ─── Obfuscation helpers (keep src out of DOM) ────────────────────────────────
+// ─── Obfuscation helpers ────────────────────────────────────────────────────
 const XOR_KEYS = [0x5A, 0x3F, 0x71, 0xA2, 0x1D, 0xE8, 0x4C, 0x93];
 function obfuscate(url: string) {
   const rev = url.split("").reverse().join("");
@@ -50,7 +50,6 @@ function makeAccessor(enc: string) {
   };
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
 export default function VideoPlayer({
   src, tracks, intro, outro, onTimeUpdate, onEnded,
   startTime, ambientMode = false, autoPlayNext = true, onAutoPlayToggle,
@@ -59,6 +58,7 @@ export default function VideoPlayer({
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef    = useRef<HTMLCanvasElement>(null);
   const hlsRef       = useRef<Hls | null>(null);
+  const wrapperRef   = useRef<HTMLDivElement>(null);
 
   // Preview thumbnail
   const previewVideoRef  = useRef<HTMLVideoElement>(null);
@@ -99,6 +99,8 @@ export default function VideoPlayer({
   const [previewHasFrame, setPreviewHasFrame] = useState(false);
   const [previewReady, setPreviewReady] = useState(false);
   const [isMobile, setIsMobile]     = useState(false);
+  // Mini player (YouTube-style scroll follow)
+  const [miniPlayer, setMiniPlayer] = useState(false);
 
   // Timer refs
   const hideTimer       = useRef<ReturnType<typeof setTimeout>>();
@@ -112,16 +114,39 @@ export default function VideoPlayer({
   const touchStartTime  = useRef(0);
   const touchStartPos   = useRef({ x: 0, y: 0 });
   const touchMoved      = useRef(false);
-  // Track whether the current touch started on the seek bar
   const touchOnSeekBar  = useRef(false);
+  // Track last playing state before fullscreen / visibility changes
+  const wasPlayingRef   = useRef(false);
 
   // Detect mobile
   useEffect(() => {
-    const check = () => setIsMobile(window.matchMedia("(max-width: 768px) or (pointer: coarse)").matches);
+    const check = () => setIsMobile(window.matchMedia("(max-width: 768px), (pointer: coarse)").matches);
     check();
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
   }, []);
+
+  // ── YouTube-style mini player on scroll ────────────────────────────────
+  useEffect(() => {
+    if (!wrapperRef.current) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        // Show mini player only when playing and scrolled out of view
+        setMiniPlayer(!entry.isIntersecting && playing);
+      },
+      { threshold: 0.2 }
+    );
+    observer.observe(wrapperRef.current);
+    return () => observer.disconnect();
+  }, [playing]);
+
+  // Update mini player state when playing changes
+  useEffect(() => {
+    if (!wrapperRef.current) return;
+    const rect = wrapperRef.current.getBoundingClientRect();
+    const isVisible = rect.top > -rect.height * 0.8 && rect.bottom < window.innerHeight + rect.height * 0.8;
+    setMiniPlayer(!isVisible && playing);
+  }, [playing]);
 
   // Re-encode when src changes
   useEffect(() => {
@@ -137,6 +162,54 @@ export default function VideoPlayer({
     v.addEventListener("contextmenu", prevent);
     return () => v.removeEventListener("contextmenu", prevent);
   }, []);
+
+  // ── FIX: Handle visibility change (mobile tab switch / fullscreen) ────
+  useEffect(() => {
+    const handleVisibility = () => {
+      const v = videoRef.current;
+      if (!v) return;
+      if (document.hidden) {
+        // Store state but DON'T pause — let browser handle it
+        wasPlayingRef.current = !v.paused;
+      } else {
+        // Page became visible again — restore play state if needed
+        if (wasPlayingRef.current && v.paused && !isBuffering) {
+          v.play().catch(() => {});
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [isBuffering]);
+
+  // ── FIX: Handle fullscreen changes on mobile without pausing ─────────
+  useEffect(() => {
+    const handler = () => {
+      const isFs = !!document.fullscreenElement;
+      setFullscreen(isFs);
+      const v = videoRef.current;
+      if (!v) return;
+      // After fullscreen transition, resume if we were playing
+      if (wasPlayingRef.current && v.paused) {
+        setTimeout(() => {
+          if (wasPlayingRef.current && v.paused) {
+            v.play().catch(() => {});
+          }
+        }, 300);
+      }
+    };
+    document.addEventListener("fullscreenchange", handler);
+    document.addEventListener("webkitfullscreenchange", handler);
+    return () => {
+      document.removeEventListener("fullscreenchange", handler);
+      document.removeEventListener("webkitfullscreenchange", handler);
+    };
+  }, []);
+
+  // Track wasPlayingRef continuously
+  useEffect(() => {
+    wasPlayingRef.current = playing;
+  }, [playing]);
 
   // ── Main HLS ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -160,6 +233,16 @@ export default function VideoPlayer({
         setQualityLevels(data.levels.map(l => ({ height: l.height, bitrate: l.bitrate })));
         setCurrentQuality(-1);
       });
+      // FIX: handle HLS errors gracefully
+      hls.on(Hls.Events.ERROR, (_e, data) => {
+        if (data.fatal) {
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+            hls.startLoad();
+          } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+            hls.recoverMediaError();
+          }
+        }
+      });
       hlsRef.current = hls;
       return () => { hls.destroy(); hlsRef.current = null; };
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
@@ -169,7 +252,7 @@ export default function VideoPlayer({
     }
   }, [src, startTime]);
 
-  // ── Preview HLS (desktop only — skip on mobile/TV to save resources) ──────
+  // ── Preview HLS (desktop only) ────────────────────────────────────────
   useEffect(() => {
     if (isMobile) return;
     const preview = previewVideoRef.current;
@@ -241,13 +324,6 @@ export default function VideoPlayer({
     draw();
     return () => { if (ambientFrameRef.current) cancelAnimationFrame(ambientFrameRef.current); };
   }, [ambientEnabled]);
-
-  // Fullscreen change listener
-  useEffect(() => {
-    const handler = () => setFullscreen(!!document.fullscreenElement);
-    document.addEventListener("fullscreenchange", handler);
-    return () => document.removeEventListener("fullscreenchange", handler);
-  }, []);
 
   // ── Keyboard ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -345,14 +421,11 @@ export default function VideoPlayer({
     v.currentTime = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) * duration;
   };
 
-  // ── Seek bar touch — CRITICAL: must clear longPressTimer to prevent 2x bug ──
+  // ── Seek bar touch ────────────────────────────────────────────────────
   const handleSeekBarTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
-    // Mark that this touch started on the seek bar
     touchOnSeekBar.current = true;
-    // IMPORTANT: cancel any pending long-press 2x timer from the container
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
-    touchMoved.current = true; // Prevent container from treating this as a tap
-
+    touchMoved.current = true;
     const v = videoRef.current;
     if (!v || !duration) return;
     const rect = e.currentTarget.getBoundingClientRect();
@@ -386,7 +459,7 @@ export default function VideoPlayer({
     e.stopPropagation();
   };
 
-  // ── Preview thumbnail hover (desktop only) ────────────────────────────────
+  // ── Preview thumbnail hover (desktop only) ────────────────────────────
   const handleProgressHover = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!duration || isMobile) return;
     const rect = e.currentTarget.getBoundingClientRect();
@@ -421,8 +494,16 @@ export default function VideoPlayer({
 
   const toggleFullscreen = () => {
     if (!containerRef.current) return;
-    if (!document.fullscreenElement) containerRef.current.requestFullscreen();
-    else document.exitFullscreen();
+    wasPlayingRef.current = playing;
+    if (!document.fullscreenElement) {
+      containerRef.current.requestFullscreen().catch(() => {
+        // Fallback for iOS Safari
+        const v = containerRef.current as any;
+        if (v?.webkitRequestFullscreen) v.webkitRequestFullscreen();
+      });
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
   };
 
   const changeSpeed = (s: number) => {
@@ -460,22 +541,18 @@ export default function VideoPlayer({
     hideTimer.current = setTimeout(() => { if (playing) setShowControls(false); }, 3500);
   };
 
-  // ── Touch: double-tap to seek, long-press for 2x ─────────────────────────
+  // ── Touch: double-tap to seek, long-press for 2x ─────────────────────
   const handleContainerTouchStart = (e: React.TouchEvent) => {
-    // If touch is on the seek bar area, don't start longPress timer
     if (touchOnSeekBar.current) return;
-
     touchStartTime.current = Date.now();
     touchStartPos.current  = { x: e.touches[0].clientX, y: e.touches[0].clientY };
     touchMoved.current     = false;
     resetHideTimer();
-
-    // Long press for 2× speed — only starts timer here
     longPressTimer.current = setTimeout(() => {
       if (touchMoved.current || touchOnSeekBar.current) return;
       const v = videoRef.current;
       if (v) { v.playbackRate = 2; setLongPressActive(true); flashCenter("2x"); }
-    }, 600); // Slightly longer than before to reduce accidental triggers
+    }, 600);
   };
 
   const handleContainerTouchMove = (e: React.TouchEvent) => {
@@ -489,31 +566,25 @@ export default function VideoPlayer({
 
   const handleContainerTouchEnd = (e: React.TouchEvent) => {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
-
     if (longPressActive) {
       const v = videoRef.current;
       if (v) v.playbackRate = speed;
       setLongPressActive(false);
       return;
     }
-
     if (touchMoved.current) return;
     if (touchOnSeekBar.current) return;
-
     const elapsed = Date.now() - touchStartTime.current;
-    if (elapsed > 500) return; // was a long press attempt, not a tap
-
+    if (elapsed > 500) return;
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect || !videoRef.current) return;
     const x = e.changedTouches[0].clientX - rect.left;
-
     tapCount.current++;
     if (doubleTapTimer.current) clearTimeout(doubleTapTimer.current);
     doubleTapTimer.current = setTimeout(() => {
       if (tapCount.current === 1) togglePlay();
       tapCount.current = 0;
     }, 280);
-
     if (tapCount.current >= 2) {
       tapCount.current = 0;
       if (doubleTapTimer.current) clearTimeout(doubleTapTimer.current);
@@ -538,13 +609,59 @@ export default function VideoPlayer({
   const PREVIEW_W = 160;
   const previewLeft = `clamp(${PREVIEW_W / 2}px, ${hoverPct}%, calc(100% - ${PREVIEW_W / 2}px))`;
 
-  // Settings panel position: fixed on mobile (escapes overflow-hidden), absolute on desktop
   const settingsPositionClass = isMobile
     ? "fixed bottom-24 right-3 z-[200]"
     : "absolute bottom-20 right-3 z-30";
 
   return (
-    <div className="relative">
+    <div ref={wrapperRef} className="relative">
+      {/* ── YouTube-style mini/pip player ─────────────────────────────── */}
+      <AnimatePresence>
+        {miniPlayer && !fullscreen && (
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            transition={{ type: "spring", damping: 20, stiffness: 300 }}
+            className="fixed bottom-4 right-4 z-[999] w-72 sm:w-80 rounded-2xl overflow-hidden shadow-[0_8px_40px_rgba(0,0,0,0.8)] border border-white/10 cursor-pointer"
+            onClick={() => wrapperRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })}
+            style={{ aspectRatio: "16/9" }}
+          >
+            {/* Mirror the actual video element */}
+            <video
+              ref={undefined}
+              className="w-full h-full object-cover pointer-events-none"
+              src={videoRef.current?.src}
+              style={{ display: "none" }}
+            />
+            {/* We clone by referencing the same HLS stream — instead show the main video as picture */}
+            <div className="w-full h-full bg-black flex items-center justify-center relative">
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="text-white/60 text-xs text-center px-3">
+                  <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center mx-auto mb-1">
+                    <Play className="w-4 h-4 text-white ml-0.5" />
+                  </div>
+                  Click to return
+                </div>
+              </div>
+            </div>
+            {/* Mini controls bar */}
+            <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 to-transparent p-2 flex items-center gap-2">
+              <button
+                onClick={(e) => { e.stopPropagation(); togglePlay(); }}
+                className="w-7 h-7 flex items-center justify-center text-white rounded-full hover:bg-white/20 transition-colors"
+              >
+                {playing ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 ml-0.5" />}
+              </button>
+              <div className="flex-1 h-0.5 bg-white/20 rounded-full overflow-hidden">
+                <div className="h-full bg-white/80 rounded-full" style={{ width: `${progress}%` }} />
+              </div>
+              <span className="text-white/60 text-[10px] tabular-nums">{fmt(currentTime)}</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Ambient glow */}
       {ambientEnabled && (
         <canvas ref={canvasRef}
@@ -568,20 +685,22 @@ export default function VideoPlayer({
           ref={videoRef}
           className="w-full h-full"
           onTimeUpdate={handleTimeUpdate}
-          onPlay={() => setPlaying(true)}
-          onPause={() => setPlaying(false)}
-          onEnded={() => onEnded?.()}
+          onPlay={() => { setPlaying(true); wasPlayingRef.current = true; }}
+          onPause={() => { setPlaying(false); wasPlayingRef.current = false; }}
+          onEnded={() => { setPlaying(false); wasPlayingRef.current = false; onEnded?.(); }}
           onClick={togglePlay}
           crossOrigin="anonymous"
           playsInline
           controlsList="nodownload noremoteplayback"
+          // FIX: prevent mobile browser from auto-pausing on fullscreen
+          x-webkit-airplay="allow"
         >
           {subtitleTracks.map((t, i) => (
             <track key={i} src={t.file} label={t.label || "Unknown"} kind="subtitles" default={t.default} />
           ))}
         </video>
 
-        {/* ── Center flash icon ─────────────────────────────────────────── */}
+        {/* ── Center flash icon ─────────────────────────────────────── */}
         <AnimatePresence>
           {showCenterIcon && (
             <motion.div key="ci"
@@ -601,7 +720,7 @@ export default function VideoPlayer({
           )}
         </AnimatePresence>
 
-        {/* ── Buffering / Paused overlay ────────────────────────────────── */}
+        {/* ── Buffering / Paused overlay ────────────────────────────── */}
         {(isBuffering || (!playing && currentTime > 0 && !showCenterIcon)) && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
             {isBuffering ? (
@@ -619,7 +738,7 @@ export default function VideoPlayer({
           </div>
         )}
 
-        {/* ── 2× badge ──────────────────────────────────────────────────── */}
+        {/* ── 2× badge ──────────────────────────────────────────────── */}
         <AnimatePresence>
           {longPressActive && (
             <motion.div key="2xbadge"
@@ -631,7 +750,7 @@ export default function VideoPlayer({
           )}
         </AnimatePresence>
 
-        {/* ── Skip Intro / Outro ────────────────────────────────────────── */}
+        {/* ── Skip Intro / Outro ────────────────────────────────────── */}
         <AnimatePresence>
           {showSkipIntro && (
             <motion.button key="skip-intro"
@@ -655,7 +774,7 @@ export default function VideoPlayer({
           )}
         </AnimatePresence>
 
-        {/* ── Settings panel ─────────────────────────────────────────────── */}
+        {/* ── Settings panel ────────────────────────────────────────── */}
         <AnimatePresence>
           {settingsOpen && showControls && (
             <motion.div key="settings"
@@ -685,7 +804,6 @@ export default function VideoPlayer({
                       <span className="flex items-center gap-1 text-white/40 text-xs">{qualityLabel(currentQuality)} <ChevronRight className="w-3 h-3" /></span>
                     </button>
                   )}
-                  {/* Toggles */}
                   {[
                     { label: "Ambient", icon: Sun, value: ambientEnabled, toggle: () => setAmbientEnabled(!ambientEnabled) },
                     { label: "Autoplay", icon: SkipForward, value: autoPlayNext, toggle: () => onAutoPlayToggle?.(!autoPlayNext) },
@@ -763,18 +881,19 @@ export default function VideoPlayer({
           )}
         </AnimatePresence>
 
-        {/* ══════════════════════════════════════════════════════════════════
-            CONTROLS OVERLAY — beautiful glassmorphism design
-            ══════════════════════════════════════════════════════════════════ */}
+        {/* ══════════════════════════════════════════════════════════════
+            CONTROLS OVERLAY — Beautiful redesigned UI
+            ══════════════════════════════════════════════════════════════ */}
         <div className={`absolute inset-x-0 bottom-0 transition-opacity duration-300 z-20 ${showControls ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
-          {/* Gradient fade */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent pointer-events-none" />
+          {/* Multi-layer gradient for depth */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent pointer-events-none" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.6) 30%, rgba(0,0,0,0.1) 60%, transparent 100%)" }} />
 
-          <div className="relative px-3 sm:px-5 pb-3 sm:pb-4 pt-10">
-            {/* ── Seek bar ─────────────────────────────────────────────── */}
+          <div className="relative px-3 sm:px-5 pb-3 sm:pb-4 pt-12">
+
+            {/* ── Seek bar — YouTube-style thick hover ──────────────── */}
             <div
-              className="w-full mb-3 sm:mb-4 cursor-pointer group/progress relative"
-              style={{ height: "28px", display: "flex", alignItems: "center" }}
+              className="w-full mb-3 sm:mb-3.5 cursor-pointer group/progress relative"
+              style={{ height: "32px", display: "flex", alignItems: "center" }}
               onClick={seek}
               onMouseMove={handleProgressHover}
               onMouseLeave={handleProgressLeave}
@@ -782,135 +901,181 @@ export default function VideoPlayer({
               onTouchMove={handleSeekBarTouchMove}
               onTouchEnd={handleSeekBarTouchEnd}
             >
-              {/* Track background */}
-              <div className="absolute inset-x-0 rounded-full bg-white/15 group-hover/progress:bg-white/20 transition-all duration-150 overflow-hidden"
-                style={{ height: "4px", top: "50%", transform: "translateY(-50%)" }}>
-                {/* Buffered */}
-                <div className="absolute top-0 left-0 h-full bg-white/25 rounded-full"
-                  style={{ width: `${bufferedPct}%`, transition: "width 0.5s linear" }} />
-                {/* Played — gradient */}
-                <div className="absolute top-0 left-0 h-full rounded-full"
-                  style={{
-                    width: `${progress}%`,
-                    background: "linear-gradient(90deg, hsl(var(--primary)), hsl(var(--accent)))",
-                    transition: "width 0.1s linear",
-                    boxShadow: "0 0 8px hsl(var(--primary) / 0.6)",
-                  }} />
+              {/* Track — thickens on hover like YouTube */}
+              <div
+                className="absolute inset-x-0 rounded-full overflow-hidden transition-all duration-150"
+                style={{
+                  height: "4px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "rgba(255,255,255,0.15)",
+                }}
+              >
+                <style>{`.group\\/progress:hover .seek-track { height: 6px !important; }`}</style>
+                {/* We use inline group-hover via CSS trick */}
+                <div className="seek-track absolute inset-0 rounded-full overflow-hidden transition-all duration-150" style={{ height: "100%" }}>
+                  {/* Buffered */}
+                  <div className="absolute top-0 left-0 h-full bg-white/30 rounded-full"
+                    style={{ width: `${bufferedPct}%`, transition: "width 0.5s linear" }} />
+                  {/* Played — premium gradient */}
+                  <div className="absolute top-0 left-0 h-full rounded-full"
+                    style={{
+                      width: `${progress}%`,
+                      background: "linear-gradient(90deg, hsl(var(--primary)), hsl(var(--accent)))",
+                      transition: "width 0.1s linear",
+                      boxShadow: "0 0 12px hsl(var(--primary) / 0.7), 0 0 4px hsl(var(--primary) / 0.5)",
+                    }} />
+                </div>
               </div>
 
-              {/* Thumb */}
-              <div className="absolute rounded-full pointer-events-none transition-opacity"
+              {/* Thumb — appears on hover */}
+              <div
+                className="absolute rounded-full pointer-events-none opacity-0 group-hover/progress:opacity-100 transition-all duration-150"
                 style={{
                   width: "14px", height: "14px",
                   left: `${progress}%`,
-                  top: "50%", transform: "translateX(-50%) translateY(-50%)",
-                  background: "hsl(var(--primary))",
-                  boxShadow: "0 0 0 3px rgba(255,255,255,0.15), 0 2px 8px rgba(0,0,0,0.6)",
-                  opacity: showControls ? 1 : 0,
+                  top: "50%",
+                  transform: "translateX(-50%) translateY(-50%)",
+                  background: "white",
+                  boxShadow: "0 0 0 3px hsl(var(--primary) / 0.4), 0 2px 8px rgba(0,0,0,0.8)",
                 }}
               />
 
-              {/* ── Preview thumbnail (desktop) ────────────────────────── */}
+              {/* ── Preview thumbnail (desktop) ────────────────────── */}
               {!isMobile && hoverTime !== null && (
                 <div
-                  className="absolute bottom-7 flex-col items-center gap-1 pointer-events-none z-20 -translate-x-1/2 hidden sm:flex"
+                  className="absolute bottom-8 flex-col items-center gap-1.5 pointer-events-none z-20 -translate-x-1/2 hidden sm:flex"
                   style={{ left: previewLeft }}
                 >
-                  <div className={`rounded-xl overflow-hidden border border-white/20 shadow-2xl bg-black transition-opacity duration-75 ${previewHasFrame ? "opacity-100" : "opacity-50"}`}
-                    style={{ boxShadow: "0 8px 24px rgba(0,0,0,0.8)" }}>
+                  {/* Time indicator line */}
+                  <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-px h-6 bg-white/40" style={{ bottom: "-24px" }} />
+                  <div className={`rounded-xl overflow-hidden border border-white/20 shadow-2xl bg-black/90 transition-opacity duration-75 ${previewHasFrame ? "opacity-100" : "opacity-40"}`}
+                    style={{ boxShadow: "0 12px 32px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,255,255,0.1)" }}>
                     <canvas ref={previewCanvasRef} width={160} height={90} className="block" />
                   </div>
-                  <span className="text-[11px] text-white font-semibold px-2 py-0.5 rounded-lg bg-black/80 backdrop-blur-sm shadow tabular-nums">
+                  <span className="text-[11px] text-white font-bold px-2.5 py-1 rounded-lg bg-black/90 backdrop-blur-sm shadow tabular-nums border border-white/10">
                     {fmt(hoverTime)}
                   </span>
                 </div>
               )}
             </div>
 
-            {/* ── Bottom controls row ───────────────────────────────────── */}
+            {/* ── Bottom controls row ───────────────────────────────── */}
             <div className="flex items-center justify-between gap-1">
-              {/* Left group */}
-              <div className="flex items-center gap-1 sm:gap-2">
+
+              {/* ── Left group ── */}
+              <div className="flex items-center gap-0.5 sm:gap-1">
                 {/* Skip back */}
-                <button onClick={() => { const v = videoRef.current; if (v) { v.currentTime = Math.max(0, v.currentTime - 10); flashCenter("rw"); } }}
-                  className="w-10 h-10 sm:w-9 sm:h-9 flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all rounded-full hover:bg-white/10">
-                  <SkipBack className="w-5 h-5" />
+                <button
+                  onClick={() => { const v = videoRef.current; if (v) { v.currentTime = Math.max(0, v.currentTime - 10); flashCenter("rw"); } }}
+                  className="relative w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all rounded-full group/btn overflow-hidden"
+                >
+                  <span className="absolute inset-0 rounded-full bg-white/0 group-hover/btn:bg-white/10 transition-colors duration-150" />
+                  <SkipBack className="relative w-4.5 h-4.5 sm:w-4 sm:h-4" />
                 </button>
 
-                {/* Play/Pause */}
-                <button onClick={togglePlay}
-                  className="w-11 h-11 sm:w-10 sm:h-10 flex items-center justify-center text-white hover:text-white active:scale-90 transition-all rounded-full hover:bg-white/10">
+                {/* Play/Pause — larger, more prominent */}
+                <button
+                  onClick={togglePlay}
+                  className="relative w-11 h-11 sm:w-10 sm:h-10 flex items-center justify-center transition-all rounded-full group/btn overflow-hidden"
+                >
+                  <span className="absolute inset-0 rounded-full bg-white/0 group-hover/btn:bg-white/15 transition-colors duration-150" />
                   {playing
-                    ? <Pause className="w-6 h-6 sm:w-5 sm:h-5" />
-                    : <Play  className="w-6 h-6 sm:w-5 sm:h-5 ml-0.5" />}
+                    ? <Pause className="relative w-5 h-5 sm:w-4.5 sm:h-4.5 text-white drop-shadow-md" />
+                    : <Play  className="relative w-5 h-5 sm:w-4.5 sm:h-4.5 text-white drop-shadow-md ml-0.5" />}
                 </button>
 
                 {/* Skip forward */}
-                <button onClick={() => { const v = videoRef.current; if (v) { v.currentTime = Math.min(v.duration, v.currentTime + 10); flashCenter("ff"); } }}
-                  className="w-10 h-10 sm:w-9 sm:h-9 flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all rounded-full hover:bg-white/10">
-                  <SkipForward className="w-5 h-5" />
+                <button
+                  onClick={() => { const v = videoRef.current; if (v) { v.currentTime = Math.min(v.duration, v.currentTime + 10); flashCenter("ff"); } }}
+                  className="relative w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all rounded-full group/btn overflow-hidden"
+                >
+                  <span className="absolute inset-0 rounded-full bg-white/0 group-hover/btn:bg-white/10 transition-colors duration-150" />
+                  <SkipForward className="relative w-4.5 h-4.5 sm:w-4 sm:h-4" />
                 </button>
 
-                {/* Volume (desktop) */}
-                <div className="hidden sm:flex items-center gap-1.5 group/vol">
-                  <button onClick={toggleMute}
-                    className="w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition-colors rounded-full hover:bg-white/10">
-                    {muted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+                {/* Volume — desktop with smooth slider */}
+                <div className="hidden sm:flex items-center gap-1 group/vol">
+                  <button
+                    onClick={toggleMute}
+                    className="relative w-8 h-8 flex items-center justify-center text-white/70 hover:text-white transition-colors rounded-full group/btn overflow-hidden"
+                  >
+                    <span className="absolute inset-0 rounded-full bg-white/0 group-hover/btn:bg-white/10 transition-colors" />
+                    {muted || volume === 0 ? <VolumeX className="relative w-4 h-4" /> : <Volume2 className="relative w-4 h-4" />}
                   </button>
-                  <div className="relative w-16 cursor-pointer" style={{ height: "20px", display: "flex", alignItems: "center" }}>
-                    <div className="absolute inset-x-0 rounded-full bg-white/20 overflow-hidden group-hover/vol:bg-white/25 transition-colors"
-                      style={{ height: "3px", top: "50%", transform: "translateY(-50%)" }}>
-                      <div className="h-full bg-white rounded-full" style={{ width: `${volumeFill}%` }} />
+                  {/* Volume slider — expands on hover */}
+                  <div className="w-0 overflow-hidden group-hover/vol:w-16 transition-all duration-200 ease-out">
+                    <div className="relative w-16 cursor-pointer" style={{ height: "18px", display: "flex", alignItems: "center" }}>
+                      <div className="absolute inset-x-0 rounded-full bg-white/20 overflow-hidden"
+                        style={{ height: "3px", top: "50%", transform: "translateY(-50%)" }}>
+                        <div className="h-full rounded-full transition-all" style={{ width: `${volumeFill}%`, background: "white" }} />
+                      </div>
+                      <input type="range" min={0} max={1} step={0.02} value={muted ? 0 : volume}
+                        onChange={handleVolumeChange}
+                        className="absolute inset-0 w-full opacity-0 cursor-pointer z-10" />
                     </div>
-                    <input type="range" min={0} max={1} step={0.02} value={muted ? 0 : volume}
-                      onChange={handleVolumeChange}
-                      className="absolute inset-0 w-full opacity-0 cursor-pointer z-10" />
                   </div>
                 </div>
 
-                {/* Time */}
-                <span className="text-[11px] sm:text-xs text-white/60 font-medium tabular-nums ml-1 hidden xs:inline">
-                  {fmt(currentTime)} <span className="text-white/30">/</span> {fmt(duration)}
-                </span>
+                {/* Time display — refined */}
+                <div className="hidden xs:flex items-center ml-1.5">
+                  <span className="text-[11px] sm:text-xs font-medium tabular-nums" style={{ color: "rgba(255,255,255,0.9)" }}>
+                    {fmt(currentTime)}
+                  </span>
+                  <span className="text-[11px] sm:text-xs mx-1" style={{ color: "rgba(255,255,255,0.3)" }}>/</span>
+                  <span className="text-[11px] sm:text-xs tabular-nums" style={{ color: "rgba(255,255,255,0.5)" }}>
+                    {fmt(duration)}
+                  </span>
+                </div>
               </div>
 
-              {/* Right group */}
-              <div className="flex items-center gap-1">
+              {/* ── Right group ── */}
+              <div className="flex items-center gap-0.5">
+                {/* Speed badge */}
                 {speed !== 1 && (
-                  <span className="text-[10px] sm:text-xs text-primary font-bold px-1.5 py-0.5 rounded-md bg-primary/15">
+                  <span className="text-[10px] sm:text-xs text-primary font-bold px-1.5 py-0.5 rounded-md bg-primary/15 border border-primary/20">
                     {speed}×
                   </span>
                 )}
+                {/* Quality badge */}
                 {currentQuality !== -1 && qualityLevels[currentQuality] && (
-                  <span className="hidden sm:inline text-[10px] text-accent font-medium px-1.5 py-0.5 rounded-md bg-accent/10">
+                  <span className="hidden sm:inline text-[10px] text-accent font-medium px-1.5 py-0.5 rounded-md bg-accent/10 border border-accent/20">
                     {qualityLabel(currentQuality)}
                   </span>
                 )}
 
                 {/* Mobile volume toggle */}
-                <button onClick={toggleMute}
-                  className="sm:hidden w-10 h-10 flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all rounded-full hover:bg-white/10">
-                  {muted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+                <button
+                  onClick={toggleMute}
+                  className="sm:hidden relative w-9 h-9 flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all rounded-full group/btn overflow-hidden"
+                >
+                  <span className="absolute inset-0 rounded-full bg-white/0 group-hover/btn:bg-white/10 transition-colors" />
+                  {muted || volume === 0 ? <VolumeX className="relative w-4 h-4" /> : <Volume2 className="relative w-4 h-4" />}
                 </button>
 
                 {/* Settings */}
                 <button
                   onClick={() => { setSettingsOpen(!settingsOpen); setSettingsPanel("main"); }}
-                  className={`w-10 h-10 sm:w-9 sm:h-9 flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all rounded-full hover:bg-white/10 ${settingsOpen ? "text-primary bg-primary/15" : ""}`}>
-                  <Settings className={`w-5 h-5 transition-transform ${settingsOpen ? "rotate-45" : ""}`} />
+                  className={`relative w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center transition-all rounded-full group/btn overflow-hidden ${settingsOpen ? "text-primary" : "text-white/70 hover:text-white"}`}
+                >
+                  <span className={`absolute inset-0 rounded-full transition-colors ${settingsOpen ? "bg-primary/15" : "bg-white/0 group-hover/btn:bg-white/10"}`} />
+                  <Settings className={`relative w-4 h-4 transition-transform duration-300 ${settingsOpen ? "rotate-45" : ""}`} />
                 </button>
 
                 {/* Fullscreen */}
-                <button onClick={toggleFullscreen}
-                  className="w-10 h-10 sm:w-9 sm:h-9 flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all rounded-full hover:bg-white/10">
-                  {fullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
+                <button
+                  onClick={toggleFullscreen}
+                  className="relative w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all rounded-full group/btn overflow-hidden"
+                >
+                  <span className="absolute inset-0 rounded-full bg-white/0 group-hover/btn:bg-white/10 transition-colors" />
+                  {fullscreen ? <Minimize className="relative w-4 h-4" /> : <Maximize className="relative w-4 h-4" />}
                 </button>
               </div>
             </div>
 
-            {/* Mobile time below controls */}
+            {/* Mobile time display below controls */}
             <div className="sm:hidden flex justify-center mt-1">
-              <span className="text-[10px] text-white/40 tabular-nums">
+              <span className="text-[10px] tabular-nums" style={{ color: "rgba(255,255,255,0.4)" }}>
                 {fmt(currentTime)} / {fmt(duration)}
               </span>
             </div>
