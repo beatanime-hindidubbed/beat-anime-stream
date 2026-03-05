@@ -66,6 +66,14 @@ export default function HindiVideoPlayer({
   const hlsRef       = useRef<Hls | null>(null);
   const wrapperRef   = useRef<HTMLDivElement>(null);
 
+  // ── Preview thumbnail (feature parity with VideoPlayer) ──────────────
+  const previewVideoRef  = useRef<HTMLVideoElement>(null);
+  const previewHlsRef    = useRef<Hls | null>(null);
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
+  const previewSeekTimer = useRef<ReturnType<typeof setTimeout>>();
+  const lastPreviewSeek  = useRef<number>(-999);
+  const previewSeeking   = useRef(false);
+
   const encodedSrc = useRef(src ? obfuscate(src) : "");
   const getUrl     = useRef(src ? makeAccessor(encodedSrc.current) : () => "");
 
@@ -90,6 +98,11 @@ export default function HindiVideoPlayer({
   const [longPressActive, setLongPressActive] = useState(false);
   const [qualityLevels, setQualityLevels] = useState<{ height: number; bitrate: number }[]>([]);
   const [currentQuality, setCurrentQuality] = useState<number>(-1);
+  // Preview thumbnail state (feature parity)
+  const [hoverTime, setHoverTime]   = useState<number | null>(null);
+  const [hoverPct, setHoverPct]     = useState(0);
+  const [previewHasFrame, setPreviewHasFrame] = useState(false);
+  const [previewReady, setPreviewReady] = useState(false);
   const [isMobile, setIsMobile]     = useState(false);
   const [miniPlayer, setMiniPlayer] = useState(false);
 
@@ -117,6 +130,7 @@ export default function HindiVideoPlayer({
     return () => window.removeEventListener("resize", check);
   }, []);
 
+  // ── Mini player on scroll ────────────────────────────────────────────
   useEffect(() => {
     if (!wrapperRef.current) return;
     const observer = new IntersectionObserver(
@@ -148,28 +162,43 @@ export default function HindiVideoPlayer({
     return () => v.removeEventListener("contextmenu", prevent);
   }, []);
 
+  // ── FIX: Handle visibility change (mobile tab switch / fullscreen) ────
   useEffect(() => {
     const handleVisibility = () => {
       const v = videoRef.current;
       if (!v) return;
       if (document.hidden) {
+        // Store state but DON'T pause — let browser handle it
         wasPlayingRef.current = !v.paused;
       } else {
-        if (wasPlayingRef.current && v.paused && !isBuffering) v.play().catch(() => {});
+        // Page became visible again — restore play state if needed
+        if (wasPlayingRef.current && v.paused && !isBuffering) {
+          v.play().catch(() => {});
+        }
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, [isBuffering]);
 
+  // ── FIX: Handle fullscreen changes on mobile without pausing ─────────
+  // ROOT CAUSE OF MOBILE AUTO-PAUSE: The original code had wasPlayingRef.current = playing
+  // BEFORE requestFullscreen(), but `playing` is a stale closure value captured at the time
+  // the button is clicked. The fix is to read v.paused directly from the video element.
   useEffect(() => {
     const handler = () => {
       const isFs = !!document.fullscreenElement;
       setFullscreen(isFs);
       const v = videoRef.current;
       if (!v) return;
+      // After fullscreen transition, resume if we were playing
+      // Use wasPlayingRef (set continuously) instead of stale `playing` state
       if (wasPlayingRef.current && v.paused) {
-        setTimeout(() => { if (wasPlayingRef.current && v.paused) v.play().catch(() => {}); }, 300);
+        setTimeout(() => {
+          if (wasPlayingRef.current && v.paused) {
+            v.play().catch(() => {});
+          }
+        }, 300);
       }
     };
     document.addEventListener("fullscreenchange", handler);
@@ -178,11 +207,12 @@ export default function HindiVideoPlayer({
       document.removeEventListener("fullscreenchange", handler);
       document.removeEventListener("webkitfullscreenchange", handler);
     };
-  }, []);
+  }, []); // ← NO dependency on `playing` — wasPlayingRef is always fresh
 
+  // Track wasPlayingRef continuously so fullscreen handler always has fresh value
   useEffect(() => { wasPlayingRef.current = playing; }, [playing]);
 
-  // ── HLS loader — identical to VideoPlayer ────────────────────────────
+  // ── HLS loader ────────────────────────────────────────────────────────
   useEffect(() => {
     if (isIframe || !src) return;
     const video = videoRef.current;
@@ -192,10 +222,11 @@ export default function HindiVideoPlayer({
 
     if (Hls.isSupported()) {
       const hls = new Hls({
+        maxBufferLength: 20, maxMaxBufferLength: 60,
+        startPosition: startTime || -1, enableWorker: true,
+        lowLatencyMode: false, abrEwmaDefaultEstimate: 500000,
+        abrBandWidthFactor: 0.95, abrBandWidthUpFactor: 0.7,
         xhrSetup: (xhr) => { xhr.withCredentials = false; },
-        maxBufferSize: 60 * 1000 * 1000,
-        maxBufferLength: 30,
-        startPosition: startTime || -1,
       });
       hls.loadSource(realSrc);
       hls.attachMedia(video);
@@ -206,11 +237,15 @@ export default function HindiVideoPlayer({
       });
       hls.on(Hls.Events.ERROR, (_e, data) => {
         if (data.fatal) {
-          // Exact tester logic: on fatal error, retry with proxy after 1s
-          setTimeout(() => {
-            const proxiedUrl = HINDI_PROXY + "?url=" + encodeURIComponent(realSrc);
-            hls.loadSource(proxiedUrl);
-          }, 1000);
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+            // Retry with proxy after 1s on network error
+            setTimeout(() => {
+              const proxiedUrl = HINDI_PROXY + "?url=" + encodeURIComponent(realSrc);
+              hls.loadSource(proxiedUrl);
+            }, 1000);
+          } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+            hls.recoverMediaError();
+          }
         }
       });
       hlsRef.current = hls;
@@ -222,6 +257,57 @@ export default function HindiVideoPlayer({
     }
   }, [src, startTime, isIframe]);
 
+  // ── Preview HLS (desktop only, feature parity with VideoPlayer) ───────
+  useEffect(() => {
+    if (isIframe || isMobile || !src) return;
+    const preview = previewVideoRef.current;
+    let realSrc: string;
+    try { realSrc = getUrl.current(); } catch { return; }
+    if (!preview || !realSrc) return;
+
+    if (Hls.isSupported()) {
+      const hls = new Hls({
+        maxBufferLength: 4, maxMaxBufferLength: 10,
+        startPosition: -1, enableWorker: false, startLevel: 0,
+        capLevelToPlayerSize: false,
+        xhrSetup: (xhr) => { xhr.withCredentials = false; },
+      });
+      hls.loadSource(realSrc);
+      hls.attachMedia(preview);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        hls.currentLevel = 0;
+        preview.pause();
+        setPreviewReady(true);
+      });
+      previewHlsRef.current = hls;
+      return () => { hls.destroy(); previewHlsRef.current = null; setPreviewReady(false); };
+    }
+  }, [src, isMobile, isIframe]);
+
+  // Draw preview frame to canvas
+  useEffect(() => {
+    const preview = previewVideoRef.current;
+    if (!preview) return;
+    const onSeeked = () => {
+      previewSeeking.current = false;
+      const canvas = previewCanvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (ctx) { ctx.drawImage(preview, 0, 0, canvas.width, canvas.height); setPreviewHasFrame(true); }
+    };
+    const onError  = () => { previewSeeking.current = false; };
+    const onStalled = () => { previewSeeking.current = false; };
+    preview.addEventListener("seeked", onSeeked);
+    preview.addEventListener("error", onError);
+    preview.addEventListener("stalled", onStalled);
+    return () => {
+      preview.removeEventListener("seeked", onSeeked);
+      preview.removeEventListener("error", onError);
+      preview.removeEventListener("stalled", onStalled);
+    };
+  }, []);
+
+  // Buffering events
   useEffect(() => {
     if (isIframe) return;
     const v = videoRef.current;
@@ -234,6 +320,7 @@ export default function HindiVideoPlayer({
     return () => { v.removeEventListener("waiting", on); v.removeEventListener("playing", off); v.removeEventListener("canplay", off); };
   }, [isIframe]);
 
+  // Ambient canvas
   useEffect(() => {
     if (!ambientEnabled || isIframe) { if (ambientFrameRef.current) cancelAnimationFrame(ambientFrameRef.current); return; }
     const video = videoRef.current, canvas = canvasRef.current;
@@ -252,6 +339,7 @@ export default function HindiVideoPlayer({
     return () => { if (ambientFrameRef.current) cancelAnimationFrame(ambientFrameRef.current); };
   }, [ambientEnabled, isIframe]);
 
+  // ── Keyboard ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (isIframe) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -345,6 +433,7 @@ export default function HindiVideoPlayer({
     v.currentTime = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) * duration;
   };
 
+  // ── Seek bar touch ────────────────────────────────────────────────────
   const handleSeekBarTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     touchOnSeekBar.current = true;
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
@@ -377,13 +466,43 @@ export default function HindiVideoPlayer({
     e.stopPropagation();
   };
 
+  // ── Preview thumbnail hover (desktop only, feature parity) ────────────
+  const handleProgressHover = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!duration || isMobile) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const pct  = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const t    = pct * duration;
+    setHoverTime(t);
+    setHoverPct(pct * 100);
+
+    if (!previewReady || !previewVideoRef.current) return;
+    if (Math.abs(lastPreviewSeek.current - t) < 0.5) return;
+    if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
+    previewSeekTimer.current = setTimeout(() => {
+      const pv = previewVideoRef.current;
+      if (!pv) return;
+      lastPreviewSeek.current = t;
+      previewSeeking.current  = true;
+      pv.currentTime = t;
+      setTimeout(() => { previewSeeking.current = false; }, 500);
+    }, previewSeeking.current ? 30 : 0);
+  };
+
+  const handleProgressLeave = () => {
+    setHoverTime(null);
+    if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
+  };
+
+  // ── FIX: toggleFullscreen reads wasPlayingRef instead of stale `playing` state ──
   const toggleFullscreen = () => {
     if (!containerRef.current) return;
-    wasPlayingRef.current = playing;
+    // Store current play state from the video element directly (not from stale React state)
+    const v = videoRef.current;
+    wasPlayingRef.current = v ? !v.paused : playing;
     if (!document.fullscreenElement) {
       containerRef.current.requestFullscreen().catch(() => {
-        const v = containerRef.current as any;
-        if (v?.webkitRequestFullscreen) v.webkitRequestFullscreen();
+        const el = containerRef.current as any;
+        if (el?.webkitRequestFullscreen) el.webkitRequestFullscreen();
       });
     } else {
       document.exitFullscreen().catch(() => {});
@@ -481,6 +600,9 @@ export default function HindiVideoPlayer({
     return lvl.height ? `${lvl.height}p` : `${Math.round(lvl.bitrate / 1000)}k`;
   };
 
+  const PREVIEW_W = 160;
+  const previewLeft = `clamp(${PREVIEW_W / 2}px, ${hoverPct}%, calc(100% - ${PREVIEW_W / 2}px))`;
+
   const settingsPositionClass = isMobile ? "fixed bottom-24 right-3 z-[200]" : "absolute bottom-20 right-3 z-30";
 
   return (
@@ -497,7 +619,6 @@ export default function HindiVideoPlayer({
             onClick={() => wrapperRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })}
             style={{ aspectRatio: "16/9" }}
           >
-            <video ref={undefined} className="w-full h-full object-cover pointer-events-none" src={videoRef.current?.src} style={{ display: "none" }} />
             <div className="w-full h-full bg-black flex items-center justify-center relative">
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="text-white/60 text-xs text-center px-3">
@@ -528,6 +649,9 @@ export default function HindiVideoPlayer({
           className="absolute -inset-8 w-[calc(100%+4rem)] h-[calc(100%+4rem)] opacity-40 blur-3xl scale-110 pointer-events-none -z-10 rounded-3xl" />
       )}
 
+      {/* Hidden preview video (desktop only, not for iframe) */}
+      {!isMobile && !isIframe && <video ref={previewVideoRef} className="hidden" muted playsInline preload="auto" />}
+
       <div
         ref={containerRef}
         className="relative w-full aspect-video bg-black rounded-2xl overflow-hidden select-none"
@@ -540,9 +664,6 @@ export default function HindiVideoPlayer({
       >
         {/* ═══════════════════════════════════════════════════════════════
             IFRAME MODE — NO sandbox attribute.
-            The original WatchPage used sandbox="allow-scripts allow-same-origin ..."
-            which causes "This video is not available due to sandboxed iframe!"
-            This component intentionally omits sandbox entirely.
             ═══════════════════════════════════════════════════════════════ */}
         {isIframe ? (
           <iframe
@@ -553,11 +674,6 @@ export default function HindiVideoPlayer({
             referrerPolicy="no-referrer-when-downgrade"
           />
         ) : (
-          /* ═══════════════════════════════════════════════════════════
-             HLS MODE — Everything below is pixel-for-pixel identical
-             to VideoPlayer.tsx. Only difference from that file: no
-             preview thumbnail / previewHLS (not needed for dub).
-             ═══════════════════════════════════════════════════════════ */
           <>
             <video
               ref={videoRef}
@@ -577,6 +693,7 @@ export default function HindiVideoPlayer({
               ))}
             </video>
 
+            {/* Center flash icon */}
             <AnimatePresence>
               {showCenterIcon && (
                 <motion.div key="ci" initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.4 }}
@@ -592,6 +709,7 @@ export default function HindiVideoPlayer({
               )}
             </AnimatePresence>
 
+            {/* Buffering / Paused overlay */}
             {(isBuffering || (!playing && currentTime > 0 && !showCenterIcon)) && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
                 {isBuffering ? (
@@ -609,6 +727,7 @@ export default function HindiVideoPlayer({
               </div>
             )}
 
+            {/* 2× badge */}
             <AnimatePresence>
               {longPressActive && (
                 <motion.div key="2xbadge" initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
@@ -618,6 +737,7 @@ export default function HindiVideoPlayer({
               )}
             </AnimatePresence>
 
+            {/* Skip Intro / Outro */}
             <AnimatePresence>
               {showSkipIntro && (
                 <motion.button key="skip-intro" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
@@ -637,6 +757,7 @@ export default function HindiVideoPlayer({
               )}
             </AnimatePresence>
 
+            {/* Settings panel */}
             <AnimatePresence>
               {settingsOpen && showControls && (
                 <motion.div key="settings" initial={{ opacity: 0, scale: 0.95, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 8 }}
@@ -740,9 +861,15 @@ export default function HindiVideoPlayer({
                 style={{ background: "linear-gradient(to top, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.6) 30%, rgba(0,0,0,0.1) 60%, transparent 100%)" }} />
 
               <div className="relative px-3 sm:px-5 pb-3 sm:pb-4 pt-12">
+                {/* Seek bar — YouTube-style with preview thumbnail */}
                 <div className="w-full mb-3 sm:mb-3.5 cursor-pointer group/progress relative"
                   style={{ height: "32px", display: "flex", alignItems: "center" }}
-                  onClick={seek} onTouchStart={handleSeekBarTouchStart} onTouchMove={handleSeekBarTouchMove} onTouchEnd={handleSeekBarTouchEnd}>
+                  onClick={seek}
+                  onMouseMove={handleProgressHover}
+                  onMouseLeave={handleProgressLeave}
+                  onTouchStart={handleSeekBarTouchStart}
+                  onTouchMove={handleSeekBarTouchMove}
+                  onTouchEnd={handleSeekBarTouchEnd}>
                   <div className="absolute inset-x-0 rounded-full overflow-hidden transition-all duration-150"
                     style={{ height: "4px", top: "50%", transform: "translateY(-50%)", background: "rgba(255,255,255,0.15)" }}>
                     <style>{`.group\\/progress:hover .seek-track { height: 6px !important; }`}</style>
@@ -759,6 +886,23 @@ export default function HindiVideoPlayer({
                   <div className="absolute rounded-full pointer-events-none opacity-0 group-hover/progress:opacity-100 transition-all duration-150"
                     style={{ width: "14px", height: "14px", left: `${progress}%`, top: "50%", transform: "translateX(-50%) translateY(-50%)",
                       background: "white", boxShadow: "0 0 0 3px hsl(var(--primary) / 0.4), 0 2px 8px rgba(0,0,0,0.8)" }} />
+
+                  {/* Preview thumbnail (desktop only) */}
+                  {!isMobile && hoverTime !== null && (
+                    <div
+                      className="absolute bottom-8 flex-col items-center gap-1.5 pointer-events-none z-20 -translate-x-1/2 hidden sm:flex"
+                      style={{ left: previewLeft }}
+                    >
+                      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-px h-6 bg-white/40" style={{ bottom: "-24px" }} />
+                      <div className={`rounded-xl overflow-hidden border border-white/20 shadow-2xl bg-black/90 transition-opacity duration-75 ${previewHasFrame ? "opacity-100" : "opacity-40"}`}
+                        style={{ boxShadow: "0 12px 32px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,255,255,0.1)" }}>
+                        <canvas ref={previewCanvasRef} width={160} height={90} className="block" />
+                      </div>
+                      <span className="text-[11px] text-white font-bold px-2.5 py-1 rounded-lg bg-black/90 backdrop-blur-sm shadow tabular-nums border border-white/10">
+                        {fmt(hoverTime)}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center justify-between gap-1">
