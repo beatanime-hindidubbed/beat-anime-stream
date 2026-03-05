@@ -290,8 +290,17 @@ export default function VideoPlayer({
       const ctx = canvas.getContext("2d");
       if (ctx) { ctx.drawImage(preview, 0, 0, canvas.width, canvas.height); setPreviewHasFrame(true); }
     };
+    // Also handle errors — reset seeking flag so it doesn't get stuck
+    const onError = () => { previewSeeking.current = false; };
+    const onStalled = () => { previewSeeking.current = false; };
     preview.addEventListener("seeked", onSeeked);
-    return () => preview.removeEventListener("seeked", onSeeked);
+    preview.addEventListener("error", onError);
+    preview.addEventListener("stalled", onStalled);
+    return () => {
+      preview.removeEventListener("seeked", onSeeked);
+      preview.removeEventListener("error", onError);
+      preview.removeEventListener("stalled", onStalled);
+    };
   }, []);
 
   // Buffering events
@@ -469,22 +478,18 @@ export default function VideoPlayer({
     setHoverPct(pct * 100);
 
     if (!previewReady || !previewVideoRef.current) return;
-    if (Math.abs(lastPreviewSeek.current - t) < 0.3) return;
-    if (previewSeeking.current) {
-      if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
-      previewSeekTimer.current = setTimeout(() => {
-        const pv = previewVideoRef.current;
-        if (!pv) return;
-        lastPreviewSeek.current = t;
-        previewSeeking.current  = true;
-        pv.currentTime = t;
-      }, 20);
-      return;
-    }
+    if (Math.abs(lastPreviewSeek.current - t) < 0.5) return;
+    // Always reset seeking after a timeout to prevent stuck state
     if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
-    lastPreviewSeek.current = t;
-    previewSeeking.current  = true;
-    previewVideoRef.current.currentTime = t;
+    previewSeekTimer.current = setTimeout(() => {
+      const pv = previewVideoRef.current;
+      if (!pv) return;
+      lastPreviewSeek.current = t;
+      previewSeeking.current  = true;
+      pv.currentTime = t;
+      // Safety: auto-reset seeking flag after 500ms if seeked event never fires
+      setTimeout(() => { previewSeeking.current = false; }, 500);
+    }, previewSeeking.current ? 30 : 0);
   };
 
   const handleProgressLeave = () => {
@@ -756,7 +761,7 @@ export default function VideoPlayer({
             <motion.button key="skip-intro"
               initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
               onClick={() => { if (videoRef.current && intro) videoRef.current.currentTime = intro.end; }}
-              className="absolute bottom-24 sm:bottom-20 right-3 sm:right-4 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold hover:scale-105 active:scale-95 transition-transform z-10 flex items-center gap-2 shadow-lg"
+              className="absolute bottom-32 sm:bottom-24 right-3 sm:right-4 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold hover:scale-105 active:scale-95 transition-transform z-20 flex items-center gap-2 shadow-lg"
             >
               <SkipForward className="w-4 h-4" /> Skip Intro
             </motion.button>
@@ -767,7 +772,7 @@ export default function VideoPlayer({
             <motion.button key="skip-outro"
               initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
               onClick={() => { if (videoRef.current && outro) videoRef.current.currentTime = outro.end; }}
-              className="absolute bottom-24 sm:bottom-20 right-3 sm:right-4 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold hover:scale-105 active:scale-95 transition-transform z-10 flex items-center gap-2 shadow-lg"
+              className="absolute bottom-32 sm:bottom-24 right-3 sm:right-4 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold hover:scale-105 active:scale-95 transition-transform z-20 flex items-center gap-2 shadow-lg"
             >
               <SkipForward className="w-4 h-4" /> Skip Outro
             </motion.button>
