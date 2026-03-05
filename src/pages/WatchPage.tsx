@@ -75,7 +75,11 @@ export default function WatchPage() {
     ? `${episodeId}${searchParams.get("ep") ? `?ep=${searchParams.get("ep")}` : ""}`
     : "";
 
-  const [category, setCategory] = useState<string>("sub");
+  // ── FIX: Read ?lang=dub from URL to auto-start in Hindi mode ──────────
+  // When user clicks from Hindi page, ?lang=dub is in the URL, so we default to "dub"
+  const initialCategory = (searchParams.get("lang") === "dub") ? "dub" : "sub";
+
+  const [category, setCategory] = useState<string>(initialCategory);
   const [selectedServer, setSelectedServer] = useState<string>("hd-2");
   const [showEpList, setShowEpList] = useState(false);
   const [showLangMenu, setShowLangMenu] = useState(false);
@@ -88,7 +92,6 @@ export default function WatchPage() {
   // Hindi state — same as original
   const [hindiSources, setHindiSources] = useState<HindiSource[]>([]);
   const [selectedHindiSource, setSelectedHindiSource] = useState<HindiSource | null>(null);
-  // NEW: instead of hindiIframeSrc as a separate state, we pass directly to HindiVideoPlayer
   const [hindiHlsSrc, setHindiHlsSrc] = useState<string | null>(null);
   const [hindiIframeSrc, setHindiIframeSrc] = useState<string | null>(null);
 
@@ -96,6 +99,14 @@ export default function WatchPage() {
   const { settings } = useSiteSettings();
 
   const animeId = fullEpisodeId.split("?")[0];
+
+  // ── FIX: When navigating between episodes on Hindi page, keep category in sync ──
+  // If the URL has ?lang=dub and the category state got reset, re-sync it
+  useEffect(() => {
+    if (searchParams.get("lang") === "dub" && category !== "dub") {
+      setCategory("dub");
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -231,6 +242,12 @@ export default function WatchPage() {
   const recommended = info?.recommendedAnimes || info?.relatedAnimes || [];
   const currentLang = LANGUAGES.find((l) => l.code === category) || LANGUAGES[0];
 
+  // ── Build episode navigation links preserving lang param ──────────────
+  const buildEpLink = (ep: { episodeId: string }) => {
+    // If we're in dub mode, preserve ?lang=dub when navigating between episodes
+    return category === "dub" ? `/watch/${ep.episodeId}?lang=dub` : `/watch/${ep.episodeId}`;
+  };
+
   const renderPlayer = () => {
     if (streamLoading) {
       return (
@@ -294,20 +311,18 @@ export default function WatchPage() {
         <HindiVideoPlayer
           src={hindiHlsSrc}
           onTimeUpdate={handleTimeUpdate}
-          onEnded={() => { if (nextEp) navigate(`/watch/${nextEp.episodeId}`); }}
+          onEnded={() => { if (nextEp) navigate(buildEpLink(nextEp)); }}
         />
       );
     }
 
     // ── Hindi DUB: Embed/iframe → HindiVideoPlayer with iframeSrc ───────
-    // KEY DIFFERENCE: HindiVideoPlayer renders this WITHOUT sandbox attribute,
-    // fixing "This video is not available due to sandboxed iframe!" error
     if (category === "dub" && hindiIframeSrc) {
       return (
         <HindiVideoPlayer
           iframeSrc={hindiIframeSrc}
           onTimeUpdate={handleTimeUpdate}
-          onEnded={() => { if (nextEp) navigate(`/watch/${nextEp.episodeId}`); }}
+          onEnded={() => { if (nextEp) navigate(buildEpLink(nextEp)); }}
         />
       );
     }
@@ -321,7 +336,7 @@ export default function WatchPage() {
           intro={streamResult.intro}
           outro={streamResult.outro}
           onTimeUpdate={handleTimeUpdate}
-          onEnded={() => { if (nextEp) navigate(`/watch/${nextEp.episodeId}`); }}
+          onEnded={() => { if (nextEp) navigate(buildEpLink(nextEp)); }}
         />
       );
     }
@@ -360,13 +375,13 @@ export default function WatchPage() {
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <div className="flex items-center gap-2">
           {prevEp && (
-            <Link to={`/watch/${prevEp.episodeId}`}
+            <Link to={buildEpLink(prevEp)}
               className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-secondary text-sm text-secondary-foreground hover:bg-secondary/80 transition-colors">
               <ChevronLeft className="w-4 h-4" /> Prev
             </Link>
           )}
           {nextEp && (
-            <Link to={`/watch/${nextEp.episodeId}`}
+            <Link to={buildEpLink(nextEp)}
               className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-secondary text-sm text-secondary-foreground hover:bg-secondary/80 transition-colors">
               Next <ChevronRight className="w-4 h-4" />
             </Link>
@@ -478,7 +493,7 @@ export default function WatchPage() {
             {episodes.map((ep) => (
               <Link
                 key={ep.episodeId}
-                to={`/watch/${ep.episodeId}`}
+                to={buildEpLink(ep)}
                 className={`flex items-center justify-center h-9 rounded text-sm font-medium transition-colors ${
                   ep.episodeId === fullEpisodeId
                     ? "bg-primary text-primary-foreground"
