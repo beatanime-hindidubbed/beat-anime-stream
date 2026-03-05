@@ -1,4 +1,4 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { store } from "@/lib/store";
@@ -13,8 +13,13 @@ import { motion } from "framer-motion";
 
 export default function AnimeDetail() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const { user } = useSupabaseAuth();
   const [inWatchlist, setInWatchlist] = useState(() => id ? store.isInWatchlist(id) : false);
+
+  // ── FIX: Preserve ?lang=dub when coming from HindiPage ───────────────
+  // If user arrived via /anime/id?lang=dub (from Hindi page), pass it through to watch links
+  const langParam = searchParams.get("lang") === "dub" ? "?lang=dub" : "";
 
   const { data: info, isLoading } = useQuery({
     queryKey: ["info", id],
@@ -116,10 +121,11 @@ export default function AnimeDetail() {
             <div className="flex items-center gap-3 flex-wrap mb-6">
               {episodes.length > 0 && (
                 <Link
-                  to={`/watch/${episodes[0].episodeId}`}
+                  to={`/watch/${episodes[0].episodeId}${langParam}`}
                   className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gradient-primary text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity"
                 >
-                  <Play className="w-4 h-4" /> Watch Now
+                  <Play className="w-4 h-4" />
+                  {langParam ? "Watch in Hindi" : "Watch Now"}
                 </Link>
               )}
               {id && episodes.length > 0 && (
@@ -164,7 +170,7 @@ export default function AnimeDetail() {
               {episodes.map((ep) => (
                 <Link
                   key={ep.episodeId}
-                  to={`/watch/${ep.episodeId}`}
+                  to={`/watch/${ep.episodeId}${langParam}`}
                   className={`flex items-center justify-center h-10 rounded-lg text-sm font-medium transition-colors ${
                     ep.isFiller ? "bg-accent/30 text-accent-foreground" : "bg-secondary text-secondary-foreground"
                   } hover:bg-primary hover:text-primary-foreground`}
