@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Loader2, Package, X, ChevronDown, Download, Zap, Clock, Wifi, AlertCircle, Crown, Lock } from "lucide-react";
+import { Loader2, Package, X, ChevronDown, Download, Zap, Clock, Wifi, AlertCircle, Lock } from "lucide-react";
 import { api } from "@/lib/api";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
@@ -136,7 +136,7 @@ function buildZip(files: { name: string; data: Uint8Array }[]): Uint8Array {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function AnimeDownloadButton({ animeId, animeName, totalEpisodes, className = "" }: Props) {
-  const { user, isPremium } = useSupabaseAuth();
+  const { user } = useSupabaseAuth();
   const { settings } = useSiteSettings();
   const [phase, setPhase]           = useState<"idle" | "running" | "zipping" | "done" | "error">("idle");
   const [epStatuses, setEpStatuses] = useState<EpStatus[]>([]);
@@ -166,9 +166,9 @@ export default function AnimeDownloadButton({ animeId, animeName, totalEpisodes,
 
   const safeName = animeName.replace(/[^a-z0-9\-_ ]/gi, "_");
 
-  // Load API pool from settings
+  // Load API pool - hardcoded since settings doesn't have apiPool
   useEffect(() => {
-    const pool = settings.apiPool || [
+    const pool = [
       "https://beat-anime-api.onrender.com/api/v1",
       "https://beat-anime-api-2.onrender.com/api/v1",
       "https://beat-anime-api-3.onrender.com/api/v1",
@@ -176,14 +176,11 @@ export default function AnimeDownloadButton({ animeId, animeName, totalEpisodes,
     ];
     setApiPool(pool);
     setApiStats(new Array(pool.length).fill(0));
-  }, [settings.apiPool]);
+  }, []);
 
-  // Check access permissions
+  // Check access permissions - logged-in users can download
   const canDownload = () => {
-    if (settings.bulkDownloadAccess === "all") return true;
-    if (settings.bulkDownloadAccess === "logged-in" && user) return true;
-    if (settings.bulkDownloadAccess === "premium" && isPremium) return true;
-    return false;
+    return !!user;
   };
 
   // Spam detection
@@ -390,7 +387,7 @@ export default function AnimeDownloadButton({ animeId, animeName, totalEpisodes,
 
   const handleDownloadBatch = async (startEp: number, endEp: number) => {
     if (!canDownload()) {
-      setStatusMsg(!user ? "Login required" : !isPremium ? "Premium required" : "Access denied");
+      setStatusMsg(!user ? "Login required" : "Access denied");
       return;
     }
 
@@ -542,7 +539,7 @@ export default function AnimeDownloadButton({ animeId, animeName, totalEpisodes,
       }
 
       const zip  = buildZip(validFiles);
-      const blobUrl = URL.createObjectURL(new Blob([zip], { type: "application/zip" }));
+      const blobUrl = URL.createObjectURL(new Blob([zip as BlobPart], { type: "application/zip" }));
       const a = Object.assign(document.createElement("a"), { 
         href: blobUrl, 
         download: `${safeName}-EP${startEp}-${endEp}-${language}-${quality}.zip` 
@@ -602,9 +599,9 @@ export default function AnimeDownloadButton({ animeId, animeName, totalEpisodes,
       {/* ── Access check banner ── */}
       {!canDownload() && (
         <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-accent/10 border border-accent/20 text-accent">
-          {!user ? <Lock className="w-4 h-4" /> : <Crown className="w-4 h-4" />}
+          <Lock className="w-4 h-4" />
           <span className="text-sm font-medium">
-            {!user ? "Login to download" : !isPremium ? "Premium required for bulk download" : "Access restricted"}
+            {!user ? "Login to download" : "Access restricted"}
           </span>
         </div>
       )}

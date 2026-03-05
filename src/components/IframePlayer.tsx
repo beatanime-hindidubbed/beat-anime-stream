@@ -11,7 +11,6 @@ export default function IframePlayer({ src }: Props) {
         allowFullScreen
         allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
         referrerPolicy="no-referrer"
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
       />
     </div>
   );
