@@ -622,7 +622,7 @@ export default function HindiVideoPlayer({
               {showSkipIntro && (
                 <motion.button key="skip-intro" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
                   onClick={() => { if (videoRef.current && intro) videoRef.current.currentTime = intro.end; }}
-                  className="absolute bottom-24 sm:bottom-20 right-3 sm:right-4 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold hover:scale-105 active:scale-95 transition-transform z-10 flex items-center gap-2 shadow-lg">
+                  className="absolute bottom-32 sm:bottom-24 right-3 sm:right-4 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold hover:scale-105 active:scale-95 transition-transform z-20 flex items-center gap-2 shadow-lg">
                   <SkipForward className="w-4 h-4" /> Skip Intro
                 </motion.button>
               )}
@@ -631,7 +631,7 @@ export default function HindiVideoPlayer({
               {showSkipOutro && (
                 <motion.button key="skip-outro" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
                   onClick={() => { if (videoRef.current && outro) videoRef.current.currentTime = outro.end; }}
-                  className="absolute bottom-24 sm:bottom-20 right-3 sm:right-4 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold hover:scale-105 active:scale-95 transition-transform z-10 flex items-center gap-2 shadow-lg">
+                  className="absolute bottom-32 sm:bottom-24 right-3 sm:right-4 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold hover:scale-105 active:scale-95 transition-transform z-20 flex items-center gap-2 shadow-lg">
                   <SkipForward className="w-4 h-4" /> Skip Outro
                 </motion.button>
               )}
