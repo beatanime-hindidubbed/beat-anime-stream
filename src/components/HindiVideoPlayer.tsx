@@ -222,11 +222,10 @@ export default function HindiVideoPlayer({
 
     if (Hls.isSupported()) {
       const hls = new Hls({
-        maxBufferLength: 20, maxMaxBufferLength: 60,
-        startPosition: startTime || -1, enableWorker: true,
-        lowLatencyMode: false, abrEwmaDefaultEstimate: 500000,
-        abrBandWidthFactor: 0.95, abrBandWidthUpFactor: 0.7,
         xhrSetup: (xhr) => { xhr.withCredentials = false; },
+        maxBufferSize: 60 * 1000 * 1000,
+        maxBufferLength: 30,
+        startPosition: startTime || -1,
       });
       hls.loadSource(realSrc);
       hls.attachMedia(video);
@@ -237,15 +236,11 @@ export default function HindiVideoPlayer({
       });
       hls.on(Hls.Events.ERROR, (_e, data) => {
         if (data.fatal) {
-          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-            // Retry with proxy after 1s on network error
-            setTimeout(() => {
-              const proxiedUrl = HINDI_PROXY + "?url=" + encodeURIComponent(realSrc);
-              hls.loadSource(proxiedUrl);
-            }, 1000);
-          } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-            hls.recoverMediaError();
-          }
+          // Original Hindi logic: on any fatal error, retry with proxy after 1s
+          setTimeout(() => {
+            const proxiedUrl = HINDI_PROXY + "?url=" + encodeURIComponent(realSrc);
+            hls.loadSource(proxiedUrl);
+          }, 1000);
         }
       });
       hlsRef.current = hls;
