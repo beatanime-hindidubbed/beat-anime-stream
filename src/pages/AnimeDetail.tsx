@@ -17,9 +17,11 @@ export default function AnimeDetail() {
   const { user } = useSupabaseAuth();
   const [inWatchlist, setInWatchlist] = useState(() => id ? store.isInWatchlist(id) : false);
 
-  // ── FIX: Preserve ?lang=dub when coming from HindiPage ───────────────
-  // If user arrived via /anime/id?lang=dub (from Hindi page), pass it through to watch links
-  const langParam = searchParams.get("lang") === "dub" ? "?lang=dub" : "";
+  // ── Read dub preference set by HindiPage (sessionStorage) or ?lang=dub URL param ──
+  const preferDub =
+    sessionStorage.getItem("preferDub") === "true" ||
+    searchParams.get("lang") === "dub";
+  const langParam = preferDub ? "?lang=dub" : "";
 
   const { data: info, isLoading } = useQuery({
     queryKey: ["info", id],
