@@ -231,7 +231,7 @@ export default function DownloadButton({
       const merged = await downloadHLS(proxyUrl, apiBase);
 
       // Trigger download
-      const blob    = new Blob([merged], { type: "video/mp2t" });
+      const blob    = new Blob([merged as BlobPart], { type: "video/mp2t" });
       const blobUrl = URL.createObjectURL(blob);
       const a = Object.assign(document.createElement("a"), {
         href: blobUrl,
