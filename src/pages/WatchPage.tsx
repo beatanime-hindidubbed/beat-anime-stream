@@ -75,9 +75,16 @@ export default function WatchPage() {
     ? `${episodeId}${searchParams.get("ep") ? `?ep=${searchParams.get("ep")}` : ""}`
     : "";
 
-  // ── FIX: Read ?lang=dub from URL to auto-start in Hindi mode ──────────
-  // When user clicks from Hindi page, ?lang=dub is in the URL, so we default to "dub"
-  const initialCategory = (searchParams.get("lang") === "dub") ? "dub" : "sub";
+  // Read dub preference: ?lang=dub URL param OR sessionStorage set by HindiPage
+  // sessionStorage is set by HindiPage when clicking an anime — cleared after first use
+  const initialCategory = (() => {
+    if (searchParams.get("lang") === "dub") return "dub";
+    if (typeof window !== "undefined" && sessionStorage.getItem("preferDub") === "true") {
+      sessionStorage.removeItem("preferDub");
+      return "dub";
+    }
+    return "sub";
+  })();
 
   const [category, setCategory] = useState<string>(initialCategory);
   const [selectedServer, setSelectedServer] = useState<string>("hd-2");
@@ -99,14 +106,6 @@ export default function WatchPage() {
   const { settings } = useSiteSettings();
 
   const animeId = fullEpisodeId.split("?")[0];
-
-  // ── FIX: When navigating between episodes on Hindi page, keep category in sync ──
-  // If the URL has ?lang=dub and the category state got reset, re-sync it
-  useEffect(() => {
-    if (searchParams.get("lang") === "dub" && category !== "dub") {
-      setCategory("dub");
-    }
-  }, [searchParams]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
