@@ -6,6 +6,7 @@ import {
   SkipForward, SkipBack, Loader2, Layers, Zap
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
+import PlayerWatermark from "@/components/PlayerWatermark"; // ← A. Added import
 
 interface Track {
   file: string;
@@ -101,6 +102,16 @@ export default function VideoPlayer({
   const [isMobile, setIsMobile]     = useState(false);
   // Mini player (YouTube-style scroll follow)
   const [miniPlayer, setMiniPlayer] = useState(false);
+  // ── B. Added watermark state and timer ──────────────────────────────────
+  const [showWatermarkIcon, setShowWatermarkIcon] = useState(false);
+  const watermarkIconTimer = useRef<ReturnType<typeof setTimeout>>();
+
+  const flashWatermark = () => {
+    setShowWatermarkIcon(true);
+    if (watermarkIconTimer.current) clearTimeout(watermarkIconTimer.current);
+    watermarkIconTimer.current = setTimeout(() => setShowWatermarkIcon(false), 3000);
+  };
+  // ────────────────────────────────────────────────────────────────────────
 
   // Timer refs
   const hideTimer       = useRef<ReturnType<typeof setTimeout>>();
@@ -407,12 +418,14 @@ export default function VideoPlayer({
     if (!v) return;
     if (v.paused) { v.play(); setPlaying(true); flashCenter("play"); }
     else          { v.pause(); setPlaying(false); flashCenter("pause"); }
+    flashWatermark(); // ← C. Added
   };
 
   const toggleMute = () => {
     const v = videoRef.current;
     if (!v) return;
     v.muted = !v.muted; setMuted(v.muted);
+    flashWatermark(); // ← C. Added
   };
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -428,6 +441,7 @@ export default function VideoPlayer({
     if (!v || !duration) return;
     const rect = e.currentTarget.getBoundingClientRect();
     v.currentTime = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) * duration;
+    flashWatermark(); // ← C. Added
   };
 
   // ── Seek bar touch ────────────────────────────────────────────────────
@@ -498,6 +512,7 @@ export default function VideoPlayer({
   };
 
   const toggleFullscreen = () => {
+    flashWatermark(); // ← C. Added
     if (!containerRef.current) return;
     wasPlayingRef.current = playing;
     if (!document.fullscreenElement) {
@@ -596,6 +611,7 @@ export default function VideoPlayer({
       const v = videoRef.current;
       if      (x < rect.width / 3)     { v.currentTime = Math.max(0, v.currentTime - 10);          flashCenter("rw"); }
       else if (x > rect.width * 2 / 3) { v.currentTime = Math.min(v.duration, v.currentTime + 10); flashCenter("ff"); }
+      flashWatermark(); // ← C. Added inside double-tap block
     }
   };
 
@@ -1086,6 +1102,8 @@ export default function VideoPlayer({
             </div>
           </div>
         </div>
+        {/* ── D. Added watermark component ─────────────────────────────── */}
+        <PlayerWatermark showIcon={showWatermarkIcon} />
       </div>
     </div>
   );
