@@ -1,217 +1,187 @@
-import { useParams, Link, useSearchParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
-import { store } from "@/lib/store";
-import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
-import AnimeCard from "@/components/AnimeCard";
-import AnimeDownloadButton from "@/components/AnimeDownloadButton";
-import DownloadButton from "@/components/DownloadButton";
-import BackButton from "@/components/BackButton";
-import { BookmarkPlus, BookmarkCheck, Play, Star, Clock, Tv } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import { Shield, CheckCircle, AlertCircle, Loader2, Smartphone } from "lucide-react";
 
-export default function AnimeDetail() {
-  const { id } = useParams<{ id: string }>();
-  const [searchParams] = useSearchParams();
-  const { user } = useSupabaseAuth();
-  const [inWatchlist, setInWatchlist] = useState(() => id ? store.isInWatchlist(id) : false);
+const VERIFY_KEY = "beat-verified";
+// Use the correct verification bot API (not supabase proxy)
+const BOT_API = "https://beat-verification-bot.onrender.com/telegram-verify";
+// Secret for the bot API - store in env or hardcode a hashed version
+const BOT_SECRET = import.meta.env.VITE_BOT_SECRET || "beat_secret_2024";
 
-  // ── FIX: Preserve ?lang=dub when coming from HindiPage ───────────────
-  // If user arrived via /anime/id?lang=dub (from Hindi page), pass it through to watch links
-  const langParam = searchParams.get("lang") === "dub" ? "?lang=dub" : "";
+function getDeviceId(): string {
+  let id = localStorage.getItem("beat-device-id");
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem("beat-device-id", id);
+  }
+  return id;
+}
 
-  const { data: info, isLoading } = useQuery({
-    queryKey: ["info", id],
-    queryFn: () => api.getAnimeInfo(id!),
-    enabled: !!id,
-  });
+interface VerifyState {
+  verified: boolean;
+  telegramId?: string;
+  devicesUsed?: number;
+  devicesMax?: number;
+  code?: string;
+  verifiedAt?: number;
+}
 
-  const { data: epData } = useQuery({
-    queryKey: ["episodes", id],
-    queryFn: () => api.getEpisodes(id!),
-    enabled: !!id,
-  });
+export function isVerified(): boolean {
+  try {
+    const raw = localStorage.getItem(VERIFY_KEY);
+    if (!raw) return false;
+    const state: VerifyState = JSON.parse(raw);
+    return !!state.verified;
+  } catch { return false; }
+}
 
-  const anime = info?.anime?.info;
-  const moreInfo = info?.anime?.moreInfo;
-  const episodes = epData?.episodes || [];
+export default function VerifyPage() {
+  const [code, setCode] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
+  const [verifyState, setVerifyState] = useState<VerifyState | null>(null);
 
-  const toggleWatchlist = () => {
-    if (!id || !anime) return;
-    if (inWatchlist) {
-      store.removeFromWatchlist(id);
-      setInWatchlist(false);
-    } else {
-      store.addToWatchlist({ id, name: anime.name || "", poster: anime.poster });
-      setInWatchlist(true);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(VERIFY_KEY);
+      if (raw) {
+        const state = JSON.parse(raw);
+        if (state.verified) { setVerifyState(state); setSuccess(true); }
+      }
+    } catch {}
+  }, []);
+
+  const handleVerify = async () => {
+    if (code.length !== 6) { setError("Enter a 6-digit code"); return; }
+    setLoading(true);
+    setError("");
+
+    try {
+      // Use the correct bot API endpoint with POST and secret in header
+      const res = await fetch(`${BOT_API}?action=verify`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Secret": BOT_SECRET,
+        },
+        body: JSON.stringify({
+          code,
+          device_id: getDeviceId(),
+          secret: BOT_SECRET, // also in body as fallback
+        }),
+      });
+
+      let data: any = {};
+      try { data = await res.json(); } catch {}
+
+      if (!res.ok || data.error) {
+        const msg = data.error || data.message || `Server error (${res.status})`;
+        setError(msg);
+        return;
+      }
+
+      const state: VerifyState = {
+        verified: true,
+        telegramId: data.telegram_id || data.telegramId,
+        devicesUsed: data.devices_used || data.devicesUsed || 1,
+        devicesMax: data.devices_max || data.devicesMax || 2,
+        code,
+        verifiedAt: Date.now(),
+      };
+      localStorage.setItem(VERIFY_KEY, JSON.stringify(state));
+      setVerifyState(state);
+      setSuccess(true);
+    } catch (err: any) {
+      // More specific error messages
+      if (err?.name === "TypeError" && err?.message?.includes("fetch")) {
+        setError("Cannot reach verification server. Check your internet connection.");
+      } else {
+        setError(err?.message || "Verification failed. Please try again.");
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
-  if (isLoading) {
+  if (success && verifyState) {
     return (
-      <div className="container py-8">
-        <div className="animate-pulse space-y-4">
-          <div className="h-64 rounded-lg bg-secondary" />
-          <div className="h-6 w-1/3 rounded bg-secondary" />
-          <div className="h-4 w-2/3 rounded bg-secondary" />
-        </div>
+      <div className="min-h-screen flex items-center justify-center px-4 bg-background">
+        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-card border border-border rounded-2xl p-8 text-center max-w-md w-full">
+          <CheckCircle className="w-16 h-16 text-accent mx-auto mb-4" />
+          <h1 className="font-display text-2xl font-bold text-foreground mb-2">Verified!</h1>
+          <p className="text-muted-foreground text-sm mb-4">Your device is verified and linked.</p>
+          <div className="bg-secondary rounded-lg p-4 text-left text-sm space-y-2">
+            <div className="flex justify-between"><span className="text-muted-foreground">Devices</span><span className="text-foreground">{verifyState.devicesUsed}/{verifyState.devicesMax}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Code</span><span className="text-foreground font-mono">{verifyState.code}</span></div>
+          </div>
+          <a href="/" className="inline-block mt-6 px-6 py-2.5 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:opacity-90 transition-opacity">
+            Start Watching
+          </a>
+        </motion.div>
       </div>
     );
   }
 
-  if (!anime) {
-    return <div className="container py-16 text-center text-muted-foreground">Anime not found.</div>;
-  }
-
   return (
-    <div>
-      <div className="container pt-4">
-        <BackButton />
-      </div>
-      {/* Banner */}
-      <div className="relative h-[40vh] overflow-hidden">
-        <img src={anime.poster} alt={anime.name} className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/70 to-background/30" />
-      </div>
+    <div className="min-h-screen flex items-center justify-center px-4 bg-background">
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-border rounded-2xl p-8 max-w-md w-full">
+        <div className="text-center mb-8">
+          <Shield className="w-12 h-12 text-primary mx-auto mb-3" />
+          <h1 className="font-display text-2xl font-bold text-foreground mb-2">Verify Your Device</h1>
+          <p className="text-muted-foreground text-sm">
+            Join our{" "}
+            <a href="https://t.me/beatanime" target="_blank" rel="noopener" className="text-accent hover:underline font-medium">
+              Telegram Channel
+            </a>
+            {" "}to get your 6-digit code from the bot, then enter it below.
+          </p>
+        </div>
 
-      <div className="container -mt-32 relative z-10">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col md:flex-row gap-6">
-          {/* Poster */}
-          <div className="shrink-0">
-            <img src={anime.poster} alt={anime.name} className="w-48 h-auto rounded-lg shadow-card" />
-          </div>
-
-          {/* Info */}
-          <div className="flex-1 min-w-0">
-            <h1 className="font-display text-2xl md:text-4xl font-bold text-foreground mb-2">{anime.name}</h1>
-
-            <div className="flex flex-wrap items-center gap-3 mb-4">
-              {anime.stats?.rating && (
-                <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                  <Star className="w-4 h-4 text-primary" /> {anime.stats.rating}
-                </span>
-              )}
-              {anime.stats?.type && (
-                <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                  <Tv className="w-4 h-4" /> {anime.stats.type}
-                </span>
-              )}
-              {anime.stats?.duration && (
-                <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                  <Clock className="w-4 h-4" /> {anime.stats.duration}
-                </span>
-              )}
-              {anime.stats?.episodes && (
-                <div className="flex gap-1">
-                  {anime.stats.episodes.sub != null && (
-                    <span className="px-2 py-0.5 rounded text-xs bg-primary text-primary-foreground">SUB {anime.stats.episodes.sub}</span>
-                  )}
-                  {anime.stats.episodes.dub != null && (
-                    <span className="px-2 py-0.5 rounded text-xs bg-accent text-accent-foreground">DUB {anime.stats.episodes.dub}</span>
-                  )}
-                </div>
-              )}
+        <div className="flex gap-2 justify-center mb-6">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div
+              key={i}
+              className={`w-11 h-14 rounded-lg border-2 flex items-center justify-center text-xl font-bold font-mono transition-colors ${
+                code[i] ? "border-primary text-foreground bg-secondary" : "border-border text-muted-foreground"
+              }`}
+            >
+              {code[i] || "·"}
             </div>
+          ))}
+        </div>
 
-            {anime.description && (
-              <p className="text-sm text-muted-foreground mb-4 max-w-2xl line-clamp-3">{anime.description}</p>
-            )}
+        <input
+          type="text"
+          inputMode="numeric"
+          maxLength={6}
+          value={code}
+          onChange={(e) => { setCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }}
+          onKeyDown={(e) => { if (e.key === "Enter" && code.length === 6) handleVerify(); }}
+          className="w-full h-12 text-center text-lg font-mono rounded-lg bg-secondary border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary mb-4"
+          placeholder="000000"
+          autoFocus
+        />
 
-            <div className="flex items-center gap-3 flex-wrap mb-6">
-              {episodes.length > 0 && (
-                <Link
-                  to={`/watch/${episodes[0].episodeId}${langParam}`}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gradient-primary text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity"
-                >
-                  <Play className="w-4 h-4" />
-                  {langParam ? "Watch in Hindi" : "Watch Now"}
-                </Link>
-              )}
-              {id && episodes.length > 0 && (
-                <AnimeDownloadButton
-                  animeId={id}
-                  animeName={anime.name || "anime"}
-                  totalEpisodes={episodes.length}
-                />
-              )}
-              {user && (
-                <button
-                  onClick={toggleWatchlist}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
-                    inWatchlist ? "border-primary text-primary" : "border-border text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {inWatchlist ? <BookmarkCheck className="w-4 h-4" /> : <BookmarkPlus className="w-4 h-4" />}
-                  {inWatchlist ? "In Watchlist" : "Add to Watchlist"}
-                </button>
-              )}
-            </div>
-
-            {/* More info */}
-            {moreInfo && (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
-                {Object.entries(moreInfo).map(([key, val]) => (
-                  <div key={key}>
-                    <span className="text-muted-foreground">{key}: </span>
-                    <span className="text-foreground">{val}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </motion.div>
-
-        {/* Episodes */}
-        {episodes.length > 0 && (
-          <div className="mt-10">
-            <h2 className="font-display text-xl font-bold text-foreground mb-4">Episodes ({episodes.length})</h2>
-            <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 xl:grid-cols-12 gap-2">
-              {episodes.map((ep) => (
-                <Link
-                  key={ep.episodeId}
-                  to={`/watch/${ep.episodeId}${langParam}`}
-                  className={`flex items-center justify-center h-10 rounded-lg text-sm font-medium transition-colors ${
-                    ep.isFiller ? "bg-accent/30 text-accent-foreground" : "bg-secondary text-secondary-foreground"
-                  } hover:bg-primary hover:text-primary-foreground`}
-                  title={ep.title || `Episode ${ep.number}`}
-                >
-                  {ep.number}
-                </Link>
-              ))}
-            </div>
+        {error && (
+          <div className="flex items-center gap-2 text-destructive text-sm mb-4 bg-destructive/10 rounded-lg px-3 py-2">
+            <AlertCircle className="w-4 h-4 shrink-0" /> {error}
           </div>
         )}
 
-        {/* Seasons */}
-        {info?.seasons && info.seasons.length > 0 && (
-          <div className="mt-10">
-            <h2 className="font-display text-xl font-bold text-foreground mb-4">Seasons</h2>
-            <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-2">
-              {info.seasons.map((s) => (
-                <Link
-                  key={s.id}
-                  to={`/anime/${s.id}`}
-                  className={`shrink-0 w-28 group ${s.isCurrent ? "ring-2 ring-primary rounded-lg" : ""}`}
-                >
-                  <img src={s.poster} alt={s.name} className="w-full aspect-[3/4] object-cover rounded-lg" />
-                  <p className="text-xs text-foreground mt-1 line-clamp-1">{s.name || s.title}</p>
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
+        <button
+          onClick={handleVerify}
+          disabled={loading || code.length !== 6}
+          className="w-full py-3 rounded-lg bg-primary text-primary-foreground font-bold text-sm hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
+        >
+          {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</> : "Verify Device"}
+        </button>
 
-        {/* Recommended */}
-        {info?.recommendedAnimes && info.recommendedAnimes.length > 0 && (
-          <div className="mt-10">
-            <h2 className="font-display text-xl font-bold text-foreground mb-4">Recommended</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-              {info.recommendedAnimes.slice(0, 6).map((a, i) => <AnimeCard key={a.id} anime={a} index={i} />)}
-            </div>
-          </div>
-        )}
-      </div>
+        <div className="mt-6 flex items-center gap-2 text-xs text-muted-foreground">
+          <Smartphone className="w-4 h-4" />
+          <span>Max 2 devices per code. 3rd device kicks oldest.</span>
+        </div>
+      </motion.div>
     </div>
   );
 }
