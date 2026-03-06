@@ -29,7 +29,6 @@ interface HindiSource {
   headers: Record<string, string>;
 }
 
-// ── Exact same fetchHindiSources as original WatchPage ──────────────────────
 async function fetchHindiSources(animeInfo: any, episodeNumber: number): Promise<HindiSource[]> {
   const moreInfo = animeInfo?.anime?.moreInfo || animeInfo?.moreInfo || {};
   const info = animeInfo?.anime?.info || {};
@@ -48,20 +47,17 @@ async function fetchHindiSources(animeInfo: any, episodeNumber: number): Promise
 
   if (!res.ok || data.status !== 200) throw new Error(data.error || "No Hindi sources found");
 
-  // ── Exact same source extraction as tester HTML ──────────────────────
   const sources = data.data?.streams || data.data?.sources || data.data?.servers || [];
   if (!sources.length) throw new Error("No Hindi sources found");
 
   return sources.map((src: any) => ({
     name: src.provider || src.serverName || src.name || "Unknown",
-    // Exact same isHLS detection as tester HTML playSource()
     isHLS: !!(
       src.isM3U8 ||
       src.dhls ||
       (src.url && src.url.includes(".m3u8")) ||
       (src.streamUrl && src.streamUrl.includes(".m3u8"))
     ),
-    // Exact same URL extraction as tester HTML
     url: src.dhls || src.streamUrl || src.url || "",
     headers: src.headers || {},
   }));
@@ -244,7 +240,6 @@ export default function WatchPage() {
   // ── Build episode navigation links preserving lang param ──────────────
   const buildEpLink = (ep: { episodeId?: string }) => {
     if (!ep.episodeId) return "#";
-    // If we're in dub mode, preserve ?lang=dub when navigating between episodes
     return category === "dub" ? `/watch/${ep.episodeId}?lang=dub` : `/watch/${ep.episodeId}`;
   };
 
@@ -305,7 +300,6 @@ export default function WatchPage() {
       );
     }
 
-    // ── Hindi DUB: HLS stream → HindiVideoPlayer with src ──────────────
     if (category === "dub" && hindiHlsSrc) {
       return (
         <HindiVideoPlayer
@@ -316,7 +310,6 @@ export default function WatchPage() {
       );
     }
 
-    // ── Hindi DUB: Embed/iframe → HindiVideoPlayer with iframeSrc ───────
     if (category === "dub" && hindiIframeSrc) {
       return (
         <HindiVideoPlayer
@@ -327,7 +320,6 @@ export default function WatchPage() {
       );
     }
 
-    // ── Sub/Raw: standard VideoPlayer — unchanged ──────────────────────
     if (streamResult?.type === "hls") {
       return (
         <VideoPlayer
@@ -409,7 +401,17 @@ export default function WatchPage() {
                 {LANGUAGES.map((lang) => (
                   <button
                     key={lang.code}
-                    onClick={() => { setCategory(lang.code); setShowLangMenu(false); }}
+                    onClick={() => {
+                      // ── NEW: selecting "dub" redirects to the dedicated Hindi watch page ──
+                      if (lang.code === "dub") {
+                        const epNumber = currentEp?.number || 1;
+                        const baseAnimeId = animeId.includes("?") ? animeId.split("?")[0] : animeId;
+                        navigate(`/hindi/watch/${baseAnimeId}/${epNumber}`);
+                        return;
+                      }
+                      setCategory(lang.code);
+                      setShowLangMenu(false);
+                    }}
                     className={`w-full px-4 py-2.5 text-sm text-left transition-colors hover:bg-secondary/80 ${
                       category === lang.code ? "text-primary font-medium bg-secondary/40" : "text-foreground"
                     }`}
@@ -423,7 +425,7 @@ export default function WatchPage() {
           </AnimatePresence>
         </div>
 
-        {/* Server selector */}
+        {/* Server selector — original logic exactly */}
         {category === "dub" && hindiSources.length > 1 ? (
           <div className="flex items-center gap-1 border border-orange-500/30 rounded-lg p-0.5 flex-wrap">
             {hindiSources.map((src) => (
