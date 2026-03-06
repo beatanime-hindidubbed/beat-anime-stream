@@ -1,11 +1,43 @@
 // src/components/VerifyGate.tsx
-// Wraps the entire app — blocks access until verified
-
 import { useEffect, useState, ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { isVerified } from "@/pages/VerifyPage";
 
-const PUBLIC_PATHS = ["/verify", "/admin", "/admin/dashboard"];
+// Public paths that do NOT require verification
+const PUBLIC_PATHS = [
+  "/verify",
+  "/auth",
+  "/owner",
+  "/admin",
+  "/admin/dashboard",
+];
+
+const VERIFY_KEY = "beat-verified";
+const EXPIRY_MS = 2 * 24 * 60 * 60 * 1000; // 2 days
+
+interface VerifyState {
+  verified: boolean;
+  telegramId?: string;
+  devicesUsed?: number;
+  devicesMax?: number;
+  code?: string;
+  verifiedAt: number; // timestamp
+}
+
+function getStoredVerification(): VerifyState | null {
+  try {
+    const raw = localStorage.getItem(VERIFY_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as VerifyState;
+  } catch {
+    return null;
+  }
+}
+
+function isValidVerification(state: VerifyState | null): boolean {
+  if (!state || !state.verified) return false;
+  const now = Date.now();
+  return now - state.verifiedAt < EXPIRY_MS;
+}
 
 interface Props {
   children: ReactNode;
@@ -15,23 +47,31 @@ export default function VerifyGate({ children }: Props) {
   const location = useLocation();
   const navigate = useNavigate();
   const [checked, setChecked] = useState(false);
-  const [verified, setVerified] = useState(false);
 
   useEffect(() => {
-    const v = isVerified();
-    setVerified(v);
-    setChecked(true);
+    const state = getStoredVerification();
+    const valid = isValidVerification(state);
+    const isPublic = PUBLIC_PATHS.some((path) =>
+      location.pathname.startsWith(path)
+    );
 
-    const isPublic = PUBLIC_PATHS.some(p => location.pathname.startsWith(p));
-    if (!v && !isPublic) {
-      navigate("/verify", { replace: true });
+    if (!valid && !isPublic) {
+      // Redirect to verify page, but preserve the intended destination
+      navigate("/verify", { replace: true, state: { from: location } });
     }
-  }, [location.pathname]);
+    setChecked(true);
+  }, [location.pathname, navigate]);
 
-  if (!checked) return null;
+  if (!checked) return null; // Avoid flash of content
 
-  const isPublic = PUBLIC_PATHS.some(p => location.pathname.startsWith(p));
-  if (!verified && !isPublic) return null;
+  // Allow access if public or verification is valid
+  const isPublic = PUBLIC_PATHS.some((path) =>
+    location.pathname.startsWith(path)
+  );
+  if (isPublic || isValidVerification(getStoredVerification())) {
+    return <>{children}</>;
+  }
 
-  return <>{children}</>;
+  // If not public and not verified, render nothing (redirect will happen)
+  return null;
 }
