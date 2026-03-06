@@ -213,12 +213,16 @@ export default function HindiVideoPlayer({
   useEffect(() => { wasPlayingRef.current = playing; }, [playing]);
 
   // ── HLS loader ────────────────────────────────────────────────────────
+  // Hindi CDN URLs need specific Referer headers — always proxy them
   useEffect(() => {
     if (isIframe || !src) return;
     const video = videoRef.current;
     let realSrc: string;
     try { realSrc = getUrl.current(); } catch { return; }
     if (!video || !realSrc) return;
+
+    // Always proxy Hindi streams for correct headers
+    const proxiedSrc = realSrc.includes("/hindiapi/proxy") ? realSrc : HINDI_PROXY + "?url=" + encodeURIComponent(realSrc);
 
     if (Hls.isSupported()) {
       const hls = new Hls({
@@ -227,7 +231,7 @@ export default function HindiVideoPlayer({
         maxBufferLength: 30,
         startPosition: startTime || -1,
       });
-      hls.loadSource(realSrc);
+      hls.loadSource(proxiedSrc);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, (_e, data) => {
         video.play().catch(() => {});
@@ -236,29 +240,29 @@ export default function HindiVideoPlayer({
       });
       hls.on(Hls.Events.ERROR, (_e, data) => {
         if (data.fatal) {
-          // Original Hindi logic: on any fatal error, retry with proxy after 1s
-          setTimeout(() => {
-            const proxiedUrl = HINDI_PROXY + "?url=" + encodeURIComponent(realSrc);
-            hls.loadSource(proxiedUrl);
-          }, 1000);
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
+          else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
         }
       });
       hlsRef.current = hls;
       return () => { hls.destroy(); hlsRef.current = null; };
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      video.src = realSrc;
+      video.src = proxiedSrc;
       if (startTime) video.currentTime = startTime;
       video.play().catch(() => {});
     }
   }, [src, startTime, isIframe]);
 
   // ── Preview HLS (desktop only, feature parity with VideoPlayer) ───────
+  // Also proxy for Hindi CDN headers
   useEffect(() => {
     if (isIframe || isMobile || !src) return;
     const preview = previewVideoRef.current;
     let realSrc: string;
     try { realSrc = getUrl.current(); } catch { return; }
     if (!preview || !realSrc) return;
+
+    const proxiedSrc = realSrc.includes("/hindiapi/proxy") ? realSrc : HINDI_PROXY + "?url=" + encodeURIComponent(realSrc);
 
     if (Hls.isSupported()) {
       const hls = new Hls({
@@ -267,7 +271,7 @@ export default function HindiVideoPlayer({
         capLevelToPlayerSize: false,
         xhrSetup: (xhr) => { xhr.withCredentials = false; },
       });
-      hls.loadSource(realSrc);
+      hls.loadSource(proxiedSrc);
       hls.attachMedia(preview);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         hls.currentLevel = 0;

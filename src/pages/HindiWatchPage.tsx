@@ -3,14 +3,22 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import HindiVideoPlayer from "@/components/HindiVideoPlayer";
+import DownloadButton from "@/components/DownloadButton";
 import BackButton from "@/components/BackButton";
 import { getApiPool } from "@/lib/streaming";
 import { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight, List, Loader2, Server, RefreshCw } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
+// Only allow these providers, mapped to friendly names
+const ALLOWED_PROVIDERS: Record<string, string> = {
+  "StreamHG": "Server 1",
+  "EarnVids": "Server 2",
+};
+
 interface HindiSource {
   name: string;
+  displayName: string;
   isHLS: boolean;
   url: string;
 }
@@ -29,15 +37,22 @@ async function fetchHindiSourcesFromAllApis(anilistId: string | undefined, malId
       const data = await res.json();
       if (!res.ok || data.status !== 200) return [];
       const sources = data.data?.streams || data.data?.sources || data.data?.servers || [];
-      return sources.map((src: any) => ({
-        name: src.provider || src.serverName || src.name || "Unknown",
-        isHLS: !!(src.isM3U8 || src.dhls || (src.url && src.url.includes(".m3u8")) || (src.streamUrl && src.streamUrl.includes(".m3u8"))),
-        url: src.dhls || src.streamUrl || src.url || "",
-      }));
+      return sources
+        .map((src: any) => {
+          const provider = src.provider || src.serverName || src.name || "Unknown";
+          const friendlyName = ALLOWED_PROVIDERS[provider];
+          if (!friendlyName) return null; // Filter out non-allowed providers
+          return {
+            name: provider,
+            displayName: friendlyName,
+            isHLS: !!(src.isM3U8 || src.dhls || (src.url && src.url.includes(".m3u8")) || (src.streamUrl && src.streamUrl.includes(".m3u8"))),
+            url: src.dhls || src.streamUrl || src.url || "",
+          };
+        })
+        .filter((s: HindiSource | null): s is HindiSource => s !== null && s.url !== "");
     })
   );
 
-  // Take first successful non-empty result
   for (const r of results) {
     if (r.status === "fulfilled" && r.value.length > 0) return r.value;
   }
@@ -163,7 +178,7 @@ export default function HindiWatchPage() {
         <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground">
           <Server className="w-3 h-3" />
           <span>
-            Streaming via <span className="text-orange-400 font-medium">{selectedSource.name}</span>
+            Streaming via <span className="text-orange-400 font-medium">{selectedSource.displayName}</span>
             {" · "}<span className="text-orange-400 font-medium">🇮🇳 हिंदी DUB</span>
           </span>
         </div>
@@ -197,17 +212,20 @@ export default function HindiWatchPage() {
                   selectedSource?.name === src.name ? "bg-orange-500 text-white" : "text-muted-foreground hover:bg-secondary"
                 }`}
               >
-                {src.name} {!src.isHLS && <span className="ml-1 text-[10px] opacity-60">EMBED</span>}
+                {src.displayName} {!src.isHLS && <span className="ml-1 text-[10px] opacity-60">EMBED</span>}
               </button>
             ))}
           </div>
         )}
 
-        {/* Download */}
+        {/* Download — same logic as English player */}
         {hindiHlsSrc && (
-          <a href={hindiHlsSrc} download className="px-3 py-1.5 rounded-lg bg-orange-500 text-white text-sm font-medium hover:bg-orange-600 transition-colors">
-            Download
-          </a>
+          <DownloadButton
+            episodeId={`hindi-${animeId}-${epNum}`}
+            episodeNumber={epNum}
+            animeName={animeName}
+            streamUrl={hindiHlsSrc}
+          />
         )}
 
         <button onClick={() => setShowEpList(!showEpList)}
