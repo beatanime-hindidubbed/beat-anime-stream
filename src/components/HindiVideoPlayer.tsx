@@ -6,6 +6,7 @@ import {
   SkipForward, SkipBack, Loader2, Layers, Zap
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
+import PlayerWatermark from "./PlayerWatermark";  // ← added watermark import
 
 interface Track {
   file: string;
@@ -662,16 +663,20 @@ export default function HindiVideoPlayer({
         onTouchEnd={handleContainerTouchEnd}
       >
         {/* ═══════════════════════════════════════════════════════════════
-            IFRAME MODE — NO sandbox attribute.
+            IFRAME MODE — NO sandbox attribute + watermark overlay.
             ═══════════════════════════════════════════════════════════════ */}
         {isIframe ? (
-          <iframe
-            src={iframeSrc}
-            className="w-full h-full border-0"
-            allowFullScreen
-            allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
-            referrerPolicy="no-referrer-when-downgrade"
-          />
+          <>
+            <iframe
+              src={iframeSrc}
+              className="w-full h-full border-0"
+              allowFullScreen
+              allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+              referrerPolicy="no-referrer-when-downgrade"
+            />
+            {/* Watermark overlay on iframe */}
+            <PlayerWatermark showIcon={false} />
+          </>
         ) : (
           <>
             <video
