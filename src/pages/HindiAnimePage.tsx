@@ -5,7 +5,7 @@ import { store } from "@/lib/store";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import AnimeCard from "@/components/AnimeCard";
 import BackButton from "@/components/BackButton";
-import { BookmarkPlus, BookmarkCheck, Play, Star, Clock, Tv } from "lucide-react";
+import { BookmarkPlus, BookmarkCheck, Play, Star, Clock, Tv, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { motion } from "framer-motion";
 
@@ -14,16 +14,19 @@ export default function HindiAnimePage() {
   const { user } = useSupabaseAuth();
   const [inWatchlist, setInWatchlist] = useState(() => id ? store.isInWatchlist(id) : false);
 
+  // ── FIX: staleTime:0 so these always fetch fresh on mount for fast Watch button ──
   const { data: info, isLoading } = useQuery({
     queryKey: ["info", id],
     queryFn: () => api.getAnimeInfo(id!),
     enabled: !!id,
+    staleTime: 0,
   });
 
-  const { data: epData } = useQuery({
+  const { data: epData, isLoading: epLoading } = useQuery({
     queryKey: ["episodes", id],
     queryFn: () => api.getEpisodes(id!),
     enabled: !!id,
+    staleTime: 0,
   });
 
   const anime = info?.anime?.info;
@@ -100,7 +103,16 @@ export default function HindiAnimePage() {
             )}
 
             <div className="flex items-center gap-3 flex-wrap mb-6">
-              {episodes.length > 0 && (
+              {/* ── FIX: Watch button shows spinner while episodes load, appears immediately ── */}
+              {epLoading ? (
+                <button
+                  disabled
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gradient-to-r from-orange-500 to-orange-600 text-sm font-medium text-white opacity-80"
+                >
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Loading...
+                </button>
+              ) : episodes.length > 0 ? (
                 <Link
                   to={`/hindi/watch/${id}/1`}
                   className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gradient-to-r from-orange-500 to-orange-600 text-sm font-medium text-white hover:opacity-90 transition-opacity"
@@ -108,7 +120,7 @@ export default function HindiAnimePage() {
                   <Play className="w-4 h-4" />
                   Watch in Hindi 🇮🇳
                 </Link>
-              )}
+              ) : null}
               {user && (
                 <button
                   onClick={toggleWatchlist}
