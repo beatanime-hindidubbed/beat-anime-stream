@@ -12,7 +12,7 @@ import { useNavigate } from "react-router-dom";
 
 const VERIFY_KEY = "beat-verified";
 // Correct edge function endpoint as per spec
-const VERIFY_FUNCTION = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/telegram-verify`;
+const VERIFY_FUNCTION = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/verify-proxy`;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 interface VerifyState {
