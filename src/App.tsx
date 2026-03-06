@@ -19,6 +19,8 @@ import SchedulePage from "./pages/SchedulePage";
 import LoginPage from "./pages/LoginPage";
 import WatchlistPage from "./pages/WatchlistPage";
 import HindiPage from "./pages/HindiPage";
+import HindiAnimePage from "./pages/HindiAnimePage";
+import HindiWatchPage from "./pages/HindiWatchPage";
 import RecentPage from "./pages/RecentPage";
 import ExplorePage from "./pages/ExplorePage";
 import ManhwaPage from "./pages/ManhwaPage";
@@ -64,6 +66,8 @@ const App = () => (
                         <Route path="/genre/:name" element={<GenrePage />} />
                         <Route path="/schedule" element={<SchedulePage />} />
                         <Route path="/hindi" element={<HindiPage />} />
+                        <Route path="/hindi/anime/:id" element={<HindiAnimePage />} />
+                        <Route path="/hindi/watch/:animeId/:episodeNumber" element={<HindiWatchPage />} />
                         <Route path="/recent" element={<RecentPage />} />
                         <Route path="/explore" element={<ExplorePage />} />
                         <Route path="/manhwa" element={<ManhwaPage />} />

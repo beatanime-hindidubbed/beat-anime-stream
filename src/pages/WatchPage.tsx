@@ -242,7 +242,8 @@ export default function WatchPage() {
   const currentLang = LANGUAGES.find((l) => l.code === category) || LANGUAGES[0];
 
   // ── Build episode navigation links preserving lang param ──────────────
-  const buildEpLink = (ep: { episodeId: string }) => {
+  const buildEpLink = (ep: { episodeId?: string }) => {
+    if (!ep.episodeId) return "#";
     // If we're in dub mode, preserve ?lang=dub when navigating between episodes
     return category === "dub" ? `/watch/${ep.episodeId}?lang=dub` : `/watch/${ep.episodeId}`;
   };
