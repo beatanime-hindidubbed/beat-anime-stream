@@ -73,6 +73,7 @@ export default function HindiVideoPlayer({
   src, iframeSrc,
   tracks, intro, outro, onTimeUpdate, onEnded,
   startTime, ambientMode = false, autoPlayNext = true, onAutoPlayToggle,
+  episodeId,
 }: Props) {
   const videoRef     = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
