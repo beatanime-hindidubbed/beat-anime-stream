@@ -5,27 +5,24 @@ import { useSiteSettings, ThemeType } from "@/hooks/useSiteSettings";
 import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
 import {
-  BarChart3, Settings, Image, Activity, LogOut, Plus, Trash2,
+  BarChart3, Image, Activity, LogOut, Plus, Trash2,
   ToggleLeft, ToggleRight, Save, Loader2, CheckCircle, XCircle, Globe,
-  Users, Shield, UserPlus, UserMinus, Palette, Type, FileText
+  Users, Shield, UserPlus, UserMinus, Palette, Type, FileText,
+  Crown, Copy, Clock, Zap, Server, RefreshCw
 } from "lucide-react";
 
 interface Ad {
-  id: string;
-  name: string;
-  image_url: string | null;
-  link_url: string;
-  placement: string;
-  size: string;
-  is_active: boolean;
-  sandbox: boolean;
+  id: string; name: string; image_url: string | null; link_url: string;
+  placement: string; size: string; is_active: boolean; sandbox: boolean;
 }
 
 interface UserRole {
-  id: string;
-  user_id: string;
-  role: string;
-  username?: string;
+  id: string; user_id: string; role: string; username?: string;
+}
+
+interface PremiumCode {
+  id: string; code: string; created_by: string; expires_at: string;
+  max_uses: number; current_uses: number; is_active: boolean; created_at: string;
 }
 
 const API_ENDPOINTS = [
@@ -33,35 +30,51 @@ const API_ENDPOINTS = [
   { name: "Search", url: "/hianime/search?q=naruto" },
   { name: "Schedule", url: "/hianime/schedule?date=2025-01-01" },
   { name: "Anime Info", url: "/hianime/anime/one-piece-100" },
+  { name: "Episodes", url: "/hianime/anime/one-piece-100/episodes" },
+  { name: "Category", url: "/hianime/category/most-popular" },
+  { name: "Genre", url: "/hianime/genre/action" },
+  { name: "Suggestions", url: "/hianime/search/suggestion?q=one" },
 ];
 
 const PLACEMENTS = ["banner-top", "sidebar", "in-feed", "footer", "popup"];
 const SIZES = ["banner", "square", "leaderboard", "skyscraper"];
 const ROLES = ["admin", "moderator", "user"] as const;
 
-const THEMES: { key: ThemeType; label: string; colors: string[] }[] = [
+const THEMES: { key: ThemeType; label: string; colors: string[]; tag?: string }[] = [
   { key: "classic", label: "Classic", colors: ["#00e5c8", "#ff4d9e"] },
-  { key: "cyberpunk", label: "Cyberpunk", colors: ["#ffff00", "#ff00ff"] },
-  { key: "neon", label: "Neon", colors: ["#00ffaa", "#aa00ff"] },
-  { key: "sakura", label: "Sakura", colors: ["#ff6b9d", "#ff9a4d"] },
+  { key: "cyberpunk", label: "Cyberpunk", colors: ["#ffff00", "#ff00ff"], tag: "Grid" },
+  { key: "neon", label: "Neon", colors: ["#00ffaa", "#aa00ff"], tag: "Glow" },
+  { key: "sakura", label: "Sakura", colors: ["#ff6b9d", "#ff9a4d"], tag: "Petals" },
   { key: "minimal", label: "Minimal", colors: ["#d0d0d0", "#909090"] },
-  { key: "midnight", label: "Midnight", colors: ["#3b82f6", "#d4a030"] },
-  { key: "ocean", label: "Ocean", colors: ["#06b6d4", "#34d399"] },
-  { key: "sunset", label: "Sunset", colors: ["#f97316", "#eab308"] },
+  { key: "midnight", label: "Midnight", colors: ["#3b82f6", "#d4a030"], tag: "Stars" },
+  { key: "ocean", label: "Ocean", colors: ["#06b6d4", "#34d399"], tag: "Waves" },
+  { key: "sunset", label: "Sunset", colors: ["#f97316", "#eab308"], tag: "Gradient" },
   { key: "forest", label: "Forest", colors: ["#22c55e", "#84cc16"] },
   { key: "lavender", label: "Lavender", colors: ["#a78bfa", "#60a5fa"] },
   { key: "crimson", label: "Crimson", colors: ["#ef4444", "#22d3ee"] },
-  { key: "arctic", label: "Arctic", colors: ["#7dd3fc", "#5eead4"] },
+  { key: "arctic", label: "Arctic", colors: ["#7dd3fc", "#5eead4"], tag: "Snow" },
   { key: "ember", label: "Ember", colors: ["#f59e0b", "#ef4444"] },
+  { key: "anime-dark", label: "Anime Dark", colors: ["#9333ea", "#e11d48"], tag: "✦ Anime" },
+  { key: "anime-pastel", label: "Anime Pastel", colors: ["#ec4899", "#22d3ee"], tag: "✦ Anime" },
+  { key: "anime-retro", label: "Anime Retro", colors: ["#ea580c", "#14b8a6"], tag: "✦ Anime" },
+  { key: "dragon", label: "Dragon", colors: ["#dc2626", "#eab308"], tag: "🔥 Fire" },
+  { key: "galaxy", label: "Galaxy", colors: ["#8b5cf6", "#3b82f6"], tag: "✨ Stars" },
+  { key: "bloodmoon", label: "Blood Moon", colors: ["#991b1b", "#b45309"], tag: "🌙" },
+  { key: "phantom", label: "Phantom", colors: ["#6366f1", "#c026d3"], tag: "👻" },
+  { key: "jade", label: "Jade", colors: ["#059669", "#16a34a"] },
+  { key: "violet-storm", label: "Violet Storm", colors: ["#a855f7", "#06b6d4"], tag: "⚡" },
+  { key: "golden-hour", label: "Golden Hour", colors: ["#ca8a04", "#ea580c"], tag: "☀️" },
 ];
+
+type TabKey = "stats" | "branding" | "ads" | "api" | "users" | "policy" | "premium";
 
 export default function AdminDashboard() {
   const { user, isAdmin, loading: authLoading, logout } = useSupabaseAuth();
   const { settings, updateSettings } = useSiteSettings();
   const navigate = useNavigate();
-  const [tab, setTab] = useState<"stats" | "branding" | "ads" | "api" | "users" | "policy">("stats");
+  const [tab, setTab] = useState<TabKey>("stats");
   const [ads, setAds] = useState<Ad[]>([]);
-  const [apiHealth, setApiHealth] = useState<Record<string, "ok" | "fail" | "loading">>({});
+  const [apiHealth, setApiHealth] = useState<Record<string, { status: "ok" | "fail" | "loading"; ms?: number }>>({});
   const [saving, setSaving] = useState(false);
   const [userRoles, setUserRoles] = useState<UserRole[]>([]);
   const [newAdminEmail, setNewAdminEmail] = useState("");
@@ -70,7 +83,7 @@ export default function AdminDashboard() {
   const [userError, setUserError] = useState("");
   const [brandingSaved, setBrandingSaved] = useState(false);
 
-  // Local branding state
+  // Branding
   const [brandName, setBrandName] = useState(settings.siteName);
   const [brandIcon, setBrandIcon] = useState(settings.siteIcon);
   const [tgChannel, setTgChannel] = useState(settings.telegramChannel);
@@ -81,16 +94,23 @@ export default function AdminDashboard() {
   const [privacy, setPrivacy] = useState(settings.privacyContent);
   const [terms, setTerms] = useState(settings.termsContent);
 
+  // Premium
+  const [premiumCodes, setPremiumCodes] = useState<PremiumCode[]>([]);
+  const [newCodeExpiry, setNewCodeExpiry] = useState("7");
+  const [newCodeMaxUses, setNewCodeMaxUses] = useState("1");
+  const [generatingCode, setGeneratingCode] = useState(false);
+
+  // API endpoints management
+  const [apiEndpoints, setApiEndpoints] = useState<string[]>(settings.apiEndpoints || []);
+  const [newApiUrl, setNewApiUrl] = useState("");
+
   useEffect(() => {
-    setBrandName(settings.siteName);
-    setBrandIcon(settings.siteIcon);
-    setTgChannel(settings.telegramChannel);
-    setTgGroup(settings.telegramGroup);
-    setErrorGif(settings.errorGif);
-    setLoadingGif(settings.loadingGif);
-    setDmca(settings.dmcaContent);
-    setPrivacy(settings.privacyContent);
+    setBrandName(settings.siteName); setBrandIcon(settings.siteIcon);
+    setTgChannel(settings.telegramChannel); setTgGroup(settings.telegramGroup);
+    setErrorGif(settings.errorGif); setLoadingGif(settings.loadingGif);
+    setDmca(settings.dmcaContent); setPrivacy(settings.privacyContent);
     setTerms(settings.termsContent);
+    setApiEndpoints(settings.apiEndpoints || ["https://beat-anime-api.onrender.com/api/v1"]);
   }, [settings]);
 
   useEffect(() => {
@@ -98,22 +118,18 @@ export default function AdminDashboard() {
   }, [user, isAdmin, authLoading, navigate]);
 
   useEffect(() => {
-    supabase.from("ads").select("*").then(({ data }) => {
-      if (data) setAds(data);
-    });
+    supabase.from("ads").select("*").then(({ data }) => { if (data) setAds(data); });
   }, []);
 
-  useEffect(() => {
-    if (tab === "users") loadUserRoles();
-  }, [tab]);
+  useEffect(() => { if (tab === "users") loadUserRoles(); }, [tab]);
+  useEffect(() => { if (tab === "premium") loadPremiumCodes(); }, [tab]);
 
   const loadUserRoles = async () => {
     const { data: roles } = await supabase.from("user_roles").select("*");
     if (!roles) return;
     const enriched: UserRole[] = [];
     for (const r of roles) {
-      const { data: profile } = await supabase
-        .from("profiles").select("username").eq("user_id", r.user_id).single();
+      const { data: profile } = await supabase.from("profiles").select("username").eq("user_id", r.user_id).single();
       enriched.push({ ...r, username: profile?.username || "Unknown" });
     }
     setUserRoles(enriched);
@@ -121,25 +137,13 @@ export default function AdminDashboard() {
 
   const addUserRole = async () => {
     if (!newAdminEmail.trim()) return;
-    setAddingUser(true);
-    setUserError("");
+    setAddingUser(true); setUserError("");
     try {
-      const { data: profiles } = await supabase
-        .from("profiles").select("user_id, username").ilike("username", newAdminEmail.trim());
-      if (!profiles || profiles.length === 0) {
-        setUserError("User not found. Search by exact username.");
-        setAddingUser(false);
-        return;
-      }
-      const { error } = await supabase.from("user_roles").insert({
-        user_id: profiles[0].user_id, role: newAdminRole as any,
-      });
-      if (error) {
-        setUserError(error.code === "23505" ? "User already has this role." : error.message);
-      } else {
-        setNewAdminEmail("");
-        loadUserRoles();
-      }
+      const { data: profiles } = await supabase.from("profiles").select("user_id, username").ilike("username", newAdminEmail.trim());
+      if (!profiles || profiles.length === 0) { setUserError("User not found."); setAddingUser(false); return; }
+      const { error } = await supabase.from("user_roles").insert({ user_id: profiles[0].user_id, role: newAdminRole as any });
+      if (error) { setUserError(error.code === "23505" ? "User already has this role." : error.message); }
+      else { setNewAdminEmail(""); loadUserRoles(); }
     } catch { setUserError("Failed to add role."); }
     setAddingUser(false);
   };
@@ -149,22 +153,76 @@ export default function AdminDashboard() {
     setUserRoles(prev => prev.filter(r => r.id !== id));
   };
 
+  // ── API Health with response time ──
   const checkApis = async () => {
-    const base = "https://beat-anime-api.onrender.com/api/v1";
-    const results: Record<string, "ok" | "fail" | "loading"> = {};
-    API_ENDPOINTS.forEach(e => { results[e.name] = "loading"; });
+    const results: Record<string, { status: "ok" | "fail" | "loading"; ms?: number }> = {};
+    const endpoints = apiEndpoints.length > 0 ? apiEndpoints : ["https://beat-anime-api.onrender.com/api/v1"];
+
+    // Check each endpoint with each API route
+    for (const base of endpoints) {
+      for (const ep of API_ENDPOINTS) {
+        const key = `${base}|${ep.name}`;
+        results[key] = { status: "loading" };
+      }
+    }
     setApiHealth({ ...results });
-    for (const ep of API_ENDPOINTS) {
-      try {
-        const res = await fetch(`${base}${ep.url}`, { signal: AbortSignal.timeout(10000) });
-        results[ep.name] = res.ok ? "ok" : "fail";
-      } catch { results[ep.name] = "fail"; }
-      setApiHealth({ ...results });
+
+    for (const base of endpoints) {
+      for (const ep of API_ENDPOINTS) {
+        const key = `${base}|${ep.name}`;
+        try {
+          const start = performance.now();
+          const res = await fetch(`${base}${ep.url}`, { signal: AbortSignal.timeout(15000) });
+          const ms = Math.round(performance.now() - start);
+          results[key] = { status: res.ok ? "ok" : "fail", ms };
+        } catch {
+          results[key] = { status: "fail" };
+        }
+        setApiHealth({ ...results });
+      }
     }
   };
 
   useEffect(() => { if (tab === "api") checkApis(); }, [tab]);
 
+  // ── Premium codes ──
+  const loadPremiumCodes = async () => {
+    const { data } = await supabase.from("premium_codes").select("*").order("created_at", { ascending: false });
+    if (data) setPremiumCodes(data as PremiumCode[]);
+  };
+
+  const generateCode = async () => {
+    if (!user) return;
+    setGeneratingCode(true);
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let code = "";
+    for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
+
+    const expiryDays = parseInt(newCodeExpiry) || 7;
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + expiryDays);
+
+    await supabase.from("premium_codes").insert({
+      code,
+      created_by: user.id,
+      expires_at: expiresAt.toISOString(),
+      max_uses: parseInt(newCodeMaxUses) || 1,
+    });
+
+    loadPremiumCodes();
+    setGeneratingCode(false);
+  };
+
+  const deleteCode = async (id: string) => {
+    await supabase.from("premium_codes").delete().eq("id", id);
+    setPremiumCodes(prev => prev.filter(c => c.id !== id));
+  };
+
+  const copyCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+  };
+
+  // ── Ads ──
   const saveAd = async (ad: Ad) => {
     setSaving(true);
     const { id, ...rest } = ad;
@@ -185,22 +243,20 @@ export default function AdminDashboard() {
 
   const saveBranding = async () => {
     setSaving(true);
-    await updateSettings({
-      siteName: brandName, siteIcon: brandIcon,
-      telegramChannel: tgChannel, telegramGroup: tgGroup,
-      errorGif, loadingGif,
-    });
-    setSaving(false);
-    setBrandingSaved(true);
-    setTimeout(() => setBrandingSaved(false), 2000);
+    await updateSettings({ siteName: brandName, siteIcon: brandIcon, telegramChannel: tgChannel, telegramGroup: tgGroup, errorGif, loadingGif });
+    setSaving(false); setBrandingSaved(true); setTimeout(() => setBrandingSaved(false), 2000);
   };
 
   const savePolicy = async () => {
     setSaving(true);
     await updateSettings({ dmcaContent: dmca, privacyContent: privacy, termsContent: terms });
-    setSaving(false);
-    setBrandingSaved(true);
-    setTimeout(() => setBrandingSaved(false), 2000);
+    setSaving(false); setBrandingSaved(true); setTimeout(() => setBrandingSaved(false), 2000);
+  };
+
+  const saveApiEndpoints = async () => {
+    setSaving(true);
+    await updateSettings({ apiEndpoints });
+    setSaving(false); setBrandingSaved(true); setTimeout(() => setBrandingSaved(false), 2000);
   };
 
   if (authLoading) return (
@@ -210,13 +266,14 @@ export default function AdminDashboard() {
   );
 
   const tabs = [
-    { key: "stats", label: "Stats", icon: BarChart3 },
-    { key: "branding", label: "Branding", icon: Palette },
-    { key: "policy", label: "Policies", icon: FileText },
-    { key: "ads", label: "Ads", icon: Image },
-    { key: "users", label: "Users", icon: Users },
-    { key: "api", label: "API", icon: Activity },
-  ] as const;
+    { key: "stats" as const, label: "Stats", icon: BarChart3 },
+    { key: "branding" as const, label: "Branding", icon: Palette },
+    { key: "premium" as const, label: "Premium", icon: Crown },
+    { key: "policy" as const, label: "Policies", icon: FileText },
+    { key: "ads" as const, label: "Ads", icon: Image },
+    { key: "users" as const, label: "Users", icon: Users },
+    { key: "api" as const, label: "API", icon: Activity },
+  ];
 
   return (
     <div className="min-h-screen bg-background">
@@ -246,7 +303,7 @@ export default function AdminDashboard() {
           ))}
         </div>
 
-        {/* Stats */}
+        {/* ── Stats ── */}
         {tab === "stats" && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             {[
@@ -254,6 +311,10 @@ export default function AdminDashboard() {
               { label: "Total Ads", value: ads.length, color: "text-foreground" },
               { label: "Current Theme", value: settings.theme, color: "text-accent" },
               { label: "Team Members", value: userRoles.length, color: "text-muted-foreground" },
+              { label: "Active Premium Codes", value: premiumCodes.filter(c => c.is_active && new Date(c.expires_at) > new Date()).length, color: "text-accent" },
+              { label: "API Endpoints", value: apiEndpoints.length, color: "text-primary" },
+              { label: "Total Premium Codes", value: premiumCodes.length, color: "text-foreground" },
+              { label: "Themes Available", value: THEMES.length, color: "text-accent" },
             ].map(s => (
               <div key={s.label} className="p-6 rounded-xl bg-card border border-border">
                 <p className="text-sm text-muted-foreground mb-1">{s.label}</p>
@@ -263,27 +324,31 @@ export default function AdminDashboard() {
           </motion.div>
         )}
 
-        {/* Branding + Theme */}
+        {/* ── Branding + Theme ── */}
         {tab === "branding" && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-            {/* Theme switcher */}
             <div className="p-6 rounded-xl bg-card border border-border">
               <h2 className="font-display text-lg font-bold text-foreground mb-4 flex items-center gap-2">
                 <Palette className="w-5 h-5" /> Site Theme
               </h2>
-              <p className="text-sm text-muted-foreground mb-4">Changes apply instantly for all users</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+              <p className="text-sm text-muted-foreground mb-4">Choose from {THEMES.length} themes — changes apply instantly for all users</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                 {THEMES.map(theme => (
                   <button
                     key={theme.key}
                     onClick={() => updateSettings({ theme: theme.key })}
-                    className={`p-4 rounded-xl border-2 transition-all ${
-                      settings.theme === theme.key ? "border-primary scale-105" : "border-border hover:border-primary/40"
+                    className={`p-4 rounded-xl border-2 transition-all relative ${
+                      settings.theme === theme.key ? "border-primary scale-105 shadow-[0_0_20px_hsl(var(--primary)/0.2)]" : "border-border hover:border-primary/40"
                     }`}
                   >
+                    {theme.tag && (
+                      <span className="absolute -top-2 -right-2 text-[10px] px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground font-medium">
+                        {theme.tag}
+                      </span>
+                    )}
                     <div className="flex gap-1 mb-2 justify-center">
                       {theme.colors.map((c, i) => (
-                        <div key={i} className="w-6 h-6 rounded-full" style={{ background: c }} />
+                        <div key={i} className="w-6 h-6 rounded-full border border-border/50" style={{ background: c }} />
                       ))}
                     </div>
                     <p className="text-xs font-medium text-foreground">{theme.label}</p>
@@ -295,50 +360,26 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* Site identity */}
             <div className="p-6 rounded-xl bg-card border border-border">
               <h2 className="font-display text-lg font-bold text-foreground mb-4 flex items-center gap-2">
                 <Type className="w-5 h-5" /> Site Identity
               </h2>
               <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <label className="text-xs text-muted-foreground block mb-1">Site Name</label>
-                  <input value={brandName} onChange={e => setBrandName(e.target.value)}
-                    className="w-full h-9 px-3 rounded-lg bg-secondary text-foreground text-sm border border-border focus:ring-1 focus:ring-primary focus:outline-none"
-                    placeholder="Beat Anistream" />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground block mb-1">Site Icon (letter/emoji)</label>
-                  <input value={brandIcon} onChange={e => setBrandIcon(e.target.value)}
-                    className="w-full h-9 px-3 rounded-lg bg-secondary text-foreground text-sm border border-border focus:ring-1 focus:ring-primary focus:outline-none"
-                    placeholder="B" maxLength={2} />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground block mb-1">Telegram Channel URL</label>
-                  <input value={tgChannel} onChange={e => setTgChannel(e.target.value)}
-                    className="w-full h-9 px-3 rounded-lg bg-secondary text-foreground text-sm border border-border focus:ring-1 focus:ring-primary focus:outline-none"
-                    placeholder="https://t.me/..." />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground block mb-1">Telegram Group URL</label>
-                  <input value={tgGroup} onChange={e => setTgGroup(e.target.value)}
-                    className="w-full h-9 px-3 rounded-lg bg-secondary text-foreground text-sm border border-border focus:ring-1 focus:ring-primary focus:outline-none"
-                    placeholder="https://t.me/..." />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground block mb-1">Error GIF URL (for stream errors)</label>
-                  <input value={errorGif} onChange={e => setErrorGif(e.target.value)}
-                    className="w-full h-9 px-3 rounded-lg bg-secondary text-foreground text-sm border border-border focus:ring-1 focus:ring-primary focus:outline-none"
-                    placeholder="https://media.giphy.com/..." />
-                  {errorGif && <img src={errorGif} className="mt-2 h-16 rounded" alt="error preview" />}
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground block mb-1">Loading GIF URL</label>
-                  <input value={loadingGif} onChange={e => setLoadingGif(e.target.value)}
-                    className="w-full h-9 px-3 rounded-lg bg-secondary text-foreground text-sm border border-border focus:ring-1 focus:ring-primary focus:outline-none"
-                    placeholder="https://media.giphy.com/..." />
-                  {loadingGif && <img src={loadingGif} className="mt-2 h-16 rounded" alt="loading preview" />}
-                </div>
+                {[
+                  { label: "Site Name", val: brandName, set: setBrandName, ph: "Beat Anistream" },
+                  { label: "Site Icon (letter/emoji)", val: brandIcon, set: setBrandIcon, ph: "B", max: 2 },
+                  { label: "Telegram Channel URL", val: tgChannel, set: setTgChannel, ph: "https://t.me/..." },
+                  { label: "Telegram Group URL", val: tgGroup, set: setTgGroup, ph: "https://t.me/..." },
+                  { label: "Error GIF URL", val: errorGif, set: setErrorGif, ph: "https://media.giphy.com/..." },
+                  { label: "Loading GIF URL", val: loadingGif, set: setLoadingGif, ph: "https://media.giphy.com/..." },
+                ].map(f => (
+                  <div key={f.label}>
+                    <label className="text-xs text-muted-foreground block mb-1">{f.label}</label>
+                    <input value={f.val} onChange={e => f.set(e.target.value)} maxLength={f.max}
+                      className="w-full h-9 px-3 rounded-lg bg-secondary text-foreground text-sm border border-border focus:ring-1 focus:ring-primary focus:outline-none"
+                      placeholder={f.ph} />
+                  </div>
+                ))}
               </div>
               <button onClick={saveBranding} disabled={saving}
                 className="mt-4 flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50">
@@ -349,30 +390,94 @@ export default function AdminDashboard() {
           </motion.div>
         )}
 
-        {/* Policy content */}
+        {/* ── Premium Codes ── */}
+        {tab === "premium" && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+            <div className="p-6 rounded-xl bg-card border border-border">
+              <h2 className="font-display text-lg font-bold text-foreground mb-4 flex items-center gap-2">
+                <Crown className="w-5 h-5 text-accent" /> Generate Premium Code
+              </h2>
+              <div className="flex gap-3 flex-wrap items-end">
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">Expires in (days)</label>
+                  <input type="number" value={newCodeExpiry} onChange={e => setNewCodeExpiry(e.target.value)} min="1" max="365"
+                    className="w-24 h-9 px-3 rounded-lg bg-secondary text-foreground text-sm border border-border focus:ring-1 focus:ring-primary focus:outline-none" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">Max uses</label>
+                  <input type="number" value={newCodeMaxUses} onChange={e => setNewCodeMaxUses(e.target.value)} min="1" max="1000"
+                    className="w-24 h-9 px-3 rounded-lg bg-secondary text-foreground text-sm border border-border focus:ring-1 focus:ring-primary focus:outline-none" />
+                </div>
+                <button onClick={generateCode} disabled={generatingCode}
+                  className="flex items-center gap-2 px-5 py-2 rounded-lg bg-accent text-accent-foreground text-sm font-medium disabled:opacity-50 h-9">
+                  {generatingCode ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  Generate Code
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {premiumCodes.length === 0 && (
+                <p className="text-center text-muted-foreground py-12">No premium codes yet. Generate one above.</p>
+              )}
+              {premiumCodes.map(c => {
+                const expired = new Date(c.expires_at) < new Date();
+                const exhausted = c.current_uses >= c.max_uses;
+                return (
+                  <div key={c.id} className={`p-4 rounded-xl bg-card border transition-colors ${expired || exhausted ? "border-border/50 opacity-60" : "border-border"}`}>
+                    <div className="flex items-center justify-between flex-wrap gap-3">
+                      <div className="flex items-center gap-4">
+                        <button onClick={() => copyCode(c.code)} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors">
+                          <span className="font-mono text-lg font-bold text-foreground tracking-widest">{c.code}</span>
+                          <Copy className="w-4 h-4 text-muted-foreground" />
+                        </button>
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Users className="w-3 h-3" />
+                            <span>{c.current_uses}/{c.max_uses} uses</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Clock className="w-3 h-3" />
+                            <span>{expired ? "Expired" : `Expires ${new Date(c.expires_at).toLocaleDateString()}`}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                          expired ? "bg-destructive/20 text-destructive" :
+                          exhausted ? "bg-muted text-muted-foreground" :
+                          "bg-accent/20 text-accent"
+                        }`}>
+                          {expired ? "Expired" : exhausted ? "Used up" : "Active"}
+                        </span>
+                        <button onClick={() => deleteCode(c.id)} className="p-1.5 rounded-lg hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── Policy ── */}
         {tab === "policy" && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5">
-            <div className="p-5 rounded-xl bg-card border border-border">
-              <h2 className="font-display text-base font-bold text-foreground mb-3 flex items-center gap-2">
-                <Shield className="w-4 h-4 text-primary" /> DMCA Policy
-              </h2>
-              <textarea value={dmca} onChange={e => setDmca(e.target.value)} rows={5}
-                className="w-full p-3 rounded-lg bg-secondary text-foreground text-sm border border-border focus:ring-1 focus:ring-primary focus:outline-none resize-y" />
-            </div>
-            <div className="p-5 rounded-xl bg-card border border-border">
-              <h2 className="font-display text-base font-bold text-foreground mb-3 flex items-center gap-2">
-                <Globe className="w-4 h-4 text-accent" /> Privacy Policy
-              </h2>
-              <textarea value={privacy} onChange={e => setPrivacy(e.target.value)} rows={5}
-                className="w-full p-3 rounded-lg bg-secondary text-foreground text-sm border border-border focus:ring-1 focus:ring-primary focus:outline-none resize-y" />
-            </div>
-            <div className="p-5 rounded-xl bg-card border border-border">
-              <h2 className="font-display text-base font-bold text-foreground mb-3 flex items-center gap-2">
-                <FileText className="w-4 h-4 text-primary" /> Terms of Service
-              </h2>
-              <textarea value={terms} onChange={e => setTerms(e.target.value)} rows={5}
-                className="w-full p-3 rounded-lg bg-secondary text-foreground text-sm border border-border focus:ring-1 focus:ring-primary focus:outline-none resize-y" />
-            </div>
+            {[
+              { label: "DMCA Policy", icon: Shield, color: "text-primary", val: dmca, set: setDmca },
+              { label: "Privacy Policy", icon: Globe, color: "text-accent", val: privacy, set: setPrivacy },
+              { label: "Terms of Service", icon: FileText, color: "text-primary", val: terms, set: setTerms },
+            ].map(p => (
+              <div key={p.label} className="p-5 rounded-xl bg-card border border-border">
+                <h2 className="font-display text-base font-bold text-foreground mb-3 flex items-center gap-2">
+                  <p.icon className={`w-4 h-4 ${p.color}`} /> {p.label}
+                </h2>
+                <textarea value={p.val} onChange={e => p.set(e.target.value)} rows={5}
+                  className="w-full p-3 rounded-lg bg-secondary text-foreground text-sm border border-border focus:ring-1 focus:ring-primary focus:outline-none resize-y" />
+              </div>
+            ))}
             <button onClick={savePolicy} disabled={saving}
               className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : brandingSaved ? <CheckCircle className="w-4 h-4" /> : <Save className="w-4 h-4" />}
@@ -381,7 +486,7 @@ export default function AdminDashboard() {
           </motion.div>
         )}
 
-        {/* Ads */}
+        {/* ── Ads ── */}
         {tab === "ads" && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             <div className="flex items-center justify-between mb-4">
@@ -427,7 +532,6 @@ export default function AdminDashboard() {
                       </div>
                     </div>
                   </div>
-                  {ad.image_url && <div className="rounded-lg overflow-hidden border border-border max-w-xs"><img src={ad.image_url} alt={ad.name} className="w-full h-auto" /></div>}
                   <div className="flex items-center gap-4 flex-wrap">
                     <button onClick={() => setAds(prev => prev.map(a => a.id === ad.id ? { ...a, is_active: !a.is_active } : a))} className="flex items-center gap-1.5 text-sm">
                       {ad.is_active ? <ToggleRight className="w-5 h-5 text-primary" /> : <ToggleLeft className="w-5 h-5 text-muted-foreground" />}
@@ -449,7 +553,7 @@ export default function AdminDashboard() {
           </motion.div>
         )}
 
-        {/* Users */}
+        {/* ── Users ── */}
         {tab === "users" && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             <div className="p-4 rounded-xl bg-card border border-border mb-6">
@@ -458,8 +562,7 @@ export default function AdminDashboard() {
               </h3>
               {userError && <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2 mb-3">{userError}</p>}
               <div className="flex gap-3 flex-wrap">
-                <input value={newAdminEmail} onChange={e => setNewAdminEmail(e.target.value)}
-                  placeholder="Search by username"
+                <input value={newAdminEmail} onChange={e => setNewAdminEmail(e.target.value)} placeholder="Search by username"
                   className="flex-1 min-w-[200px] h-9 px-3 rounded-lg bg-secondary text-foreground text-sm border border-border focus:ring-1 focus:ring-primary focus:outline-none" />
                 <select value={newAdminRole} onChange={e => setNewAdminRole(e.target.value)}
                   className="h-9 px-3 rounded-lg bg-secondary text-foreground text-sm border border-border focus:ring-1 focus:ring-primary focus:outline-none">
@@ -499,25 +602,84 @@ export default function AdminDashboard() {
           </motion.div>
         )}
 
-        {/* API Health */}
+        {/* ── API Health ── */}
         {tab === "api" && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-display text-lg font-bold text-foreground">API Health</h2>
-              <button onClick={checkApis} className="px-4 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm">Refresh</button>
-            </div>
-            <div className="space-y-3">
-              {API_ENDPOINTS.map(ep => (
-                <div key={ep.name} className="flex items-center justify-between p-4 rounded-xl bg-card border border-border">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{ep.name}</p>
-                    <p className="text-xs text-muted-foreground font-mono">{ep.url}</p>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+            {/* API Endpoints Manager */}
+            <div className="p-5 rounded-xl bg-card border border-border">
+              <h2 className="font-display text-base font-bold text-foreground mb-3 flex items-center gap-2">
+                <Server className="w-4 h-4 text-primary" /> API Endpoints (Load Distribution)
+              </h2>
+              <p className="text-xs text-muted-foreground mb-4">Add multiple identical API clones to distribute load and reduce response time.</p>
+              <div className="space-y-2 mb-4">
+                {apiEndpoints.map((url, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <input value={url} onChange={e => {
+                      const next = [...apiEndpoints]; next[i] = e.target.value; setApiEndpoints(next);
+                    }}
+                      className="flex-1 h-9 px-3 rounded-lg bg-secondary text-foreground text-sm border border-border focus:ring-1 focus:ring-primary focus:outline-none font-mono text-xs" />
+                    <button onClick={() => setApiEndpoints(prev => prev.filter((_, j) => j !== i))}
+                      className="p-2 rounded-lg hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
-                  <div>
-                    {apiHealth[ep.name] === "loading" && <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />}
-                    {apiHealth[ep.name] === "ok" && <CheckCircle className="w-5 h-5 text-primary" />}
-                    {apiHealth[ep.name] === "fail" && <XCircle className="w-5 h-5 text-destructive" />}
-                    {!apiHealth[ep.name] && <span className="text-xs text-muted-foreground">—</span>}
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <input value={newApiUrl} onChange={e => setNewApiUrl(e.target.value)} placeholder="https://your-api-clone.onrender.com/api/v1"
+                  className="flex-1 h-9 px-3 rounded-lg bg-secondary text-foreground text-sm border border-border focus:ring-1 focus:ring-primary focus:outline-none font-mono text-xs" />
+                <button onClick={() => { if (newApiUrl.trim()) { setApiEndpoints(prev => [...prev, newApiUrl.trim()]); setNewApiUrl(""); } }}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium">
+                  <Plus className="w-4 h-4" /> Add
+                </button>
+              </div>
+              <button onClick={saveApiEndpoints} disabled={saving}
+                className="mt-3 flex items-center gap-2 px-4 py-2 rounded-lg bg-accent text-accent-foreground text-sm font-medium disabled:opacity-50">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                Save Endpoints
+              </button>
+            </div>
+
+            {/* Health check results */}
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-display text-lg font-bold text-foreground flex items-center gap-2">
+                  <Zap className="w-5 h-5 text-accent" /> API Health & Response Time
+                </h2>
+                <button onClick={checkApis} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm">
+                  <RefreshCw className="w-4 h-4" /> Refresh
+                </button>
+              </div>
+              {apiEndpoints.map((base, bi) => (
+                <div key={bi} className="mb-6">
+                  <h3 className="text-sm font-medium text-foreground mb-3 font-mono flex items-center gap-2">
+                    <Server className="w-3.5 h-3.5 text-muted-foreground" />
+                    API #{bi + 1}: <span className="text-muted-foreground truncate">{base}</span>
+                  </h3>
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                    {API_ENDPOINTS.map(ep => {
+                      const key = `${base}|${ep.name}`;
+                      const h = apiHealth[key];
+                      return (
+                        <div key={key} className="flex items-center justify-between p-3 rounded-xl bg-card border border-border">
+                          <div>
+                            <p className="text-sm font-medium text-foreground">{ep.name}</p>
+                            <p className="text-[10px] text-muted-foreground font-mono truncate max-w-[140px]">{ep.url}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {h?.ms != null && (
+                              <span className={`text-xs font-mono ${h.ms < 500 ? "text-accent" : h.ms < 2000 ? "text-primary" : "text-destructive"}`}>
+                                {h.ms}ms
+                              </span>
+                            )}
+                            {h?.status === "loading" && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
+                            {h?.status === "ok" && <CheckCircle className="w-4 h-4 text-accent" />}
+                            {h?.status === "fail" && <XCircle className="w-4 h-4 text-destructive" />}
+                            {!h && <span className="text-xs text-muted-foreground">—</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               ))}
