@@ -251,7 +251,7 @@ export default function Navbar() {
 
           <button
             onClick={() => { setMobileMenu(!mobileMenu); setMobileSearch(false); }}
-            className="lg:hidden p-2 text-muted-foreground"
+            className="lg:hidden p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-all duration-200"
           >
             {mobileMenu ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
