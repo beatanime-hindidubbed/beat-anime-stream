@@ -523,6 +523,16 @@ function applyTheme(theme: ThemeType, customColors?: CustomThemeColors) {
       "--gradient-accent": "linear-gradient(135deg, hsl(30 25% 55%), hsl(25 20% 48%))",
       "--theme-pattern": "radial-gradient(ellipse at 50% 50%, hsl(150 30% 50% / 0.03) 0%, transparent 60%)",
     },
+    // ── Ultra-Modern Gaming Theme ──
+    "mecha-gaming": {
+      "--primary": "180 100% 50%", "--accent": "320 100% 60%",
+      "--background": "220 40% 3%", "--card": "220 35% 6%", "--border": "220 30% 12%",
+      "--foreground": "180 10% 95%", "--muted-foreground": "200 15% 50%",
+      "--secondary": "220 30% 9%", "--secondary-foreground": "180 20% 90%",
+      "--gradient-primary": "linear-gradient(135deg, hsl(180 100% 50%), hsl(200 100% 55%), hsl(160 100% 45%))",
+      "--gradient-accent": "linear-gradient(135deg, hsl(320 100% 60%), hsl(280 100% 65%), hsl(350 90% 55%))",
+      "--theme-pattern": "repeating-linear-gradient(0deg, transparent, transparent 100px, hsl(180 100% 50% / 0.02) 100px, hsl(180 100% 50% / 0.02) 101px), repeating-linear-gradient(90deg, transparent, transparent 100px, hsl(320 100% 60% / 0.02) 100px, hsl(320 100% 60% / 0.02) 101px), radial-gradient(circle at 15% 85%, hsl(180 100% 50% / 0.06) 0%, transparent 35%), radial-gradient(circle at 85% 15%, hsl(320 100% 60% / 0.06) 0%, transparent 35%), radial-gradient(circle at 50% 50%, hsl(200 100% 55% / 0.03) 0%, transparent 50%)",
+    },
   };
 
   // Anime wallpaper backgrounds mapped to themes
