@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import HindiVideoPlayer from "@/components/HindiVideoPlayer";
-import DownloadButton from "@/components/DownloadButton";
+
 import BackButton from "@/components/BackButton";
 import { getApiPool, getNextApi, proxyUrl as makeProxyUrl } from "@/lib/streaming";
 import { getCachedStream, setCachedStream } from "@/lib/streamCache";
