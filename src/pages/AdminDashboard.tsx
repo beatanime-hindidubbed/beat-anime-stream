@@ -133,6 +133,13 @@ export default function AdminDashboard() {
   const [bannedAnimes, setBannedAnimes] = useState<string[]>(settings.bannedAnimes || []);
   const [newBanId, setNewBanId] = useState("");
   const [adminLogs, setAdminLogs] = useState<any[]>([]);
+  
+  // Custom theme builder
+  const [customPrimary, setCustomPrimary] = useState(settings.customThemeColors?.primary || "175 80% 50%");
+  const [customAccent, setCustomAccent] = useState(settings.customThemeColors?.accent || "330 70% 55%");
+  const [customBg, setCustomBg] = useState(settings.customThemeColors?.background || "220 20% 7%");
+  const [customCard, setCustomCard] = useState(settings.customThemeColors?.card || "220 18% 10%");
+  const [customBorder, setCustomBorder] = useState(settings.customThemeColors?.border || "220 15% 18%");
 
   useEffect(() => {
     setBrandName(settings.siteName); setBrandIcon(settings.siteIcon);
