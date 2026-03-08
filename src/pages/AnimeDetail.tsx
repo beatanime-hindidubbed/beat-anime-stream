@@ -1,5 +1,6 @@
 import { useParams, Link } from "react-router-dom";
 import AnimeReviews from "@/components/AnimeReviews";
+import AnimeReportButton from "@/components/AnimeReportButton";
 import { useQuery } from "@tanstack/react-query";
 import { api, AnimeInfo, AnimeItem } from "@/lib/api";
 import { store } from "@/lib/store";
