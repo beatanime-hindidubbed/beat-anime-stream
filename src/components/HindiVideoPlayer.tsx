@@ -1028,18 +1028,20 @@ export default function HindiVideoPlayer({
                     style={{ width: "14px", height: "14px", left: `${progress}%`, top: "50%", transform: "translateX(-50%) translateY(-50%)",
                       background: "white", boxShadow: "0 0 0 3px hsl(var(--primary) / 0.4), 0 2px 8px rgba(0,0,0,0.8)" }} />
 
-                  {/* Preview thumbnail (desktop only) */}
-                  {!isMobile && hoverTime !== null && (
+                  {/* Preview thumbnail */}
+                  {hoverTime !== null && (
                     <div
-                      className="absolute bottom-8 flex-col items-center gap-1.5 pointer-events-none z-20 -translate-x-1/2 hidden sm:flex"
+                      className="absolute bottom-6 sm:bottom-8 flex flex-col items-center gap-1 sm:gap-1.5 pointer-events-none z-20 -translate-x-1/2"
                       style={{ left: previewLeft }}
                     >
-                      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-px h-6 bg-white/40" style={{ bottom: "-24px" }} />
-                      <div className={`rounded-xl overflow-hidden border border-white/20 shadow-2xl bg-black/90 transition-opacity duration-75 ${previewHasFrame ? "opacity-100" : "opacity-40"}`}
-                        style={{ boxShadow: "0 12px 32px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,255,255,0.1)" }}>
-                        <canvas ref={previewCanvasRef} width={160} height={90} className="block" />
-                      </div>
-                      <span className="text-[11px] text-white font-bold px-2.5 py-1 rounded-lg bg-black/90 backdrop-blur-sm shadow tabular-nums border border-white/10">
+                      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-px h-4 sm:h-6 bg-white/40" style={{ bottom: "-16px" }} />
+                      {!isMobile && (
+                        <div className={`rounded-lg sm:rounded-xl overflow-hidden border border-white/20 shadow-2xl bg-black/90 transition-opacity duration-75 ${previewHasFrame ? "opacity-100" : "opacity-40"}`}
+                          style={{ boxShadow: "0 12px 32px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,255,255,0.1)" }}>
+                          <canvas ref={previewCanvasRef} width={160} height={90} className="block" />
+                        </div>
+                      )}
+                      <span className="text-[9px] sm:text-[11px] text-white font-bold px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg bg-black/90 shadow tabular-nums border border-white/10">
                         {fmt(hoverTime)}
                       </span>
                     </div>
