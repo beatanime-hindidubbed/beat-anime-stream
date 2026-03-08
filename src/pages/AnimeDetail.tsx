@@ -37,7 +37,7 @@ export default function AnimeDetail() {
     if (id) setInWatchlist(store.isInWatchlist(id));
   }, [id]);
 
-  if (isHidden(id || "")) {
+  if (isHidden(id || "", info?.anime?.info?.name)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <p className="text-muted-foreground">This anime is currently unavailable.</p>
