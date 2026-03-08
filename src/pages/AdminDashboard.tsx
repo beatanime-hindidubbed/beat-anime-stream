@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
-import { useSiteSettings, ThemeType, PlayerTheme } from "@/hooks/useSiteSettings";
+import { useSiteSettings, ThemeType, PlayerTheme, FontStyle, CustomThemeColors } from "@/hooks/useSiteSettings";
 import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
 import {
@@ -42,6 +42,7 @@ const SIZES = ["banner", "square", "leaderboard", "skyscraper"];
 const ROLES = ["admin", "moderator", "user"] as const;
 
 const THEMES: { key: ThemeType; label: string; colors: string[]; tag?: string }[] = [
+  { key: "netflix", label: "Netflix", colors: ["#e50914", "#f5f5f5"], tag: "🎬 Netflix" },
   { key: "classic", label: "Classic", colors: ["#00e5c8", "#ff4d9e"] },
   { key: "cyberpunk", label: "Cyberpunk", colors: ["#ffff00", "#ff00ff"], tag: "Grid" },
   { key: "neon", label: "Neon", colors: ["#00ffaa", "#aa00ff"], tag: "Glow" },
@@ -65,6 +66,7 @@ const THEMES: { key: ThemeType; label: string; colors: string[]; tag?: string }[
   { key: "jade", label: "Jade", colors: ["#059669", "#16a34a"] },
   { key: "violet-storm", label: "Violet Storm", colors: ["#a855f7", "#06b6d4"], tag: "⚡" },
   { key: "golden-hour", label: "Golden Hour", colors: ["#ca8a04", "#ea580c"], tag: "☀️" },
+  { key: "custom", label: "Custom", colors: ["#888", "#ccc"], tag: "🎨 Builder" },
 ];
 
 const PLAYER_THEMES: { key: PlayerTheme; label: string; desc: string }[] = [
@@ -73,6 +75,14 @@ const PLAYER_THEMES: { key: PlayerTheme; label: string; desc: string }[] = [
   { key: "cinema", label: "Cinema", desc: "Dark overlay, large play button" },
   { key: "retro", label: "Retro", desc: "VHS style with scan lines" },
   { key: "glassmorphism", label: "Glass", desc: "Frosted glass controls" },
+];
+
+const FONT_STYLES: { key: FontStyle; label: string; desc: string; preview: string }[] = [
+  { key: "default", label: "Default", desc: "Outfit + Space Grotesk", preview: "Aa" },
+  { key: "elegant", label: "Elegant", desc: "Georgia + Palatino (Serif)", preview: "Aa" },
+  { key: "playful", label: "Playful", desc: "Comic Neue (Fun)", preview: "Aa" },
+  { key: "monospace", label: "Monospace", desc: "JetBrains Mono (Code)", preview: "Aa" },
+  { key: "cinematic", label: "Cinematic", desc: "Bebas Neue + Inter", preview: "Aa" },
 ];
 
 type TabKey = "stats" | "branding" | "ads" | "api" | "users" | "policy" | "premium" | "chat" | "player" | "banlist" | "logs";
@@ -123,6 +133,13 @@ export default function AdminDashboard() {
   const [bannedAnimes, setBannedAnimes] = useState<string[]>(settings.bannedAnimes || []);
   const [newBanId, setNewBanId] = useState("");
   const [adminLogs, setAdminLogs] = useState<any[]>([]);
+  
+  // Custom theme builder
+  const [customPrimary, setCustomPrimary] = useState(settings.customThemeColors?.primary || "175 80% 50%");
+  const [customAccent, setCustomAccent] = useState(settings.customThemeColors?.accent || "330 70% 55%");
+  const [customBg, setCustomBg] = useState(settings.customThemeColors?.background || "220 20% 7%");
+  const [customCard, setCustomCard] = useState(settings.customThemeColors?.card || "220 18% 10%");
+  const [customBorder, setCustomBorder] = useState(settings.customThemeColors?.border || "220 15% 18%");
 
   useEffect(() => {
     setBrandName(settings.siteName); setBrandIcon(settings.siteIcon);
@@ -446,6 +463,60 @@ export default function AdminDashboard() {
                     {settings.theme === theme.key && (
                       <p className="text-xs text-primary mt-0.5">Active</p>
                     )}
+                  </button>
+                ))}
+              </div>
+
+              {/* Custom Theme Builder */}
+              {settings.theme === "custom" && (
+                <div className="mt-6 p-4 rounded-xl bg-secondary/30 border border-border space-y-3">
+                  <h3 className="text-sm font-bold text-foreground">🎨 Custom Theme Builder</h3>
+                  <p className="text-xs text-muted-foreground">Enter HSL values (e.g. "175 80% 50%")</p>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {[
+                      { label: "Primary Color", val: customPrimary, set: setCustomPrimary },
+                      { label: "Accent Color", val: customAccent, set: setCustomAccent },
+                      { label: "Background", val: customBg, set: setCustomBg },
+                      { label: "Card", val: customCard, set: setCustomCard },
+                      { label: "Border", val: customBorder, set: setCustomBorder },
+                    ].map(f => (
+                      <div key={f.label}>
+                        <label className="text-[10px] text-muted-foreground block mb-1">{f.label}</label>
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-full border border-border flex-shrink-0" style={{ background: `hsl(${f.val})` }} />
+                          <input value={f.val} onChange={e => f.set(e.target.value)}
+                            className="flex-1 h-8 px-2 rounded-lg bg-secondary text-foreground text-xs border border-border focus:ring-1 focus:ring-primary focus:outline-none font-mono" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={async () => {
+                    const colors: CustomThemeColors = { primary: customPrimary, accent: customAccent, background: customBg, card: customCard, border: customBorder };
+                    await updateSettings({ theme: "custom", customThemeColors: colors });
+                    await logAction("custom_theme", JSON.stringify(colors));
+                  }} disabled={saving}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50">
+                    <Save className="w-4 h-4" /> Apply Custom Theme
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Font Style */}
+            <div className="p-6 rounded-xl bg-card border border-border">
+              <h2 className="font-display text-lg font-bold text-foreground mb-4 flex items-center gap-2">
+                <Type className="w-5 h-5" /> Text Style
+              </h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                {FONT_STYLES.map(fs => (
+                  <button key={fs.key} onClick={() => updateSettings({ fontStyle: fs.key })}
+                    className={`p-4 rounded-xl border-2 text-left transition-all ${
+                      settings.fontStyle === fs.key ? "border-primary shadow-[0_0_15px_hsl(var(--primary)/0.2)]" : "border-border hover:border-primary/40"
+                    }`}>
+                    <p className="text-lg font-bold text-foreground mb-1">{fs.preview}</p>
+                    <p className="text-xs font-bold text-foreground">{fs.label}</p>
+                    <p className="text-[10px] text-muted-foreground">{fs.desc}</p>
+                    {settings.fontStyle === fs.key && <p className="text-[10px] text-primary mt-0.5">Active</p>}
                   </button>
                 ))}
               </div>
