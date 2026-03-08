@@ -291,16 +291,8 @@ export default function AdminDashboard() {
     { key: "api" as const, label: "API", icon: Activity },
   ];
 
-  useEffect(() => {
-    if (tab === "chat") {
-      supabase.from("chat_messages").select("*").eq("type", "report").order("created_at", { ascending: false }).limit(50)
-        .then(({ data }) => { if (data) setChatReports(data); });
-      supabase.from("chat_messages").select("*").eq("type", "group").order("created_at", { ascending: false }).limit(50)
-        .then(({ data }) => { if (data) setChatMessages(data); });
-      supabase.from("chat_bans").select("*").order("created_at", { ascending: false })
-        .then(({ data }) => { if (data) setChatBans(data); });
-    }
-  }, [tab]);
+
+
 
   const adminDeleteMsg = async (id: string) => {
     await supabase.from("chat_messages").update({ is_deleted: true, content: "[deleted by admin]" }).eq("id", id);
