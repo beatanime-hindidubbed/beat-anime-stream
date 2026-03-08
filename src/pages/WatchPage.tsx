@@ -269,6 +269,17 @@ export default function WatchPage() {
       setHindiIframeSrc(null);
       setRetryMessage("");
 
+      // Check cache first (1hr TTL)
+      const cacheKey = `eng_${fullEpisodeId}_${category}`;
+      const cached = getCachedStream<StreamResult>(cacheKey);
+      if (cached && retryKey === 0) {
+        setSelectedServer(cached.server as any);
+        setStreamResult(cached);
+        setStreamLoading(false);
+        if (category === "eng") setEngMode(cached.category as "sub" | "dub");
+        return;
+      }
+
       // For "eng", try sub first then dub; for "raw" use sub
       const categoriesToTry = category === "eng" ? ["sub", "dub"] : ["sub"];
 
@@ -281,6 +292,7 @@ export default function WatchPage() {
             const result = await getWorkingStream({ episodeId: fullEpisodeId, category: apiCat, server });
             if (cancelled) return;
             if (result) {
+              setCachedStream(cacheKey, result);
               setSelectedServer(server);
               setStreamResult(result);
               setStreamLoading(false);
