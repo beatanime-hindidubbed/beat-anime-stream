@@ -429,7 +429,7 @@ export default function WatchPage() {
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm font-medium text-foreground hover:bg-secondary/80 transition-colors"
           >
             <Globe className="w-4 h-4" />
-            {currentLang.short}
+            {category === "eng" ? engLabel || "ENG" : currentLang.short}
             <ChevronDown className={`w-3 h-3 transition-transform ${showLangMenu ? "rotate-180" : ""}`} />
           </button>
           <AnimatePresence>
