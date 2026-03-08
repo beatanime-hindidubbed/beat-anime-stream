@@ -5,7 +5,7 @@ import { lovable } from "@/integrations/lovable";
 import { motion } from "framer-motion";
 import { Loader2, Eye, EyeOff, Shield, Mail, User, Lock } from "lucide-react";
 
-const RATE_LIMIT_MS = 3000; // 3s between attempts
+const RATE_LIMIT_MS = 2000; // 2s between attempts
 
 export default function LoginPage() {
   const [isRegister, setIsRegister] = useState(false);
@@ -41,8 +41,8 @@ export default function LoginPage() {
     // Honeypot check (bots fill hidden fields)
     if (honeypot) return;
 
-    // Time-based bot detection — form filled too fast
-    if (Date.now() - formStartTime.current < 1500) {
+    // Time-based bot detection — form filled too fast (only for register)
+    if (isRegister && Date.now() - formStartTime.current < 800) {
       setError("Please take your time filling the form");
       return;
     }
@@ -54,7 +54,7 @@ export default function LoginPage() {
     }
 
     // Max attempts
-    if (attempts >= 8) {
+    if (attempts >= 15) {
       setError("Too many attempts. Please try again later.");
       return;
     }
@@ -230,7 +230,7 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            disabled={loading || attempts >= 8}
+            disabled={loading || attempts >= 15}
             className="w-full h-11 sm:h-12 rounded-xl bg-gradient-primary text-sm font-semibold text-primary-foreground hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg shadow-primary/20"
           >
             {loading && <Loader2 className="w-4 h-4 animate-spin" />}
