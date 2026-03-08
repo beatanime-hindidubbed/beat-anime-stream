@@ -49,22 +49,12 @@ export default function ManhwaPage() {
     fetchDonghua(1, 0, true);
   }, []);
 
-  useEffect(() => {
-    if (!loaderRef.current) return;
-    const obs = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && !loading && hasMore) {
-          const nextIdx = searchIdx + 1;
-          setSearchIdx(nextIdx);
-          setPage((p) => p + 1);
-          fetchDonghua(1, nextIdx);
-        }
-      },
-      { threshold: 0.1 }
-    );
-    obs.observe(loaderRef.current);
-    return () => obs.disconnect();
-  }, [loading, hasMore, searchIdx, fetchDonghua]);
+  const loadMore = () => {
+    const nextIdx = searchIdx + 1;
+    setSearchIdx(nextIdx);
+    setPage((p) => p + 1);
+    fetchDonghua(1, nextIdx);
+  };
 
   return (
     <div className="container py-6">
