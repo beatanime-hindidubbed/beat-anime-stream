@@ -17,9 +17,7 @@ interface Track {
 }
 
 interface Props {
-  // HLS direct stream URL
   src?: string;
-  // Embed/iframe URL — rendered WITHOUT sandbox to fix "not available in sandboxed iframe"
   iframeSrc?: string;
   tracks?: Track[];
   intro?: { start: number; end: number };
@@ -30,6 +28,8 @@ interface Props {
   ambientMode?: boolean;
   autoPlayNext?: boolean;
   onAutoPlayToggle?: (enabled: boolean) => void;
+  /** HiAnime episode ID for English preview thumbnails */
+  episodeId?: string;
 }
 
 const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
