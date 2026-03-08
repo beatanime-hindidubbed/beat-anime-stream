@@ -18,6 +18,30 @@ import { AnimatePresence, motion } from "framer-motion";
 
 const HINDI_API_BASE = "https://beat-anime-api.onrender.com/api/v1";
 
+// Race multiple API endpoints for faster Hindi source fetching
+async function raceHindiFetch(url: string): Promise<any> {
+  const apis = JSON.parse(localStorage.getItem("beat_api_endpoints") || "[]");
+  const bases = apis.length > 0 ? apis : [HINDI_API_BASE];
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
+  try {
+    const promises = bases.slice(0, 3).map(async (base: string) => {
+      const fullUrl = url.replace(HINDI_API_BASE, base);
+      const res = await fetch(fullUrl, { signal: controller.signal });
+      if (!res.ok) throw new Error(`${res.status}`);
+      return res.json();
+    });
+    const result = await Promise.any(promises);
+    clearTimeout(timeout);
+    return result;
+  } catch {
+    clearTimeout(timeout);
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`${res.status}`);
+    return res.json();
+  }
+}
+
 const LANGUAGES = [
   { code: "sub", label: "English (Sub)", short: "ENG SUB" },
   { code: "dub", label: "Hindi (Dub)", short: "HINDI" },

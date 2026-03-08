@@ -970,6 +970,21 @@ export default function VideoPlayer({
                   ))}
                 </div>
               )}
+              {settingsPanel === ("boost" as any) && (
+                <div className="py-1.5">
+                  <button onClick={() => setSettingsPanel("main")}
+                    className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-white/50 hover:bg-white/10">
+                    <ChevronRight className="w-3 h-3 rotate-180" /> Audio Boost
+                  </button>
+                  <div className="border-t border-white/10 mt-1" />
+                  {[1, 1.5, 2, 2.5, 3].map(b => (
+                    <button key={b} onClick={() => { setAudioBoost(b); setSettingsPanel("main"); }}
+                      className={`w-full px-4 py-2.5 text-sm text-left hover:bg-white/10 transition-colors ${audioBoost === b ? "text-primary font-semibold" : "text-white/80"}`}>
+                      {b === 1 ? "Normal" : `${b}× Boost`}
+                    </button>
+                  ))}
+                </div>
+              )
             </motion.div>
           )}
         </AnimatePresence>
