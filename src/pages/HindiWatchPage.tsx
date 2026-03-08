@@ -165,6 +165,11 @@ export default function HindiWatchPage() {
   const hindiHlsSrc = selectedSource?.isHLS ? selectedSource.url : null;
   const hindiIframeSrc = selectedSource && !selectedSource.isHLS ? selectedSource.url : null;
 
+  // Build proxied URL for download (Hindi streams need proxy WITHOUT megacloud referer)
+  const hindiDownloadUrl = hindiHlsSrc
+    ? `${getApiPool()[0]}/hindiapi/proxy?url=${encodeURIComponent(hindiHlsSrc)}`
+    : undefined;
+
   const renderPlayer = () => {
     if (loading) {
       return (
@@ -259,12 +264,12 @@ export default function HindiWatchPage() {
         )}
 
         {/* Download — same logic as English player */}
-        {hindiHlsSrc && (
+        {hindiDownloadUrl && (
           <DownloadButton
             episodeId={`hindi-${animeId}-${epNum}`}
             episodeNumber={epNum}
             animeName={animeName}
-            streamUrl={hindiHlsSrc}
+            streamUrl={hindiDownloadUrl}
           />
         )}
 

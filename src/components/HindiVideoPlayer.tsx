@@ -284,23 +284,7 @@ export default function HindiVideoPlayer({
   // Track wasPlayingRef continuously
   useEffect(() => { wasPlayingRef.current = playing; }, [playing]);
 
-  // ── FIX: Catch unexpected pause events and auto-resume ────────────────
-  useEffect(() => {
-    if (isIframe) return;
-    const v = videoRef.current;
-    if (!v) return;
-    const onPause = () => {
-      if (wasPlayingRef.current && !document.hidden) {
-        setTimeout(() => {
-          if (v.paused && wasPlayingRef.current && !v.ended && !document.hidden) {
-            v.play().catch(() => {});
-          }
-        }, 150);
-      }
-    };
-    v.addEventListener("pause", onPause);
-    return () => v.removeEventListener("pause", onPause);
-  }, [isIframe]);
+  // Removed over-aggressive auto-resume on pause (was causing user pause to be ignored)
 
   // ── HLS loader ────────────────────────────────────────────────────────
   // Hindi CDN URLs need specific Referer headers — always proxy them
@@ -499,8 +483,8 @@ export default function HindiVideoPlayer({
   const togglePlay = () => {
     const v = videoRef.current;
     if (!v) return;
-    if (v.paused) { v.play(); setPlaying(true); flashCenter("play"); }
-    else          { v.pause(); setPlaying(false); flashCenter("pause"); }
+    if (v.paused) { wasPlayingRef.current = true; v.play(); setPlaying(true); flashCenter("play"); }
+    else          { wasPlayingRef.current = false; v.pause(); setPlaying(false); flashCenter("pause"); }
   };
 
   const toggleMute = () => {
@@ -632,7 +616,7 @@ export default function HindiVideoPlayer({
   const resetHideTimer = () => {
     setShowControls(true);
     if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => { if (playing) setShowControls(false); }, 3500);
+    hideTimer.current = setTimeout(() => { if (playing && !settingsOpen) setShowControls(false); }, 3500);
   };
 
   const handleContainerTouchStart = (e: React.TouchEvent) => {
@@ -788,6 +772,9 @@ export default function HindiVideoPlayer({
               ))}
             </video>
 
+            {/* Watermark on HLS player */}
+            <PlayerWatermark showIcon={false} />
+
             {/* Center flash icon */}
             <AnimatePresence>
               {showCenterIcon && (
@@ -854,7 +841,7 @@ export default function HindiVideoPlayer({
 
             {/* Settings panel */}
             <AnimatePresence>
-              {settingsOpen && showControls && (
+              {settingsOpen && (
                 <motion.div key="settings" initial={{ opacity: 0, scale: 0.95, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 8 }}
                   className={`${settingsPositionClass} w-52 sm:w-56 bg-black/90 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden`}>
                   {settingsPanel === "main" && (

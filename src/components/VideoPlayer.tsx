@@ -285,24 +285,7 @@ export default function VideoPlayer({
     wasPlayingRef.current = playing;
   }, [playing]);
 
-  // ── FIX: Catch unexpected pause events and auto-resume ────────────────
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    const onPause = () => {
-      // If video paused but user didn't intend it (e.g. browser interference)
-      // and it was playing before, auto-resume after brief delay
-      if (wasPlayingRef.current && !document.hidden) {
-        setTimeout(() => {
-          if (v.paused && wasPlayingRef.current && !v.ended && !document.hidden) {
-            v.play().catch(() => {});
-          }
-        }, 150);
-      }
-    };
-    v.addEventListener("pause", onPause);
-    return () => v.removeEventListener("pause", onPause);
-  }, []);
+  // Removed over-aggressive auto-resume on pause (was causing user pause to be ignored)
 
   // ── Main HLS ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -498,9 +481,9 @@ export default function VideoPlayer({
   const togglePlay = () => {
     const v = videoRef.current;
     if (!v) return;
-    if (v.paused) { v.play(); setPlaying(true); flashCenter("play"); }
-    else          { v.pause(); setPlaying(false); flashCenter("pause"); }
-    flashWatermark(); // ← C. Added
+    if (v.paused) { wasPlayingRef.current = true; v.play(); setPlaying(true); flashCenter("play"); }
+    else          { wasPlayingRef.current = false; v.pause(); setPlaying(false); flashCenter("pause"); }
+    flashWatermark();
   };
 
   const toggleMute = () => {
@@ -640,7 +623,7 @@ export default function VideoPlayer({
   const resetHideTimer = () => {
     setShowControls(true);
     if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => { if (playing) setShowControls(false); }, 3500);
+    hideTimer.current = setTimeout(() => { if (playing && !settingsOpen) setShowControls(false); }, 3500);
   };
 
   // ── Touch: double-tap to seek, long-press for 2x ─────────────────────
@@ -879,7 +862,7 @@ export default function VideoPlayer({
 
         {/* ── Settings panel ────────────────────────────────────────── */}
         <AnimatePresence>
-          {settingsOpen && showControls && (
+          {settingsOpen && (
             <motion.div key="settings"
               initial={{ opacity: 0, scale: 0.95, y: 8 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
