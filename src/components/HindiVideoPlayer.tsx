@@ -748,7 +748,7 @@ export default function HindiVideoPlayer({
         className="relative w-full aspect-video bg-black rounded-2xl overflow-hidden select-none"
         style={{ boxShadow: "0 8px 40px rgba(0,0,0,0.7), 0 2px 8px rgba(0,0,0,0.5)" }}
         onMouseMove={resetHideTimer}
-        onMouseLeave={() => { if (playing) { setShowControls(false); setSettingsOpen(false); } }}
+        onMouseLeave={() => { if (playing && !settingsOpen) setShowControls(false); }}
         onTouchStart={handleContainerTouchStart}
         onTouchMove={handleContainerTouchMove}
         onTouchEnd={handleContainerTouchEnd}
