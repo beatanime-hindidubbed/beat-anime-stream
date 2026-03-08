@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import HindiVideoPlayer from "@/components/HindiVideoPlayer";
-import DownloadButton from "@/components/DownloadButton";
+
 import BackButton from "@/components/BackButton";
 import { getApiPool, getNextApi, proxyUrl as makeProxyUrl } from "@/lib/streaming";
 import { getCachedStream, setCachedStream } from "@/lib/streamCache";
@@ -179,8 +179,6 @@ export default function HindiWatchPage() {
   const hindiHlsSrc = selectedSource?.isHLS ? selectedSource.url : null;
   const hindiIframeSrc = selectedSource && !selectedSource.isHLS ? selectedSource.url : null;
 
-  // Download URL: pass raw HLS, downloader will race multiple APIs itself
-  const hindiDownloadUrl = hindiHlsSrc || undefined;
 
   const renderPlayer = () => {
     if (loading) {
@@ -275,15 +273,6 @@ export default function HindiWatchPage() {
           </div>
         )}
 
-        {/* Download — Hindi stream only */}
-        {hindiDownloadUrl && (
-          <DownloadButton
-            episodeId={currentEp?.episodeId || `hindi-${animeId}-${epNum}`}
-            episodeNumber={epNum}
-            animeName={`${animeName}-Hindi`}
-            streamUrl={hindiDownloadUrl}
-          />
-        )}
 
         <button onClick={() => setShowEpList(!showEpList)}
           className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-secondary text-sm text-secondary-foreground hover:bg-secondary/80">

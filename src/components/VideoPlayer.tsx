@@ -27,6 +27,7 @@ interface Props {
   ambientMode?: boolean;
   autoPlayNext?: boolean;
   onAutoPlayToggle?: (enabled: boolean) => void;
+  disableInternalMiniPlayer?: boolean;
 }
 
 const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
@@ -54,7 +55,7 @@ function makeAccessor(enc: string) {
 
 export default function VideoPlayer({
   src, tracks, intro, outro, onTimeUpdate, onEnded,
-  startTime, ambientMode = false, autoPlayNext = true, onAutoPlayToggle,
+  startTime, ambientMode = false, autoPlayNext = true, onAutoPlayToggle, disableInternalMiniPlayer = false,
 }: Props) {
   const videoRef     = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -195,6 +196,10 @@ export default function VideoPlayer({
 
   // ── YouTube-style mini player on scroll ────────────────────────────────
   useEffect(() => {
+    if (disableInternalMiniPlayer) {
+      setMiniPlayer(false);
+      return;
+    }
     if (!wrapperRef.current) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
@@ -205,15 +210,19 @@ export default function VideoPlayer({
     );
     observer.observe(wrapperRef.current);
     return () => observer.disconnect();
-  }, [playing]);
+  }, [playing, disableInternalMiniPlayer]);
 
   // Update mini player state when playing changes
   useEffect(() => {
+    if (disableInternalMiniPlayer) {
+      setMiniPlayer(false);
+      return;
+    }
     if (!wrapperRef.current) return;
     const rect = wrapperRef.current.getBoundingClientRect();
     const isVisible = rect.top > -rect.height * 0.8 && rect.bottom < window.innerHeight + rect.height * 0.8;
     setMiniPlayer(!isVisible && playing);
-  }, [playing]);
+  }, [playing, disableInternalMiniPlayer]);
 
   // Re-encode when src changes
   useEffect(() => {
@@ -701,7 +710,7 @@ export default function VideoPlayer({
     <div ref={wrapperRef} className="relative">
       {/* ── YouTube-style mini/pip player ─────────────────────────────── */}
       <AnimatePresence>
-        {miniPlayer && !fullscreen && (
+        {miniPlayer && !fullscreen && !disableInternalMiniPlayer && (
           <motion.div
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -775,6 +784,7 @@ export default function VideoPlayer({
           onClick={togglePlay}
           crossOrigin="anonymous"
           playsInline
+          disablePictureInPicture
           controlsList="nodownload noremoteplayback"
           // FIX: prevent mobile browser from auto-pausing on fullscreen
           x-webkit-airplay="allow"

@@ -15,7 +15,7 @@ import AnimeReportButton from "@/components/AnimeReportButton";
 import { getWorkingStream, StreamResult, HIANIME_SERVERS } from "@/lib/streaming";
 import { getCachedStream, setCachedStream } from "@/lib/streamCache";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { ChevronLeft, ChevronRight, List, Loader2, Server, RefreshCw, Globe, ChevronDown, MessageSquare, ArrowUp } from "lucide-react";
+import { ChevronLeft, ChevronRight, List, Loader2, Server, RefreshCw, Globe, ChevronDown, MessageSquare } from "lucide-react";
 
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -138,6 +138,7 @@ export default function WatchPage() {
   const [hindiIframeSrc, setHindiIframeSrc] = useState<string | null>(null);
 
   const langRef = useRef<HTMLDivElement>(null);
+  const playerAnchorRef = useRef<HTMLDivElement>(null);
   const playerWrapperRef = useRef<HTMLDivElement>(null);
   const [showPip, setShowPip] = useState(false);
   const [mobileCompact, setMobileCompact] = useState(true);
@@ -162,33 +163,20 @@ export default function WatchPage() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // PiP: robust visibility when user scrolls past the main player
+  // PiP: decide visibility from anchor position (prevents fixed-player flicker)
   useEffect(() => {
-    const el = playerWrapperRef.current;
-    if (!el) return;
-
     const updatePip = () => {
-      const rect = el.getBoundingClientRect();
-      const hasScrolledPast = rect.bottom < window.innerHeight * 0.35;
-      const farBelow = rect.top > window.innerHeight * 0.9;
-      setShowPip(hasScrolledPast || farBelow);
+      const anchor = playerAnchorRef.current;
+      if (!anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      setShowPip(rect.top < -120);
     };
 
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        setShowPip(!entry.isIntersecting);
-        updatePip();
-      },
-      { threshold: 0.15, rootMargin: "0px 0px -10% 0px" }
-    );
-
-    observer.observe(el);
     window.addEventListener("scroll", updatePip, { passive: true });
     window.addEventListener("resize", updatePip);
     updatePip();
 
     return () => {
-      observer.disconnect();
       window.removeEventListener("scroll", updatePip);
       window.removeEventListener("resize", updatePip);
     };
@@ -460,6 +448,7 @@ export default function WatchPage() {
       return (
         <HindiVideoPlayer
           src={hindiHlsSrc}
+          disableInternalMiniPlayer
           onTimeUpdate={handleTimeUpdate}
           onEnded={() => { if (nextEp) navigate(buildEpLink(nextEp)); }}
         />
@@ -470,6 +459,7 @@ export default function WatchPage() {
       return (
         <HindiVideoPlayer
           iframeSrc={hindiIframeSrc}
+          disableInternalMiniPlayer
           onTimeUpdate={handleTimeUpdate}
           onEnded={() => { if (nextEp) navigate(buildEpLink(nextEp)); }}
         />
@@ -480,6 +470,7 @@ export default function WatchPage() {
       return (
         <VideoPlayer
           src={streamResult.url}
+          disableInternalMiniPlayer
           tracks={streamResult.tracks}
           intro={streamResult.intro}
           outro={streamResult.outro}
@@ -502,6 +493,8 @@ export default function WatchPage() {
     <div className="container py-4 max-w-6xl">
       <BackButton />
 
+      <div ref={playerAnchorRef} className="h-px w-full" aria-hidden="true" />
+
       {/* Player — DOM style mutated directly for PiP (no React re-render) */}
       <div
         ref={playerWrapperRef}
@@ -516,17 +509,6 @@ export default function WatchPage() {
         } : undefined}
       >
         {renderPlayer()}
-        {/* PiP close button overlay */}
-        {showPip && (
-          <div className="absolute top-1 right-1 z-[60]">
-            <button
-              onClick={(e) => { e.stopPropagation(); setShowPip(false); }}
-              className="w-6 h-6 rounded-full bg-black/70 flex items-center justify-center text-white text-xs hover:bg-black/90"
-            >
-              ✕
-            </button>
-          </div>
-        )}
         {!showPip && isMobile && (
           <div className="flex justify-center py-1">
             <button onClick={() => setMobileCompact(!mobileCompact)} className="flex items-center gap-1 text-[10px] text-muted-foreground">
@@ -666,12 +648,12 @@ export default function WatchPage() {
             <span className="text-xs text-orange-400 font-medium">🇮🇳 Hindi Dubbed</span>
           )}
         </div>
-        {currentEp?.episodeId && (
+        {currentEp?.episodeId && category !== "dub" && (
           <DownloadButton
             episodeId={currentEp.episodeId}
             episodeNumber={currentEp.number}
             animeName={animeName}
-            streamUrl={category === "dub" ? (hindiHlsSrc || undefined) : streamResult?.url}
+            streamUrl={streamResult?.url}
           />
         )}
       </div>

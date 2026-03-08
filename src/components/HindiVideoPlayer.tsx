@@ -31,6 +31,7 @@ interface Props {
   onAutoPlayToggle?: (enabled: boolean) => void;
   /** HiAnime episode ID for English preview thumbnails */
   episodeId?: string;
+  disableInternalMiniPlayer?: boolean;
 }
 
 const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
@@ -74,7 +75,7 @@ export default function HindiVideoPlayer({
   src, iframeSrc,
   tracks, intro, outro, onTimeUpdate, onEnded,
   startTime, ambientMode = false, autoPlayNext = true, onAutoPlayToggle,
-  episodeId,
+  episodeId, disableInternalMiniPlayer = false,
 }: Props) {
   const videoRef     = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -205,6 +206,10 @@ export default function HindiVideoPlayer({
 
   // ── Mini player on scroll ────────────────────────────────────────────
   useEffect(() => {
+    if (disableInternalMiniPlayer) {
+      setMiniPlayer(false);
+      return;
+    }
     if (!wrapperRef.current) return;
     const observer = new IntersectionObserver(
       ([entry]) => { setMiniPlayer(!entry.isIntersecting && playing); },
@@ -212,14 +217,18 @@ export default function HindiVideoPlayer({
     );
     observer.observe(wrapperRef.current);
     return () => observer.disconnect();
-  }, [playing]);
+  }, [playing, disableInternalMiniPlayer]);
 
   useEffect(() => {
+    if (disableInternalMiniPlayer) {
+      setMiniPlayer(false);
+      return;
+    }
     if (!wrapperRef.current) return;
     const rect = wrapperRef.current.getBoundingClientRect();
     const isVisible = rect.top > -rect.height * 0.8 && rect.bottom < window.innerHeight + rect.height * 0.8;
     setMiniPlayer(!isVisible && playing);
-  }, [playing]);
+  }, [playing, disableInternalMiniPlayer]);
 
   useEffect(() => {
     if (!src) return;
@@ -700,7 +709,7 @@ export default function HindiVideoPlayer({
     <div ref={wrapperRef} className="relative">
       {/* Mini player (HLS only) */}
       <AnimatePresence>
-        {miniPlayer && !fullscreen && !isIframe && (
+        {miniPlayer && !fullscreen && !isIframe && !disableInternalMiniPlayer && (
           <motion.div
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -780,6 +789,7 @@ export default function HindiVideoPlayer({
               onClick={togglePlay}
               crossOrigin="anonymous"
               playsInline
+              disablePictureInPicture
               controlsList="nodownload noremoteplayback"
               x-webkit-airplay="allow"
             >
