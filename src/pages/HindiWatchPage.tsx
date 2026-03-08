@@ -264,12 +264,12 @@ export default function HindiWatchPage() {
         )}
 
         {/* Download — same logic as English player */}
-        {hindiHlsSrc && (
+        {hindiDownloadUrl && (
           <DownloadButton
             episodeId={`hindi-${animeId}-${epNum}`}
             episodeNumber={epNum}
             animeName={animeName}
-            streamUrl={hindiHlsSrc}
+            streamUrl={hindiDownloadUrl}
           />
         )}
 

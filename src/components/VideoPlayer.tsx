@@ -862,7 +862,7 @@ export default function VideoPlayer({
 
         {/* ── Settings panel ────────────────────────────────────────── */}
         <AnimatePresence>
-          {settingsOpen && showControls && (
+          {settingsOpen && (
             <motion.div key="settings"
               initial={{ opacity: 0, scale: 0.95, y: 8 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
