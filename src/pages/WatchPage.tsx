@@ -48,8 +48,7 @@ async function raceHindiFetch(url: string): Promise<any> {
 
 const LANGUAGES = [
   { code: "dub", label: "Hindi (Dub)", short: "🇮🇳 HINDI" },
-  { code: "sub", label: "English (Sub)", short: "ENG SUB" },
-  { code: "engdub", label: "English (Dub)", short: "ENG DUB" },
+  { code: "eng", label: "English (Sub/Dub)", short: "ENG" },
   { code: "raw", label: "Japanese (Raw)", short: "RAW" },
 ] as const;
 
