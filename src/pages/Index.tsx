@@ -113,6 +113,18 @@ export default function Index() {
           </AnimeSection>
         )}
 
+        {/* Personalized For You */}
+        {forYouAnimes.length > 0 && (
+          <AnimeSection
+            title={`For You — ${watchedGenre}`}
+            linkTo={`/genre/${watchedGenre}`}
+          >
+            <div className={grid}>
+              {forYouAnimes.map((a, i) => <AnimeCard key={a.id} anime={a} index={i} />)}
+            </div>
+          </AnimeSection>
+        )}
+
         <AnimeSection title="Trending" linkTo="/category/trending">
           <div className={grid}>
             {isLoading ? skeletons : data?.trendingAnimes?.slice(0, 6).map((a, i) => <AnimeCard key={a.id} anime={a} index={i} />)}
