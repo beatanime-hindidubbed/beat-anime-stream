@@ -7,7 +7,8 @@ import {
   Camera, Repeat, Volume1, SlidersHorizontal
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
-import PlayerWatermark from "./PlayerWatermark";  // ← added watermark import
+import PlayerWatermark from "./PlayerWatermark";
+import { getNextApi } from "@/lib/streaming";
 
 interface Track {
   file: string;
