@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
 import { api, AnimeItem } from "@/lib/api";
+import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import AnimeCard from "@/components/AnimeCard";
 import SkeletonCard from "@/components/SkeletonCard";
 import { motion } from "framer-motion";
-import { Zap, Search, Filter } from "lucide-react";
+import { Zap, Search, Loader2 } from "lucide-react";
 
 const CATEGORIES = [
   { key: "most-popular", label: "Popular" },
@@ -20,7 +20,11 @@ const GENRES = [
   "sports", "supernatural", "thriller", "ecchi", "mecha",
 ];
 
+const MAX_PAGES = 20; // Anti-spam: max pages for infinite scroll
+const SCROLL_COOLDOWN = 800; // ms between auto-loads
+
 export default function ExplorePage() {
+  const { user } = useSupabaseAuth();
   const [activeCategory, setActiveCategory] = useState("most-popular");
   const [activeGenre, setActiveGenre] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -29,6 +33,7 @@ export default function ExplorePage() {
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const loaderRef = useRef<HTMLDivElement>(null);
+  const lastLoadTime = useRef(0);
 
   const fetchPage = useCallback(async (pg: number, reset = false) => {
     setLoading(true);
@@ -43,7 +48,7 @@ export default function ExplorePage() {
       }
       const items = data?.animes || [];
       setAllAnimes(prev => reset ? items : [...prev, ...items]);
-      setHasMore(items.length >= 20);
+      setHasMore(items.length >= 20 && pg < MAX_PAGES);
     } catch {
       setHasMore(false);
     } finally {
@@ -59,12 +64,19 @@ export default function ExplorePage() {
     fetchPage(1, true);
   }, [activeCategory, activeGenre, searchQuery]);
 
-  // Intersection observer for infinite scroll
+  // Infinite scroll — only for logged-in users
   useEffect(() => {
-    if (!loaderRef.current) return;
+    if (!user || !loaderRef.current) return;
     const obs = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && !loading && hasMore) {
+        const now = Date.now();
+        if (
+          entries[0].isIntersecting &&
+          !loading &&
+          hasMore &&
+          now - lastLoadTime.current > SCROLL_COOLDOWN
+        ) {
+          lastLoadTime.current = now;
           const nextPage = page + 1;
           setPage(nextPage);
           fetchPage(nextPage);
@@ -74,10 +86,16 @@ export default function ExplorePage() {
     );
     obs.observe(loaderRef.current);
     return () => obs.disconnect();
-  }, [loading, hasMore, page, fetchPage]);
+  }, [user, loading, hasMore, page, fetchPage]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
+  };
+
+  const loadMore = () => {
+    const nextPage = page + 1;
+    setPage(nextPage);
+    fetchPage(nextPage);
   };
 
   return (
@@ -90,7 +108,9 @@ export default function ExplorePage() {
           </div>
           <div>
             <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground">Explore</h1>
-            <p className="text-sm text-muted-foreground">Discover all anime — scroll endlessly</p>
+            <p className="text-sm text-muted-foreground">
+              {user ? "Scroll endlessly — auto-loads for you" : "Discover anime — tap Load More for next page"}
+            </p>
           </div>
         </div>
       </motion.div>
@@ -159,13 +179,16 @@ export default function ExplorePage() {
         {loading && Array.from({ length: 12 }).map((_, i) => <SkeletonCard key={`sk-${i}`} />)}
       </div>
 
-      {/* Infinite scroll trigger + cyberpunk load more */}
+      {/* Load more / infinite scroll trigger */}
       <div ref={loaderRef} className="flex justify-center py-8">
-        {hasMore && !loading && (
+        {loading && (
+          <Loader2 className="w-6 h-6 animate-spin text-primary" />
+        )}
+        {hasMore && !loading && !user && (
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            onClick={() => { const next = page + 1; setPage(next); fetchPage(next); }}
+            onClick={loadMore}
             className="relative px-8 py-3 text-sm font-bold text-primary border border-primary/60 rounded-none overflow-hidden group"
             style={{
               clipPath: "polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%)",
