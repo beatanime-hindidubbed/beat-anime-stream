@@ -40,7 +40,10 @@ export interface SiteSettings {
   theme: ThemeType;
   playerTheme: PlayerTheme;
   fontStyle: FontStyle;
+  textEffect: TextEffect;
+  particleEffect: ParticleEffect;
   customThemeColors: CustomThemeColors;
+  sandboxLinks: SandboxLink[];
   faviconUrl: string;
   errorGif: string;
   loadingGif: string;
