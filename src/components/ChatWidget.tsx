@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
+import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { sanitizeMessage } from "@/lib/profanityFilter";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -46,8 +47,11 @@ const PINNED_MSG = "⚠️ Chat auto-clears every 7 days. Be respectful. No pers
 
 export default function ChatWidget() {
   const { user, isAdmin } = useSupabaseAuth();
+  const { settings } = useSiteSettings();
+  const perms = settings.chatPermissions;
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<ChatMode>("group");
+  const [lastSentAt, setLastSentAt] = useState(0);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -177,11 +181,23 @@ export default function ChatWidget() {
 
   const sendMessage = async () => {
     if (!user || !input.trim() || sending || isBanned || isMuted) return;
+    if (!isAdmin && !perms.sendMessages) return;
+
+    // Slow mode check
+    if (!isAdmin && perms.slowMode > 0) {
+      const now = Date.now();
+      if (now - lastSentAt < perms.slowMode * 1000) return;
+    }
+
     setSending(true);
 
     const clean = sanitizeMessage(input.trim());
-    const urlPattern = /http:\/\/\S+/gi;
-    if (urlPattern.test(clean)) { setSending(false); return; }
+
+    // Link check
+    const urlPattern = /https?:\/\/\S+/gi;
+    if (!isAdmin && !perms.sendLinks && urlPattern.test(clean)) { setSending(false); return; }
+    // Block http links always (non-https)
+    if (/http:\/\/\S+/gi.test(clean)) { setSending(false); return; }
 
     const { data: profile } = await supabase
       .from("profiles")
@@ -205,6 +221,7 @@ export default function ChatWidget() {
     setForwardMsg(null);
     setSending(false);
     setShowEmojiPicker(false);
+    setLastSentAt(Date.now());
     inputRef.current?.focus();
   };
 
@@ -249,6 +266,7 @@ export default function ChatWidget() {
   };
 
   if (!user) return null;
+  if (!settings.chatEnabled && !isAdmin) return null;
 
   return (
     <>
@@ -508,14 +526,14 @@ export default function ChatWidget() {
                 value={input}
                 onChange={e => { setInput(e.target.value); handleTyping(); }}
                 onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                placeholder={isBanned ? "You are banned" : isMuted ? "You are muted" : mode === "report" ? "Describe the issue..." : "Type a message..."}
-                disabled={isBanned || isMuted}
+                placeholder={isBanned ? "You are banned" : isMuted ? "You are muted" : (!isAdmin && !perms.sendMessages) ? "Messaging disabled" : mode === "report" ? "Describe the issue..." : perms.slowMode > 0 ? `Type a message... (slow mode: ${perms.slowMode}s)` : "Type a message..."}
+                disabled={isBanned || isMuted || (!isAdmin && !perms.sendMessages)}
                 className="flex-1 h-9 px-3 rounded-lg bg-secondary text-foreground text-sm border border-border focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50 min-w-0"
                 maxLength={500}
               />
               <button
                 onClick={sendMessage}
-                disabled={!input.trim() || sending || isBanned || isMuted}
+                disabled={!input.trim() || sending || isBanned || isMuted || (!isAdmin && !perms.sendMessages)}
                 className="w-9 h-9 rounded-lg bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-40 hover:opacity-90 active:scale-95 transition-all shrink-0"
               >
                 <Send className="w-4 h-4" />

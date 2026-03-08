@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
-import { useSiteSettings, ThemeType, PlayerTheme, FontStyle, CustomThemeColors, TextEffect, ParticleEffect, SandboxLink } from "@/hooks/useSiteSettings";
+import { useSiteSettings, ThemeType, PlayerTheme, FontStyle, CustomThemeColors, TextEffect, ParticleEffect, SandboxLink, ChatPermissions } from "@/hooks/useSiteSettings";
 import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, AreaChart, Area } from "recharts";
@@ -483,6 +483,35 @@ export default function AdminDashboard() {
   const removeBan = async (id: string) => {
     await supabase.from("chat_bans").delete().eq("id", id);
     setChatBans(prev => prev.filter(b => b.id !== id));
+  };
+
+  const clearAllChat = async () => {
+    if (!confirm("Are you sure you want to delete ALL chat messages? This cannot be undone.")) return;
+    await supabase.from("chat_messages").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    setChatMessages([]);
+    setChatReports([]);
+    await logAction("clear_all_chat", "Cleared all chat messages");
+  };
+
+  const SLOW_MODE_OPTIONS = [
+    { label: "Off", value: 0 },
+    { label: "5s", value: 5 },
+    { label: "10s", value: 10 },
+    { label: "30s", value: 30 },
+    { label: "1m", value: 60 },
+    { label: "5m", value: 300 },
+    { label: "15m", value: 900 },
+    { label: "1h", value: 3600 },
+  ];
+
+  const toggleChatPerm = async (key: keyof ChatPermissions) => {
+    const perms = { ...settings.chatPermissions, [key]: !settings.chatPermissions[key] };
+    await updateSettings({ chatPermissions: perms });
+  };
+
+  const setSlowMode = async (val: number) => {
+    const perms = { ...settings.chatPermissions, slowMode: val };
+    await updateSettings({ chatPermissions: perms });
   };
 
   return (
@@ -1067,6 +1096,78 @@ export default function AdminDashboard() {
         {/* ── Chat Moderation ── */}
         {tab === "chat" && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+
+            {/* Chat Master Toggle + Clear All */}
+            <div className="p-5 rounded-xl bg-card border border-border">
+              <h2 className="font-display text-base font-bold text-foreground mb-4 flex items-center gap-2">
+                <MessageCircle className="w-4 h-4 text-primary" /> Chat Controls
+              </h2>
+              <div className="flex flex-wrap gap-4 items-center">
+                <div className="flex items-center gap-3">
+                  <button onClick={() => updateSettings({ chatEnabled: !settings.chatEnabled })}
+                    className={`relative w-12 h-6 rounded-full transition-colors ${settings.chatEnabled ? "bg-primary" : "bg-secondary"}`}>
+                    <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-primary-foreground shadow transition-transform ${settings.chatEnabled ? "left-[26px]" : "left-0.5"}`} />
+                  </button>
+                  <span className="text-sm text-foreground">{settings.chatEnabled ? "Chat Enabled" : "Chat Disabled"}</span>
+                </div>
+                <button onClick={clearAllChat}
+                  className="px-4 py-2 rounded-lg bg-destructive text-destructive-foreground text-sm font-medium hover:opacity-90 flex items-center gap-2">
+                  <Trash2 className="w-4 h-4" /> Clear All Chat
+                </button>
+              </div>
+            </div>
+
+            {/* Permissions (Telegram-style) */}
+            <div className="p-5 rounded-xl bg-card border border-border">
+              <h2 className="font-display text-base font-bold text-foreground mb-1 flex items-center gap-2">
+                <Shield className="w-4 h-4 text-accent" /> Permissions
+              </h2>
+              <p className="text-xs text-muted-foreground mb-4">What can members of this group do?</p>
+              
+              <div className="space-y-3">
+                {([
+                  { key: "sendMessages" as const, label: "Send messages" },
+                  { key: "sendPhotos" as const, label: "Send photos" },
+                  { key: "sendVideos" as const, label: "Send videos" },
+                  { key: "sendMusic" as const, label: "Send music" },
+                  { key: "sendFiles" as const, label: "Send files" },
+                  { key: "sendStickers" as const, label: "Stickers & GIFs" },
+                  { key: "sendLinks" as const, label: "Embed links" },
+                  { key: "sendPolls" as const, label: "Send polls" },
+                  { key: "addMembers" as const, label: "Add members" },
+                  { key: "pinMessages" as const, label: "Pin messages" },
+                ]).map(perm => (
+                  <div key={perm.key} className="flex items-center justify-between">
+                    <span className="text-sm text-foreground">{perm.label}</span>
+                    <button onClick={() => toggleChatPerm(perm.key)}
+                      className={`relative w-11 h-6 rounded-full transition-colors ${settings.chatPermissions[perm.key] ? "bg-primary" : "bg-secondary"}`}>
+                      <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-primary-foreground shadow transition-transform ${settings.chatPermissions[perm.key] ? "left-[22px]" : "left-0.5"}`} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Slow Mode */}
+              <div className="mt-6 pt-4 border-t border-border">
+                <h3 className="text-sm font-semibold text-accent mb-2">Slow mode</h3>
+                <div className="flex flex-wrap gap-2">
+                  {SLOW_MODE_OPTIONS.map(opt => (
+                    <button key={opt.value} onClick={() => setSlowMode(opt.value)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                        settings.chatPermissions.slowMode === opt.value
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                      }`}>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-2">
+                  Members will be able to send only one message per this interval.
+                </p>
+              </div>
+            </div>
+
             {/* Bug Reports */}
             <div className="p-5 rounded-xl bg-card border border-border">
               <h2 className="font-display text-base font-bold text-foreground mb-3 flex items-center gap-2">
