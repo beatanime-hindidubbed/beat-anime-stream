@@ -17,6 +17,34 @@ export default function Navbar() {
   const navigate = useNavigate();
   const searchRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const [listening, setListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
+
+  // Voice search
+  const startVoice = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setQuery(transcript);
+      navigate(`/search?q=${encodeURIComponent(transcript)}`);
+      setListening(false);
+    };
+    recognition.onerror = () => setListening(false);
+    recognition.onend = () => setListening(false);
+    recognition.start();
+    setListening(true);
+    recognitionRef.current = recognition;
+  };
+
+  const stopVoice = () => {
+    recognitionRef.current?.stop();
+    setListening(false);
+  };
 
   const displayName = user?.user_metadata?.username || user?.email?.split("@")[0] || "User";
 
