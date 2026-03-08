@@ -181,11 +181,23 @@ export default function ChatWidget() {
 
   const sendMessage = async () => {
     if (!user || !input.trim() || sending || isBanned || isMuted) return;
+    if (!isAdmin && !perms.sendMessages) return;
+
+    // Slow mode check
+    if (!isAdmin && perms.slowMode > 0) {
+      const now = Date.now();
+      if (now - lastSentAt < perms.slowMode * 1000) return;
+    }
+
     setSending(true);
 
     const clean = sanitizeMessage(input.trim());
-    const urlPattern = /http:\/\/\S+/gi;
-    if (urlPattern.test(clean)) { setSending(false); return; }
+
+    // Link check
+    const urlPattern = /https?:\/\/\S+/gi;
+    if (!isAdmin && !perms.sendLinks && urlPattern.test(clean)) { setSending(false); return; }
+    // Block http links always (non-https)
+    if (/http:\/\/\S+/gi.test(clean)) { setSending(false); return; }
 
     const { data: profile } = await supabase
       .from("profiles")
