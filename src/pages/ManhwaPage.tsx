@@ -110,7 +110,15 @@ export default function ManhwaPage() {
         </div>
       )}
 
-      <div ref={loaderRef} className="flex justify-center py-4">
+      <div className="flex justify-center py-4">
+        {hasMore && !loading && animes.length > 0 && (
+          <button
+            onClick={loadMore}
+            className="px-6 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+          >
+            Load More
+          </button>
+        )}
         {!hasMore && animes.length > 0 && (
           <p className="text-muted-foreground text-sm">That's all for now 🐉</p>
         )}
