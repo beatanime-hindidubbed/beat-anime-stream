@@ -233,43 +233,44 @@ export default function HindiVideoPlayer({
     return () => v.removeEventListener("contextmenu", prevent);
   }, []);
 
-  // ── FIX: Handle visibility change (mobile tab switch / fullscreen) ────
+  // ── FIX: Handle visibility change — robust auto-resume ─────────────────
   useEffect(() => {
     const handleVisibility = () => {
       const v = videoRef.current;
       if (!v) return;
       if (document.hidden) {
-        // Store state but DON'T pause — let browser handle it
         wasPlayingRef.current = !v.paused;
       } else {
-        // Page became visible again — restore play state if needed
-        if (wasPlayingRef.current && v.paused && !isBuffering) {
-          v.play().catch(() => {});
+        if (wasPlayingRef.current && v.paused) {
+          const tryResume = (attempts = 3) => {
+            if (attempts <= 0 || !v.paused || !wasPlayingRef.current) return;
+            v.play().catch(() => {
+              setTimeout(() => tryResume(attempts - 1), 200);
+            });
+          };
+          tryResume();
         }
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, [isBuffering]);
+  }, []);
 
-  // ── FIX: Handle fullscreen changes on mobile without pausing ─────────
-  // ROOT CAUSE OF MOBILE AUTO-PAUSE: The original code had wasPlayingRef.current = playing
-  // BEFORE requestFullscreen(), but `playing` is a stale closure value captured at the time
-  // the button is clicked. The fix is to read v.paused directly from the video element.
+  // ── FIX: Handle fullscreen changes — robust across all devices ────────
   useEffect(() => {
     const handler = () => {
       const isFs = !!document.fullscreenElement;
       setFullscreen(isFs);
       const v = videoRef.current;
       if (!v) return;
-      // After fullscreen transition, resume if we were playing
-      // Use wasPlayingRef (set continuously) instead of stale `playing` state
       if (wasPlayingRef.current && v.paused) {
-        setTimeout(() => {
-          if (wasPlayingRef.current && v.paused) {
-            v.play().catch(() => {});
-          }
-        }, 300);
+        const tryResume = (attempts = 4) => {
+          if (attempts <= 0 || !v.paused || !wasPlayingRef.current) return;
+          v.play().catch(() => {
+            setTimeout(() => tryResume(attempts - 1), 250);
+          });
+        };
+        setTimeout(() => tryResume(), 200);
       }
     };
     document.addEventListener("fullscreenchange", handler);
@@ -278,10 +279,28 @@ export default function HindiVideoPlayer({
       document.removeEventListener("fullscreenchange", handler);
       document.removeEventListener("webkitfullscreenchange", handler);
     };
-  }, []); // ← NO dependency on `playing` — wasPlayingRef is always fresh
+  }, []);
 
-  // Track wasPlayingRef continuously so fullscreen handler always has fresh value
+  // Track wasPlayingRef continuously
   useEffect(() => { wasPlayingRef.current = playing; }, [playing]);
+
+  // ── FIX: Catch unexpected pause events and auto-resume ────────────────
+  useEffect(() => {
+    if (isIframe) return;
+    const v = videoRef.current;
+    if (!v) return;
+    const onPause = () => {
+      if (wasPlayingRef.current && !document.hidden) {
+        setTimeout(() => {
+          if (v.paused && wasPlayingRef.current && !v.ended && !document.hidden) {
+            v.play().catch(() => {});
+          }
+        }, 150);
+      }
+    };
+    v.addEventListener("pause", onPause);
+    return () => v.removeEventListener("pause", onPause);
+  }, [isIframe]);
 
   // ── HLS loader ────────────────────────────────────────────────────────
   // Hindi CDN URLs need specific Referer headers — always proxy them
