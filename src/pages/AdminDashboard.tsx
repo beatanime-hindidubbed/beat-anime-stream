@@ -671,7 +671,7 @@ export default function AdminDashboard() {
                   <button
                     key={theme.key}
                     onClick={() => updateSettings({ theme: theme.key })}
-                    className={`p-4 rounded-xl border-2 transition-all relative ${
+                    className={`group/theme p-4 rounded-xl border-2 transition-all relative ${
                       settings.theme === theme.key ? "border-primary scale-105 shadow-[0_0_20px_hsl(var(--primary)/0.2)]" : "border-border hover:border-primary/40"
                     }`}
                   >
@@ -689,6 +689,23 @@ export default function AdminDashboard() {
                     {settings.theme === theme.key && (
                       <p className="text-xs text-primary mt-0.5">Active</p>
                     )}
+                    {/* Theme preview tooltip */}
+                    <div className="absolute z-20 bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/theme:block pointer-events-none">
+                      <div className="w-40 rounded-lg overflow-hidden border border-border shadow-xl">
+                        <div className="h-16 relative" style={{
+                          background: `linear-gradient(135deg, ${theme.colors[0]}, ${theme.colors[1] || theme.colors[0]})`,
+                        }}>
+                          <div className="absolute bottom-1 left-1 right-1 flex gap-0.5">
+                            {theme.colors.map((c, i) => (
+                              <div key={i} className="flex-1 h-1 rounded-full" style={{ background: c }} />
+                            ))}
+                          </div>
+                        </div>
+                        <div className="px-2 py-1.5 bg-card text-[9px] text-center text-muted-foreground">
+                          {theme.label} Theme
+                        </div>
+                      </div>
+                    </div>
                   </button>
                 ))}
               </div>
