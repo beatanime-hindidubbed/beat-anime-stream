@@ -319,7 +319,7 @@ export default function HindiVideoPlayer({
       const hls = new Hls({
         xhrSetup: (xhr) => { xhr.withCredentials = false; },
         maxBufferSize: 60 * 1000 * 1000,
-        maxBufferLength: 30,
+        maxBufferLength: 180,
         startPosition: startTime || -1,
       });
       hls.loadSource(proxiedSrc);
