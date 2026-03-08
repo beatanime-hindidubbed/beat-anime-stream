@@ -9,7 +9,7 @@ import {
   ToggleLeft, ToggleRight, Save, Loader2, CheckCircle, XCircle, Globe,
   Users, Shield, UserPlus, UserMinus, Palette, Type, FileText,
   Crown, Copy, Clock, Zap, Server, RefreshCw, MessageCircle, Ban, VolumeX,
-  AlertTriangle, MonitorPlay, Link2, ScrollText, EyeOff
+  AlertTriangle, MonitorPlay, Link2, ScrollText, EyeOff, Sparkles, ExternalLink
 } from "lucide-react";
 
 interface Ad {
