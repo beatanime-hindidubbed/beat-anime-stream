@@ -9,10 +9,10 @@ export default function AdminLogin() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const { login, isAdmin, user } = useSupabaseAuth();
+  const { login, isAdmin, isModerator, user } = useSupabaseAuth();
   const navigate = useNavigate();
 
-  if (user && isAdmin) {
+  if (user && (isAdmin || isModerator)) {
     navigate("/admin/dashboard", { replace: true });
     return null;
   }

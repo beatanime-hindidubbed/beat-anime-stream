@@ -180,7 +180,7 @@ export default function CommentSection({ episodeId, animeId }: Props) {
               <Reply className="w-3 h-3" /> Reply
             </button>
           )}
-          {(isAdmin || user?.id === comment.user_id) && (
+          {(canModerate || user?.id === comment.user_id) && (
             <button onClick={() => handleDelete(comment.id)}
               className="text-[11px] text-muted-foreground hover:text-destructive flex items-center gap-1">
               <Trash2 className="w-3 h-3" /> Delete
