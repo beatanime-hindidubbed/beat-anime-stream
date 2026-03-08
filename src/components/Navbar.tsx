@@ -186,7 +186,7 @@ export default function Navbar() {
           {/* Mobile search toggle */}
           <button
             onClick={() => setMobileSearch(!mobileSearch)}
-            className="md:hidden p-2 text-muted-foreground hover:text-primary transition-colors"
+            className="md:hidden p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-all duration-200"
           >
             <Search className="w-5 h-5" />
           </button>
