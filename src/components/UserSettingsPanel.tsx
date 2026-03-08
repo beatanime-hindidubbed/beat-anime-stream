@@ -45,7 +45,7 @@ export default function UserSettingsPanel() {
   const [open, setOpen] = useState(false);
   const [prefs, setPrefs] = useState<UserPrefs>(getPrefs);
 
-  if (!user) return null;
+  const isLoggedIn = !!user;
 
   const update = (partial: Partial<UserPrefs>) => {
     const next = { ...prefs, ...partial };
