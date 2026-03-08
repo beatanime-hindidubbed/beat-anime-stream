@@ -494,22 +494,116 @@ export default function AdminDashboard() {
 
         {/* ── Stats ── */}
         {tab === "stats" && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {[
-              { label: "Active Ads", value: ads.filter(a => a.is_active).length, color: "text-primary" },
-              { label: "Total Ads", value: ads.length, color: "text-foreground" },
-              { label: "Current Theme", value: settings.theme, color: "text-accent" },
-              { label: "Team Members", value: userRoles.length, color: "text-muted-foreground" },
-              { label: "Active Premium Codes", value: premiumCodes.filter(c => c.is_active && new Date(c.expires_at) > new Date()).length, color: "text-accent" },
-              { label: "API Endpoints", value: apiEndpoints.length, color: "text-primary" },
-              { label: "Total Premium Codes", value: premiumCodes.length, color: "text-foreground" },
-              { label: "Themes Available", value: THEMES.length, color: "text-accent" },
-            ].map(s => (
-              <div key={s.label} className="p-6 rounded-xl bg-card border border-border">
-                <p className="text-sm text-muted-foreground mb-1">{s.label}</p>
-                <p className={`text-2xl font-display font-bold capitalize ${s.color}`}>{s.value}</p>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+            {/* Quick stat cards */}
+            <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+              {[
+                { label: "Total Comments", value: commentStats.total, color: "text-primary", icon: MessageSquare },
+                { label: "Comments Today", value: commentStats.today, color: "text-accent", icon: TrendingUp },
+                { label: "Censored Comments", value: commentStats.censored, color: "text-destructive", icon: Shield },
+                { label: "Active Ads", value: ads.filter(a => a.is_active).length, color: "text-primary", icon: Eye },
+                { label: "Team Members", value: userRoles.length, color: "text-foreground", icon: Users },
+                { label: "Current Theme", value: settings.theme, color: "text-accent", icon: Palette },
+                { label: "API Endpoints", value: apiEndpoints.length, color: "text-primary", icon: Server },
+                { label: "Themes Available", value: THEMES.length, color: "text-muted-foreground", icon: Sparkles },
+              ].map(s => (
+                <div key={s.label} className="p-4 sm:p-5 rounded-xl bg-card border border-border">
+                  <div className="flex items-center gap-2 mb-1">
+                    <s.icon className="w-4 h-4 text-muted-foreground" />
+                    <p className="text-[11px] sm:text-xs text-muted-foreground">{s.label}</p>
+                  </div>
+                  <p className={`text-xl sm:text-2xl font-display font-bold capitalize ${s.color}`}>{s.value}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Charts row */}
+            <div className="grid gap-4 md:grid-cols-2">
+              {/* Comments over 7 days */}
+              <div className="p-4 sm:p-5 rounded-xl bg-card border border-border">
+                <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4 text-primary" /> Comments (7 days)
+                </h3>
+                <div className="h-48 sm:h-56">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={statsData.dailyComments}>
+                      <defs>
+                        <linearGradient id="commentGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="date" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
+                      <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
+                      <Area type="monotone" dataKey="count" stroke="hsl(var(--primary))" fill="url(#commentGrad)" strokeWidth={2} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
-            ))}
+
+              {/* Chat activity 7 days */}
+              <div className="p-4 sm:p-5 rounded-xl bg-card border border-border">
+                <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+                  <MessageCircle className="w-4 h-4 text-accent" /> Chat Activity (7 days)
+                </h3>
+                <div className="h-48 sm:h-56">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={statsData.chatActivity}>
+                      <XAxis dataKey="date" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
+                      <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
+                      <Bar dataKey="messages" fill="hsl(var(--accent))" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+
+            {/* Role distribution + Admin permissions */}
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="p-4 sm:p-5 rounded-xl bg-card border border-border">
+                <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+                  <Users className="w-4 h-4 text-primary" /> Role Distribution
+                </h3>
+                <div className="h-48 sm:h-56">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={statsData.roleDistribution} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={({ name, value }) => `${name}: ${value}`}>
+                        {statsData.roleDistribution.map((_, i) => (
+                          <Cell key={i} fill={["hsl(var(--accent))", "hsl(var(--primary))", "hsl(var(--muted-foreground))"][i % 3]} />
+                        ))}
+                      </Pie>
+                      <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Admin permission levels */}
+              <div className="p-4 sm:p-5 rounded-xl bg-card border border-border">
+                <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-accent" /> Admin Permission Levels
+                </h3>
+                <div className="space-y-3">
+                  {[
+                    { role: "Owner", color: "bg-accent/20 text-accent", perms: ["Full site control", "Add/remove admins", "Database access", "Delete anything", "Change all settings"] },
+                    { role: "Admin", color: "bg-primary/20 text-primary", perms: ["Manage ads & themes", "Ban/mute users", "Moderate comments", "View logs", "Manage premium codes"] },
+                    { role: "Moderator", color: "bg-secondary text-secondary-foreground", perms: ["Delete chat messages", "Mute users (7d)", "View reports", "Moderate comments"] },
+                    { role: "User", color: "bg-muted text-muted-foreground", perms: ["Post comments", "Use chat", "Watch content", "Report bugs"] },
+                  ].map(r => (
+                    <div key={r.role} className="flex gap-3 items-start">
+                      <span className={`px-2 py-0.5 rounded text-[11px] font-bold flex-shrink-0 ${r.color}`}>{r.role}</span>
+                      <div className="flex flex-wrap gap-1">
+                        {r.perms.map(p => (
+                          <span key={p} className="text-[10px] px-1.5 py-0.5 rounded bg-secondary/50 text-muted-foreground">{p}</span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
           </motion.div>
         )}
 
