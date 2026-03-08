@@ -403,7 +403,42 @@ export default function WatchPage() {
     <div className="container py-4 max-w-6xl">
       <BackButton />
 
-      <div className="mb-2">{renderPlayer()}</div>
+      <div ref={playerWrapperRef} className="mb-2">{renderPlayer()}</div>
+
+      {/* Floating PiP when scrolled past player */}
+      <AnimatePresence>
+        {showPip && (hindiHlsSrc || hindiIframeSrc || streamResult) && (
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.9 }}
+            transition={{ duration: 0.2 }}
+            className="fixed bottom-4 right-4 z-50 w-56 sm:w-64 rounded-xl overflow-hidden shadow-2xl border border-border bg-card cursor-pointer group"
+            onClick={scrollToPlayer}
+          >
+            <div className="aspect-video bg-black/90 flex items-center justify-center relative overflow-hidden">
+              {animePoster && (
+                <img src={animePoster} alt="" className="absolute inset-0 w-full h-full object-cover opacity-30 blur-sm" />
+              )}
+              <div className="relative flex flex-col items-center gap-1 text-center px-2">
+                <ArrowUp className="w-5 h-5 text-primary animate-bounce" />
+                <span className="text-[11px] font-bold text-foreground">Back to Player</span>
+                <span className="text-[9px] text-muted-foreground truncate max-w-full">
+                  Ep {currentEp?.number} · {category === "dub" ? "🇮🇳 Hindi" : engLabel || category.toUpperCase()}
+                </span>
+              </div>
+            </div>
+            <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowPip(false); }}
+                className="w-5 h-5 rounded-full bg-background/80 flex items-center justify-center text-muted-foreground hover:text-foreground text-xs"
+              >
+                ✕
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
 
       {/* Stream info */}
