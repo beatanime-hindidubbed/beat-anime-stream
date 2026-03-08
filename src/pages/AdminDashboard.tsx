@@ -1090,7 +1090,98 @@ export default function AdminDashboard() {
           </motion.div>
         )}
 
-        {/* ── Policy ── */}
+        {/* ── Comments Control ── */}
+        {tab === "comments" && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+            {/* Global toggle */}
+            <div className="p-4 sm:p-6 rounded-xl bg-card border border-border">
+              <h2 className="font-display text-lg font-bold text-foreground mb-3 flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 text-primary" /> Comment Settings
+              </h2>
+              <div className="flex items-center gap-3 mb-4">
+                <button
+                  onClick={() => updateSettings({ commentsEnabled: !settings.commentsEnabled })}
+                  className={`relative w-12 h-6 rounded-full transition-colors ${settings.commentsEnabled ? "bg-primary" : "bg-secondary"}`}
+                >
+                  <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-primary-foreground shadow transition-transform ${settings.commentsEnabled ? "left-[26px]" : "left-0.5"}`} />
+                </button>
+                <span className="text-sm text-foreground">
+                  {settings.commentsEnabled ? "Comments Enabled (Global)" : "Comments Disabled (Global)"}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">When disabled, no one can see or post comments anywhere.</p>
+            </div>
+
+            {/* Per-anime disable */}
+            <div className="p-4 sm:p-6 rounded-xl bg-card border border-border">
+              <h2 className="font-display text-base font-bold text-foreground mb-3 flex items-center gap-2">
+                <EyeOff className="w-4 h-4 text-destructive" /> Disable Comments for Specific Anime
+              </h2>
+              <p className="text-xs text-muted-foreground mb-4">Add anime IDs to disable comments on specific shows.</p>
+              <div className="flex gap-2 mb-4">
+                <input
+                  value={newDisableCommentId}
+                  onChange={e => setNewDisableCommentId(e.target.value)}
+                  placeholder="anime-slug-id"
+                  className="flex-1 h-9 px-3 rounded-lg bg-secondary text-foreground text-sm border border-border focus:ring-1 focus:ring-primary focus:outline-none font-mono text-xs"
+                />
+                <button
+                  onClick={async () => {
+                    if (!newDisableCommentId.trim()) return;
+                    const next = [...commentsDisabledAnimes, newDisableCommentId.trim()];
+                    setCommentsDisabledAnimes(next);
+                    await updateSettings({ commentsDisabledAnimes: next });
+                    await logAction("disable_comments", newDisableCommentId.trim());
+                    setNewDisableCommentId("");
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-destructive text-destructive-foreground text-sm font-medium"
+                >
+                  <Plus className="w-4 h-4" /> Disable
+                </button>
+              </div>
+              <div className="space-y-2">
+                {commentsDisabledAnimes.length === 0 && <p className="text-sm text-muted-foreground">Comments enabled on all anime.</p>}
+                {commentsDisabledAnimes.map(id => (
+                  <div key={id} className="flex items-center justify-between p-3 rounded-lg bg-secondary">
+                    <span className="text-sm font-mono text-foreground">{id}</span>
+                    <button
+                      onClick={async () => {
+                        const next = commentsDisabledAnimes.filter(a => a !== id);
+                        setCommentsDisabledAnimes(next);
+                        await updateSettings({ commentsDisabledAnimes: next });
+                        await logAction("enable_comments", id);
+                      }}
+                      className="px-2 py-1 rounded text-xs bg-accent text-accent-foreground hover:opacity-80"
+                    >
+                      Enable
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Comment stats */}
+            <div className="p-4 sm:p-6 rounded-xl bg-card border border-border">
+              <h2 className="font-display text-base font-bold text-foreground mb-3">Comment Stats</h2>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="p-3 rounded-lg bg-secondary text-center">
+                  <p className="text-xl font-bold text-primary">{commentStats.total}</p>
+                  <p className="text-[10px] text-muted-foreground">Total</p>
+                </div>
+                <div className="p-3 rounded-lg bg-secondary text-center">
+                  <p className="text-xl font-bold text-accent">{commentStats.today}</p>
+                  <p className="text-[10px] text-muted-foreground">Today</p>
+                </div>
+                <div className="p-3 rounded-lg bg-secondary text-center">
+                  <p className="text-xl font-bold text-destructive">{commentStats.censored}</p>
+                  <p className="text-[10px] text-muted-foreground">Censored</p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+
         {tab === "policy" && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5">
             {[
