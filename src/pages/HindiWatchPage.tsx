@@ -5,7 +5,7 @@ import { useSiteSettings } from "@/hooks/useSiteSettings";
 import HindiVideoPlayer from "@/components/HindiVideoPlayer";
 import DownloadButton from "@/components/DownloadButton";
 import BackButton from "@/components/BackButton";
-import { getApiPool } from "@/lib/streaming";
+import { getApiPool, getNextApi, proxyUrl as makeProxyUrl } from "@/lib/streaming";
 import { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight, List, Loader2, Server, RefreshCw } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -82,6 +82,7 @@ export default function HindiWatchPage() {
   const [error, setError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const [showEpList, setShowEpList] = useState(false);
+  const [subtitleTracks, setSubtitleTracks] = useState<{ file: string; label?: string; kind?: string; default?: boolean }[]>([]);
 
   const { data: info } = useQuery({
     queryKey: ["info", animeId],
@@ -133,6 +134,34 @@ export default function HindiWatchPage() {
     return () => { cancelled = true; };
   }, [info, epNum, retryKey, anilistId, malId]);
 
+  // Fetch subtitles from English HiAnime endpoint
+  useEffect(() => {
+    if (!currentEp?.episodeId) { setSubtitleTracks([]); return; }
+    let cancelled = false;
+    const fetchSubs = async () => {
+      const apiBase = getNextApi();
+      try {
+        const res = await fetch(
+          `${apiBase}/hianime/episode/sources?animeEpisodeId=${encodeURIComponent(currentEp.episodeId!)}&server=hd-2&category=sub`
+        );
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        const rawTracks = data?.data?.tracks || [];
+        const subs = rawTracks
+          .filter((t: any) => (t.kind || t.lang) !== "thumbnails" && t.lang !== "thumbnails")
+          .map((t: any) => ({
+            file: makeProxyUrl(t.url || t.file, "https://megacloud.blog/", apiBase),
+            label: t.label || t.lang || "Unknown",
+            kind: t.kind || "subtitles",
+            default: t.default || false,
+          }));
+        if (!cancelled) setSubtitleTracks(subs);
+      } catch { /* silent */ }
+    };
+    fetchSubs();
+    return () => { cancelled = true; };
+  }, [currentEp?.episodeId]);
+
   const hindiHlsSrc = selectedSource?.isHLS ? selectedSource.url : null;
   const hindiIframeSrc = selectedSource && !selectedSource.isHLS ? selectedSource.url : null;
 
@@ -165,10 +194,10 @@ export default function HindiWatchPage() {
     }
 
     if (hindiHlsSrc) {
-      return <HindiVideoPlayer src={hindiHlsSrc} onEnded={() => navigate(`/hindi/watch/${animeId}/${epNum + 1}`)} />;
+      return <HindiVideoPlayer src={hindiHlsSrc} tracks={subtitleTracks} onEnded={() => navigate(`/hindi/watch/${animeId}/${epNum + 1}`)} />;
     }
     if (hindiIframeSrc) {
-      return <HindiVideoPlayer iframeSrc={hindiIframeSrc} onEnded={() => navigate(`/hindi/watch/${animeId}/${epNum + 1}`)} />;
+      return <HindiVideoPlayer iframeSrc={hindiIframeSrc} tracks={subtitleTracks} onEnded={() => navigate(`/hindi/watch/${animeId}/${epNum + 1}`)} />;
     }
 
     return (
