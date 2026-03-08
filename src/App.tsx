@@ -53,6 +53,7 @@ const App = () => (
             <Routes>
               {/* Public routes */}
               <Route path="/verify" element={<VerifyPage />} />
+              <Route path="/go" element={<SandboxRedirect />} />
               <Route path="/admin" element={<AdminLogin />} />
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
 
