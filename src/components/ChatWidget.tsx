@@ -5,8 +5,9 @@ import { sanitizeMessage } from "@/lib/profanityFilter";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   MessageCircle, X, Send, AlertTriangle, Users, Lock,
-  Reply, Trash2, Ban, Volume2, VolumeX, Image as ImageIcon,
-  ChevronDown, Shield, Crown, Pin
+  Reply, Trash2, Ban, VolumeX,
+  ChevronDown, Pin, Smile, Forward, Heart, ThumbsUp, ThumbsDown,
+  Flame, Star, Laugh, Check, CheckCheck
 } from "lucide-react";
 
 type ChatMode = "group" | "report" | "whisper";
@@ -22,6 +23,7 @@ interface ChatMsg {
   is_deleted: boolean;
   image_url: string | null;
   created_at: string;
+  avatar_url: string | null;
 }
 
 interface ChatBan {
@@ -30,6 +32,15 @@ interface ChatBan {
   ban_type: string;
   expires_at: string | null;
 }
+
+const REACTIONS = [
+  { emoji: "❤️", icon: Heart },
+  { emoji: "👍", icon: ThumbsUp },
+  { emoji: "👎", icon: ThumbsDown },
+  { emoji: "🔥", icon: Flame },
+  { emoji: "⭐", icon: Star },
+  { emoji: "😂", icon: Laugh },
+];
 
 const PINNED_MSG = "⚠️ Chat auto-clears every 7 days. Be respectful. No personal info sharing.";
 
@@ -47,8 +58,17 @@ export default function ChatWidget() {
   const [isMuted, setIsMuted] = useState(false);
   const [showPin, setShowPin] = useState(true);
   const [unread, setUnread] = useState(0);
+  const [showReactions, setShowReactions] = useState<string | null>(null);
+  const [reactions, setReactions] = useState<Record<string, Record<string, string[]>>>({});
+  const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
+  const [isTyping, setIsTyping] = useState(false);
+  const [forwardMsg, setForwardMsg] = useState<ChatMsg | null>(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+
+  const QUICK_EMOJIS = ["😀", "😂", "😍", "🤔", "😭", "😎", "🔥", "👀", "💀", "🎉", "❤️", "👍", "🙏", "💯", "✨", "🤡"];
 
   // Load messages
   const loadMessages = useCallback(async () => {
@@ -71,14 +91,11 @@ export default function ChatWidget() {
     if (data) setMessages(data as unknown as ChatMsg[]);
   }, [user, mode, whisperTo]);
 
-  // Check ban status
+  // Check ban
   useEffect(() => {
     if (!user) return;
     const checkBan = async () => {
-      const { data } = await supabase
-        .from("chat_bans")
-        .select("*")
-        .eq("user_id", user.id);
+      const { data } = await supabase.from("chat_bans").select("*").eq("user_id", user.id);
       if (data && data.length > 0) {
         const activeBan = (data as unknown as ChatBan[]).find(b => {
           if (!b.expires_at) return true;
@@ -93,12 +110,11 @@ export default function ChatWidget() {
     checkBan();
   }, [user]);
 
-  // Load on open/mode change
   useEffect(() => {
     if (open && user) loadMessages();
   }, [open, mode, whisperTo, loadMessages, user]);
 
-  // Realtime subscription
+  // Realtime
   useEffect(() => {
     if (!open || !user) return;
     const channel = supabase
@@ -122,23 +138,55 @@ export default function ChatWidget() {
     return () => { supabase.removeChannel(channel); };
   }, [open, user, mode, whisperTo]);
 
+  // Typing indicator via presence
+  useEffect(() => {
+    if (!open || !user) return;
+    const channel = supabase.channel("chat-typing", { config: { presence: { key: user.id } } });
+    
+    channel.on("presence", { event: "sync" }, () => {
+      const state = channel.presenceState();
+      const typing = new Set<string>();
+      Object.entries(state).forEach(([uid, data]) => {
+        if (uid !== user.id && Array.isArray(data) && data.some((d: any) => d.typing)) {
+          typing.add(uid);
+        }
+      });
+      setTypingUsers(typing);
+    }).subscribe(async (status) => {
+      if (status === "SUBSCRIBED") {
+        await channel.track({ typing: false });
+      }
+    });
+
+    return () => { supabase.removeChannel(channel); };
+  }, [open, user]);
+
   // Auto-scroll
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
+
+  const handleTyping = () => {
+    if (!isTyping) {
+      setIsTyping(true);
+      const channel = supabase.channel("chat-typing");
+      channel.send({ type: "presence", event: "track", payload: { typing: true } }).catch(() => {});
+    }
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      setIsTyping(false);
+      const channel = supabase.channel("chat-typing");
+      channel.send({ type: "presence", event: "track", payload: { typing: false } }).catch(() => {});
+    }, 2000);
+  };
 
   const sendMessage = async () => {
     if (!user || !input.trim() || sending || isBanned || isMuted) return;
     setSending(true);
 
     const clean = sanitizeMessage(input.trim());
-
-    // Block links that aren't https
     const urlPattern = /http:\/\/\S+/gi;
-    if (urlPattern.test(clean)) {
-      setSending(false);
-      return;
-    }
+    if (urlPattern.test(clean)) { setSending(false); return; }
 
     const { data: profile } = await supabase
       .from("profiles")
@@ -159,13 +207,35 @@ export default function ChatWidget() {
     await supabase.from("chat_messages").insert(msg);
     setInput("");
     setReplyTo(null);
+    setForwardMsg(null);
     setSending(false);
+    setShowEmojiPicker(false);
     inputRef.current?.focus();
   };
 
-  // Admin actions
+  const addReaction = (msgId: string, emoji: string) => {
+    setReactions(prev => {
+      const msgReactions = { ...(prev[msgId] || {}) };
+      const users = msgReactions[emoji] || [];
+      if (users.includes(user!.id)) {
+        msgReactions[emoji] = users.filter(u => u !== user!.id);
+        if (msgReactions[emoji].length === 0) delete msgReactions[emoji];
+      } else {
+        msgReactions[emoji] = [...users, user!.id];
+      }
+      return { ...prev, [msgId]: msgReactions };
+    });
+    setShowReactions(null);
+  };
+
+  const forwardMessage = (msg: ChatMsg) => {
+    setInput(`↪ ${msg.username}: "${msg.content}"`);
+    setForwardMsg(null);
+    inputRef.current?.focus();
+  };
+
   const deleteMessage = async (id: string) => {
-    await supabase.from("chat_messages").update({ is_deleted: true, content: "[deleted by admin]" }).eq("id", id);
+    await supabase.from("chat_messages").update({ is_deleted: true, content: "[deleted by admin]" } as any).eq("id", id);
     setMessages(prev => prev.map(m => m.id === id ? { ...m, is_deleted: true, content: "[deleted by admin]" } : m));
   };
 
@@ -174,33 +244,29 @@ export default function ChatWidget() {
     const expires = new Date();
     expires.setDate(expires.getDate() + 7);
     await supabase.from("chat_bans").insert({
-      user_id: userId,
-      banned_by: user.id,
-      ban_type: type,
-      reason: "Admin action",
-      expires_at: expires.toISOString(),
+      user_id: userId, banned_by: user.id, ban_type: type,
+      reason: "Admin action", expires_at: expires.toISOString(),
     });
   };
 
   const startWhisper = (userId: string, username: string) => {
-    setMode("whisper");
-    setWhisperTo(userId);
-    setWhisperUsername(username);
+    setMode("whisper"); setWhisperTo(userId); setWhisperUsername(username);
   };
 
   if (!user) return null;
+
+  const replyToMsg = replyTo ? messages.find(m => m.id === replyTo.id) : null;
 
   return (
     <>
       {/* Floating button */}
       {!open && (
         <motion.button
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
+          initial={{ scale: 0 }} animate={{ scale: 1 }}
           onClick={() => { setOpen(true); setUnread(0); }}
-          className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center justify-center"
+          className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center justify-center"
         >
-          <MessageCircle className="w-6 h-6" />
+          <MessageCircle className="w-5 h-5 sm:w-6 sm:h-6" />
           {unread > 0 && (
             <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center">
               {unread > 9 ? "9+" : unread}
@@ -216,7 +282,7 @@ export default function ChatWidget() {
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            className="fixed bottom-4 right-4 z-50 w-[360px] max-w-[calc(100vw-2rem)] h-[520px] max-h-[calc(100vh-2rem)] flex flex-col bg-card border border-border rounded-2xl shadow-2xl overflow-hidden"
+            className="fixed bottom-0 right-0 sm:bottom-4 sm:right-4 z-50 w-full sm:w-[380px] sm:max-w-[calc(100vw-2rem)] h-[100dvh] sm:h-[540px] sm:max-h-[calc(100vh-2rem)] flex flex-col bg-card border-0 sm:border border-border sm:rounded-2xl shadow-2xl overflow-hidden"
           >
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card/80 backdrop-blur-sm">
@@ -225,12 +291,11 @@ export default function ChatWidget() {
                 <span className="font-display font-bold text-sm text-foreground">
                   {mode === "group" ? "Group Chat" : mode === "report" ? "Report Bug" : `Whisper: ${whisperUsername}`}
                 </span>
+                <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
               </div>
-              <div className="flex items-center gap-1">
-                <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg hover:bg-secondary transition-colors">
-                  <X className="w-4 h-4 text-muted-foreground" />
-                </button>
-              </div>
+              <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg hover:bg-secondary transition-colors">
+                <X className="w-4 h-4 text-muted-foreground" />
+              </button>
             </div>
 
             {/* Mode tabs */}
@@ -240,15 +305,11 @@ export default function ChatWidget() {
                 { key: "report" as const, icon: AlertTriangle, label: "Report" },
                 ...(mode === "whisper" ? [{ key: "whisper" as const, icon: Lock, label: "Whisper" }] : []),
               ]).map(t => (
-                <button
-                  key={t.key}
-                  onClick={() => setMode(t.key)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium transition-colors ${
+                <button key={t.key} onClick={() => setMode(t.key)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors ${
                     mode === t.key ? "text-primary border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <t.icon className="w-3 h-3" />
-                  {t.label}
+                  }`}>
+                  <t.icon className="w-3.5 h-3.5" /> {t.label}
                 </button>
               ))}
             </div>
@@ -273,106 +334,188 @@ export default function ChatWidget() {
             )}
 
             {/* Messages */}
-            <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-2 scrollbar-hide">
+            <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-1.5 scrollbar-hide">
               {messages.length === 0 && (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm">
                   <MessageCircle className="w-8 h-8 mb-2 opacity-30" />
                   <p>{mode === "report" ? "Report a bug or issue" : "No messages yet"}</p>
                 </div>
               )}
-              {messages.map(msg => (
-                <div
-                  key={msg.id}
-                  className={`group flex gap-2 ${msg.user_id === user.id ? "flex-row-reverse" : ""}`}
-                >
-                  {/* Avatar */}
-                  <div className={`w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold ${
-                    msg.user_id === user.id ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"
-                  }`}>
-                    {(msg.username || "?")[0]?.toUpperCase()}
-                  </div>
-                  {/* Bubble */}
-                  <div className={`max-w-[75%] ${msg.user_id === user.id ? "text-right" : ""}`}>
-                    <div className="flex items-center gap-1.5 mb-0.5">
-                      <span className="text-[10px] font-medium text-foreground">{msg.username || "Anonymous"}</span>
-                      <span className="text-[9px] text-muted-foreground">
-                        {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                      </span>
-                    </div>
-
-                    {/* Reply indicator */}
-                    {msg.reply_to && (
-                      <div className="text-[9px] text-muted-foreground bg-secondary/50 rounded px-1.5 py-0.5 mb-0.5 inline-block">
-                        ↩ Reply
+              {messages.map((msg, i) => {
+                const isOwn = msg.user_id === user.id;
+                const msgReactions = reactions[msg.id] || {};
+                const prevMsg = messages[i - 1];
+                const sameUser = prevMsg?.user_id === msg.user_id;
+                
+                return (
+                  <div key={msg.id} className={`group flex gap-2 ${isOwn ? "flex-row-reverse" : ""} ${sameUser ? "mt-0.5" : "mt-3"}`}>
+                    {/* Avatar */}
+                    {!sameUser ? (
+                      <div className={`w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold ${
+                        isOwn ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"
+                      }`}>
+                        {msg.avatar_url ? (
+                          <img src={msg.avatar_url} className="w-full h-full rounded-full object-cover" />
+                        ) : (msg.username || "?")[0]?.toUpperCase()}
                       </div>
-                    )}
+                    ) : <div className="w-7 flex-shrink-0" />}
 
-                    <div className={`px-3 py-1.5 rounded-xl text-sm break-words ${
-                      msg.is_deleted
-                        ? "bg-destructive/10 text-destructive/60 italic"
-                        : msg.user_id === user.id
-                        ? "bg-primary text-primary-foreground rounded-tr-sm"
-                        : "bg-secondary text-secondary-foreground rounded-tl-sm"
-                    }`}>
-                      {msg.content}
-                    </div>
-
-                    {msg.image_url && !msg.is_deleted && (
-                      <img src={msg.image_url} alt="" className="mt-1 rounded-lg max-h-40 object-cover" />
-                    )}
-
-                    {/* Actions */}
-                    <div className="flex items-center gap-1 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {!msg.is_deleted && (
-                        <button onClick={() => setReplyTo(msg)} className="p-0.5 rounded hover:bg-secondary">
-                          <Reply className="w-3 h-3 text-muted-foreground" />
-                        </button>
+                    {/* Bubble */}
+                    <div className={`max-w-[75%] ${isOwn ? "text-right" : ""}`}>
+                      {!sameUser && (
+                        <div className={`flex items-center gap-1.5 mb-0.5 ${isOwn ? "justify-end" : ""}`}>
+                          <span className="text-[10px] font-medium text-foreground">{msg.username || "Anonymous"}</span>
+                          <span className="text-[9px] text-muted-foreground">
+                            {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        </div>
                       )}
-                      {msg.user_id !== user.id && (
-                        <button onClick={() => startWhisper(msg.user_id, msg.username || "User")} className="p-0.5 rounded hover:bg-secondary">
-                          <Lock className="w-3 h-3 text-muted-foreground" />
-                        </button>
+
+                      {/* Reply indicator */}
+                      {msg.reply_to && (
+                        <div className="text-[9px] text-muted-foreground bg-secondary/50 rounded px-1.5 py-0.5 mb-0.5 inline-block">
+                          ↩ Reply
+                        </div>
                       )}
-                      {isAdmin && !msg.is_deleted && (
-                        <>
-                          <button onClick={() => deleteMessage(msg.id)} className="p-0.5 rounded hover:bg-destructive/20">
-                            <Trash2 className="w-3 h-3 text-destructive" />
+
+                      <div className={`relative px-3 py-1.5 rounded-2xl text-sm break-words ${
+                        msg.is_deleted
+                          ? "bg-destructive/10 text-destructive/60 italic"
+                          : isOwn
+                          ? "bg-primary text-primary-foreground rounded-tr-sm"
+                          : "bg-secondary text-secondary-foreground rounded-tl-sm"
+                      }`}>
+                        {msg.content}
+                        {/* Read receipt for own msgs */}
+                        {isOwn && !msg.is_deleted && (
+                          <span className="inline-flex ml-1.5 align-bottom">
+                            <CheckCheck className="w-3 h-3 text-primary-foreground/60" />
+                          </span>
+                        )}
+                      </div>
+
+                      {msg.image_url && !msg.is_deleted && (
+                        <img src={msg.image_url} alt="" className="mt-1 rounded-lg max-h-40 object-cover" />
+                      )}
+
+                      {/* Reactions display */}
+                      {Object.keys(msgReactions).length > 0 && (
+                        <div className={`flex gap-1 mt-0.5 flex-wrap ${isOwn ? "justify-end" : ""}`}>
+                          {Object.entries(msgReactions).map(([emoji, users]) => (
+                            <button key={emoji} onClick={() => addReaction(msg.id, emoji)}
+                              className={`px-1.5 py-0.5 rounded-full text-[11px] border transition-colors ${
+                                users.includes(user.id) ? "border-primary/40 bg-primary/10" : "border-border bg-secondary/50 hover:bg-secondary"
+                              }`}>
+                              {emoji} {users.length}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Actions (hover) */}
+                      <div className={`flex items-center gap-0.5 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity ${isOwn ? "justify-end" : ""}`}>
+                        {!msg.is_deleted && (
+                          <>
+                            <button onClick={() => setShowReactions(showReactions === msg.id ? null : msg.id)}
+                              className="p-0.5 rounded hover:bg-secondary" title="React">
+                              <Smile className="w-3 h-3 text-muted-foreground" />
+                            </button>
+                            <button onClick={() => setReplyTo(msg)} className="p-0.5 rounded hover:bg-secondary" title="Reply">
+                              <Reply className="w-3 h-3 text-muted-foreground" />
+                            </button>
+                            <button onClick={() => forwardMessage(msg)} className="p-0.5 rounded hover:bg-secondary" title="Forward">
+                              <Forward className="w-3 h-3 text-muted-foreground" />
+                            </button>
+                          </>
+                        )}
+                        {!isOwn && (
+                          <button onClick={() => startWhisper(msg.user_id, msg.username || "User")} className="p-0.5 rounded hover:bg-secondary" title="Whisper">
+                            <Lock className="w-3 h-3 text-muted-foreground" />
                           </button>
-                          {msg.user_id !== user.id && (
-                            <>
-                              <button onClick={() => banUser(msg.user_id, "mute")} title="Mute 7 days" className="p-0.5 rounded hover:bg-destructive/20">
-                                <VolumeX className="w-3 h-3 text-destructive" />
-                              </button>
-                              <button onClick={() => banUser(msg.user_id, "ban")} title="Ban 7 days" className="p-0.5 rounded hover:bg-destructive/20">
-                                <Ban className="w-3 h-3 text-destructive" />
-                              </button>
-                            </>
-                          )}
-                        </>
+                        )}
+                        {isAdmin && !msg.is_deleted && (
+                          <>
+                            <button onClick={() => deleteMessage(msg.id)} className="p-0.5 rounded hover:bg-destructive/20" title="Delete">
+                              <Trash2 className="w-3 h-3 text-destructive" />
+                            </button>
+                            {!isOwn && (
+                              <>
+                                <button onClick={() => banUser(msg.user_id, "mute")} title="Mute 7d" className="p-0.5 rounded hover:bg-destructive/20">
+                                  <VolumeX className="w-3 h-3 text-destructive" />
+                                </button>
+                                <button onClick={() => banUser(msg.user_id, "ban")} title="Ban 7d" className="p-0.5 rounded hover:bg-destructive/20">
+                                  <Ban className="w-3 h-3 text-destructive" />
+                                </button>
+                              </>
+                            )}
+                          </>
+                        )}
+                      </div>
+
+                      {/* Reaction picker */}
+                      {showReactions === msg.id && (
+                        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+                          className={`flex gap-1 mt-1 p-1.5 rounded-xl bg-card border border-border shadow-lg ${isOwn ? "justify-end" : ""}`}>
+                          {REACTIONS.map(r => (
+                            <button key={r.emoji} onClick={() => addReaction(msg.id, r.emoji)}
+                              className="w-7 h-7 rounded-lg hover:bg-secondary flex items-center justify-center text-sm transition-transform hover:scale-125">
+                              {r.emoji}
+                            </button>
+                          ))}
+                        </motion.div>
                       )}
                     </div>
                   </div>
+                );
+              })}
+
+              {/* Typing indicator */}
+              {typingUsers.size > 0 && (
+                <div className="flex items-center gap-2 py-1">
+                  <div className="flex gap-0.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "0ms" }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "150ms" }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "300ms" }} />
+                  </div>
+                  <span className="text-[10px] text-muted-foreground">typing...</span>
                 </div>
-              ))}
+              )}
             </div>
 
             {/* Reply indicator */}
             {replyTo && (
               <div className="flex items-center gap-2 px-3 py-1.5 bg-secondary/50 border-t border-border text-xs text-muted-foreground">
                 <Reply className="w-3 h-3" />
-                <span className="truncate">Replying to {replyTo.username}</span>
-                <button onClick={() => setReplyTo(null)} className="ml-auto">
-                  <X className="w-3 h-3" />
-                </button>
+                <span className="truncate flex-1">Replying to <strong>{replyTo.username}</strong>: {replyTo.content.slice(0, 50)}</span>
+                <button onClick={() => setReplyTo(null)}><X className="w-3 h-3" /></button>
               </div>
             )}
 
+            {/* Emoji picker */}
+            <AnimatePresence>
+              {showEmojiPicker && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}
+                  className="border-t border-border p-2 bg-card grid grid-cols-8 gap-1">
+                  {QUICK_EMOJIS.map(e => (
+                    <button key={e} onClick={() => { setInput(prev => prev + e); inputRef.current?.focus(); }}
+                      className="w-8 h-8 rounded-lg hover:bg-secondary flex items-center justify-center text-lg transition-transform hover:scale-110">
+                      {e}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* Input */}
-            <div className="border-t border-border p-3 flex items-center gap-2">
+            <div className="border-t border-border p-3 flex items-center gap-2 bg-card">
+              <button onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                className={`p-2 rounded-lg transition-colors ${showEmojiPicker ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-secondary"}`}>
+                <Smile className="w-4 h-4" />
+              </button>
               <input
                 ref={inputRef}
                 value={input}
-                onChange={e => setInput(e.target.value)}
+                onChange={e => { setInput(e.target.value); handleTyping(); }}
                 onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
                 placeholder={isBanned ? "You are banned" : isMuted ? "You are muted" : mode === "report" ? "Describe the issue..." : "Type a message..."}
                 disabled={isBanned || isMuted}
