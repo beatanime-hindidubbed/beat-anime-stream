@@ -1,10 +1,52 @@
-const BASE_URL = "https://beat-anime-api.onrender.com/api/v1";
+// Multi-API load distribution with round-robin
+import { getNextApi, getApiPool } from "./streaming";
+
+// Fallback if streaming module hasn't loaded yet
+const FALLBACK_BASE = "https://beat-anime-api.onrender.com/api/v1";
 
 async function fetchApi<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`);
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
-  const json = await res.json();
-  return json.data ?? json;
+  const apis = getApiPool();
+  if (apis.length === 0) apis.push(FALLBACK_BASE);
+
+  // Race the first 2 APIs for fastest response
+  const selected = apis.length >= 2
+    ? [getNextApi(), getNextApi()]
+    : [apis[0]];
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
+
+  try {
+    const result = await Promise.any(
+      selected.map(async (base) => {
+        const res = await fetch(`${base}${path}`, { signal: controller.signal });
+        if (!res.ok) throw new Error(`API error: ${res.status}`);
+        const json = await res.json();
+        return (json.data ?? json) as T;
+      })
+    );
+    clearTimeout(timeout);
+    return result;
+  } catch (firstErr) {
+    clearTimeout(timeout);
+    // If first batch failed, try remaining APIs sequentially
+    for (const base of apis) {
+      if (selected.includes(base)) continue;
+      try {
+        const res = await fetch(`${base}${path}`);
+        if (!res.ok) continue;
+        const json = await res.json();
+        return (json.data ?? json) as T;
+      } catch { continue; }
+    }
+    throw firstErr;
+  }
+}
+
+/** Get a proxy URL using round-robin API */
+function getProxyUrl(url: string, referer = "https://megacloud.blog/"): string {
+  const base = getNextApi();
+  return `${base}/hindiapi/proxy?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}`;
 }
 
 export interface AnimeItem {
@@ -93,8 +135,7 @@ export const api = {
   getEpisodes: (id: string) => fetchApi<{ episodes: Episode[]; totalEpisodes: number }>(`/hianime/anime/${id}/episodes`),
   getEpisodeSources: (episodeId: string, category = "sub") =>
     fetchApi<EpisodeSource>(`/hianime/episode/sources?animeEpisodeId=${episodeId}&category=${category}`),
-  proxyUrl: (url: string, referer = "https://megacloud.blog/") =>
-    `${BASE_URL}/hindiapi/proxy?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}`,
+  proxyUrl: (url: string, referer = "https://megacloud.blog/") => getProxyUrl(url, referer),
   search: (q: string, page = 1) => fetchApi<SearchResult>(`/hianime/search?q=${encodeURIComponent(q)}&page=${page}`),
   searchSuggestions: (q: string) => fetchApi<{ suggestions: AnimeItem[] }>(`/hianime/search/suggestion?q=${encodeURIComponent(q)}`),
   getCategory: (name: string, page = 1) => fetchApi<SearchResult>(`/hianime/category/${name}?page=${page}`),

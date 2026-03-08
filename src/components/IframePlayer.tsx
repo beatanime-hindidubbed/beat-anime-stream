@@ -10,7 +10,8 @@ export default function IframePlayer({ src }: Props) {
         className="w-full h-full border-0"
         allowFullScreen
         allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-        referrerPolicy="no-referrer"
+        referrerPolicy="no-referrer-when-downgrade"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation"
       />
     </div>
   );
