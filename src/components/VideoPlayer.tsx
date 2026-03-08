@@ -1000,9 +1000,8 @@ export default function VideoPlayer({
                   ))}
                 </div>
               )}
-            </motion.div>
-          )}
-        </AnimatePresence>
+            </div>
+        )}
 
         {/* ══════════════════════════════════════════════════════════════
             CONTROLS OVERLAY — Beautiful redesigned UI
