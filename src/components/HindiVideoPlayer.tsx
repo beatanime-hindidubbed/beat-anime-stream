@@ -1001,7 +1001,7 @@ export default function HindiVideoPlayer({
 
               <div className="relative px-2 sm:px-5 pb-1.5 sm:pb-4 pt-8 sm:pt-12">
                 {/* Seek bar — YouTube-style with preview thumbnail */}
-                <div className="w-full mb-3 sm:mb-3.5 cursor-pointer group/progress relative"
+                <div className="w-full mb-3 sm:mb-3.5 cursor-pointer group/progress relative touch-none"
                   style={{ height: "32px", display: "flex", alignItems: "center" }}
                   onClick={seek}
                   onMouseMove={handleProgressHover}
