@@ -669,7 +669,7 @@ export default function HindiVideoPlayer({
     const x = e.changedTouches[0].clientX - rect.left;
     tapCount.current++;
     if (doubleTapTimer.current) clearTimeout(doubleTapTimer.current);
-    doubleTapTimer.current = setTimeout(() => { if (tapCount.current === 1) togglePlay(); tapCount.current = 0; }, 280);
+    doubleTapTimer.current = setTimeout(() => { if (tapCount.current === 1) togglePlay(); tapCount.current = 0; }, 220);
     if (tapCount.current >= 2) {
       tapCount.current = 0;
       if (doubleTapTimer.current) clearTimeout(doubleTapTimer.current);
