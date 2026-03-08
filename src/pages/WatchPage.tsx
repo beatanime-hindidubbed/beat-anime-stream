@@ -487,7 +487,7 @@ export default function WatchPage() {
         )}
       </div>
 
-      {/* Floating PiP when scrolled past player */}
+      {/* Floating PiP mini player when scrolled past */}
       <AnimatePresence>
         {showPip && (hindiHlsSrc || hindiIframeSrc || streamResult) && (
           <motion.div
@@ -495,25 +495,35 @@ export default function WatchPage() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.9 }}
             transition={{ duration: 0.2 }}
-            className="fixed bottom-4 right-4 z-50 w-56 sm:w-64 rounded-xl overflow-hidden shadow-2xl border border-border bg-card cursor-pointer group"
-            onClick={scrollToPlayer}
+            className="fixed bottom-4 right-4 z-50 w-64 sm:w-80 rounded-xl overflow-hidden shadow-2xl border border-border bg-black group"
           >
-            <div className="aspect-video bg-black/90 flex items-center justify-center relative overflow-hidden">
-              {animePoster && (
-                <img src={animePoster} alt="" className="absolute inset-0 w-full h-full object-cover opacity-30 blur-sm" />
+            <div className="aspect-video relative overflow-hidden">
+              {/* Render actual mini player */}
+              {category === "dub" && hindiHlsSrc ? (
+                <HindiVideoPlayer src={hindiHlsSrc} />
+              ) : category === "dub" && hindiIframeSrc ? (
+                <HindiVideoPlayer iframeSrc={hindiIframeSrc} />
+              ) : streamResult?.type === "hls" ? (
+                <VideoPlayer src={streamResult.url} tracks={streamResult.tracks} />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-black/90">
+                  {animePoster && <img src={animePoster} alt="" className="absolute inset-0 w-full h-full object-cover opacity-30 blur-sm" />}
+                  <span className="text-xs text-muted-foreground relative">Playing...</span>
+                </div>
               )}
-              <div className="relative flex flex-col items-center gap-1 text-center px-2">
-                <ArrowUp className="w-5 h-5 text-primary animate-bounce" />
-                <span className="text-[11px] font-bold text-foreground">Back to Player</span>
-                <span className="text-[9px] text-muted-foreground truncate max-w-full">
-                  Ep {currentEp?.number} · {category === "dub" ? "🇮🇳 Hindi" : engLabel || category.toUpperCase()}
-                </span>
-              </div>
             </div>
-            <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            {/* Bottom bar with info + controls */}
+            <div className="flex items-center justify-between px-2 py-1.5 bg-card/95">
+              <button
+                onClick={scrollToPlayer}
+                className="flex items-center gap-1.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ArrowUp className="w-3 h-3 text-primary" />
+                <span className="truncate max-w-[120px]">Ep {currentEp?.number} · {category === "dub" ? "🇮🇳" : (engLabel || category.toUpperCase())}</span>
+              </button>
               <button
                 onClick={(e) => { e.stopPropagation(); setShowPip(false); }}
-                className="w-5 h-5 rounded-full bg-background/80 flex items-center justify-center text-muted-foreground hover:text-foreground text-xs"
+                className="w-5 h-5 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground text-xs"
               >
                 ✕
               </button>

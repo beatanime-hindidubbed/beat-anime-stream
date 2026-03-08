@@ -275,12 +275,12 @@ export default function HindiWatchPage() {
           </div>
         )}
 
-        {/* Download — same logic as English player */}
+        {/* Download — Hindi stream only */}
         {hindiDownloadUrl && (
           <DownloadButton
-            episodeId={`hindi-${animeId}-${epNum}`}
+            episodeId={currentEp?.episodeId || `hindi-${animeId}-${epNum}`}
             episodeNumber={epNum}
-            animeName={animeName}
+            animeName={`${animeName}-Hindi`}
             streamUrl={hindiDownloadUrl}
           />
         )}
