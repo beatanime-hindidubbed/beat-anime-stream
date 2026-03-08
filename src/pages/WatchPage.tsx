@@ -13,7 +13,7 @@ import AnimeCard from "@/components/AnimeCard";
 import AnimeReportButton from "@/components/AnimeReportButton";
 import { getWorkingStream, StreamResult, HIANIME_SERVERS } from "@/lib/streaming";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { ChevronLeft, ChevronRight, List, Loader2, Server, RefreshCw, Globe, ChevronDown } from "lucide-react";
+import { ChevronLeft, ChevronRight, List, Loader2, Server, RefreshCw, Globe, ChevronDown, MessageSquare } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
 const HINDI_API_BASE = "https://beat-anime-api.onrender.com/api/v1";
