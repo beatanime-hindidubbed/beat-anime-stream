@@ -82,6 +82,7 @@ export default function HindiWatchPage() {
   const [error, setError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const [showEpList, setShowEpList] = useState(false);
+  const [subtitleTracks, setSubtitleTracks] = useState<{ file: string; label?: string; kind?: string; default?: boolean }[]>([]);
 
   const { data: info } = useQuery({
     queryKey: ["info", animeId],
