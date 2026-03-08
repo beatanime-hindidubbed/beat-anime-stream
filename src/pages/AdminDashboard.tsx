@@ -281,11 +281,6 @@ export default function AdminDashboard() {
     { key: "api" as const, label: "API", icon: Activity },
   ];
 
-  // Chat admin state
-  const [chatMessages, setChatMessages] = useState<any[]>([]);
-  const [chatBans, setChatBans] = useState<any[]>([]);
-  const [chatReports, setChatReports] = useState<any[]>([]);
-
   useEffect(() => {
     if (tab === "chat") {
       supabase.from("chat_messages").select("*").eq("type", "report").order("created_at", { ascending: false }).limit(50)
