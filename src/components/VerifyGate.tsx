@@ -115,8 +115,15 @@ export default function VerifyGate({ children }: Props) {
 
   // ── Core gate function ─────────────────────────────────────────────────────
   const gate = useCallback((pathname: string) => {
-    // Public paths are always allowed — no verification needed
+    // Public paths are always allowed
     if (isPublicPath(pathname)) {
+      setAllowed(true);
+      return;
+    }
+
+    // If verification is disabled by admin, allow everything
+    if (!settings.verificationEnabled) {
+      verifiedInMemory.current = true;
       setAllowed(true);
       return;
     }
