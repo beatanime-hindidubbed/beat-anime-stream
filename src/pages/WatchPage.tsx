@@ -48,8 +48,7 @@ async function raceHindiFetch(url: string): Promise<any> {
 
 const LANGUAGES = [
   { code: "dub", label: "Hindi (Dub)", short: "🇮🇳 HINDI" },
-  { code: "sub", label: "English (Sub)", short: "ENG SUB" },
-  { code: "engdub", label: "English (Dub)", short: "ENG DUB" },
+  { code: "eng", label: "English (Sub/Dub)", short: "ENG" },
   { code: "raw", label: "Japanese (Raw)", short: "RAW" },
 ] as const;
 
@@ -101,9 +100,9 @@ export default function WatchPage() {
 
   // Default to Hindi dub unless explicitly set otherwise
   const initialCategory = (() => {
-    if (searchParams.get("lang") === "sub") return "sub";
-    if (searchParams.get("lang") === "engdub") return "engdub";
-    if (searchParams.get("lang") === "raw") return "raw";
+    const lang = searchParams.get("lang");
+    if (lang === "sub" || lang === "engdub" || lang === "eng") return "eng";
+    if (lang === "raw") return "raw";
     // Default is Hindi dub
     return "dub";
   })();
@@ -213,6 +212,8 @@ export default function WatchPage() {
   }, [category, info, currentEp, retryKey]);
 
   // ── HiAnime (sub/engdub/raw) stream loader ─────────────────────────
+  const [engMode, setEngMode] = useState<"sub" | "dub">("sub");
+
   useEffect(() => {
     if (category === "dub" || !fullEpisodeId) return;
     let cancelled = false;
@@ -226,21 +227,27 @@ export default function WatchPage() {
       setHindiIframeSrc(null);
       setRetryMessage("");
 
-      // Map engdub → "dub" for HiAnime API, sub/raw → "sub"
-      const apiCategory = category === "engdub" ? "dub" : category === "raw" ? "sub" : "sub";
+      // For "eng", try sub first then dub; for "raw" use sub
+      const categoriesToTry = category === "eng" ? ["sub", "dub"] : ["sub"];
 
-      for (let i = 0; i < HIANIME_SERVERS.length; i++) {
-        if (cancelled) return;
-        const server = HIANIME_SERVERS[i];
-        if (i > 0) {
-          setRetryMessage(`Trying server ${i + 1}/${HIANIME_SERVERS.length}: ${server.toUpperCase()}...`);
-          await new Promise((r) => setTimeout(r, 800));
-        }
-        try {
-          const result = await getWorkingStream({ episodeId: fullEpisodeId, category: apiCategory, server });
+      for (const apiCat of categoriesToTry) {
+        for (let i = 0; i < HIANIME_SERVERS.length; i++) {
           if (cancelled) return;
-          if (result) { setSelectedServer(server); setStreamResult(result); setStreamLoading(false); setRetryMessage(""); return; }
-        } catch {}
+          const server = HIANIME_SERVERS[i];
+          setRetryMessage(`Trying ${apiCat.toUpperCase()} on ${server.toUpperCase()}...`);
+          try {
+            const result = await getWorkingStream({ episodeId: fullEpisodeId, category: apiCat, server });
+            if (cancelled) return;
+            if (result) {
+              setSelectedServer(server);
+              setStreamResult(result);
+              setStreamLoading(false);
+              setRetryMessage("");
+              if (category === "eng") setEngMode(apiCat as "sub" | "dub");
+              return;
+            }
+          } catch {}
+        }
       }
 
       if (!cancelled) { setStreamError("all_failed"); setStreamLoading(false); }
@@ -265,6 +272,7 @@ export default function WatchPage() {
 
   const recommended = info?.recommendedAnimes || info?.relatedAnimes || [];
   const currentLang = LANGUAGES.find((l) => l.code === category) || LANGUAGES[0];
+  const engLabel = category === "eng" ? (engMode === "dub" ? "ENG DUB" : "ENG SUB") : "";
 
   // ── Build episode navigation links preserving lang param ──────────────
   const buildEpLink = (ep: { episodeId?: string }) => {
@@ -391,7 +399,7 @@ export default function WatchPage() {
             </span>
             {" · "}
             <span className={category === "dub" ? "text-orange-400 font-medium" : ""}>
-              {category === "dub" ? "🇮🇳 हिंदी DUB" : (streamResult?.category || category).toUpperCase()}
+              {category === "dub" ? "🇮🇳 हिंदी DUB" : category === "eng" ? engLabel : (streamResult?.category || category).toUpperCase()}
             </span>
           </span>
         </div>
@@ -421,7 +429,7 @@ export default function WatchPage() {
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm font-medium text-foreground hover:bg-secondary/80 transition-colors"
           >
             <Globe className="w-4 h-4" />
-            {currentLang.short}
+            {category === "eng" ? engLabel || "ENG" : currentLang.short}
             <ChevronDown className={`w-3 h-3 transition-transform ${showLangMenu ? "rotate-180" : ""}`} />
           </button>
           <AnimatePresence>
