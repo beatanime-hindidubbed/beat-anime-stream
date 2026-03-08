@@ -97,15 +97,13 @@ export default function WatchPage() {
     ? `${episodeId}${searchParams.get("ep") ? `?ep=${searchParams.get("ep")}` : ""}`
     : "";
 
-  // Read dub preference: ?lang=dub URL param OR sessionStorage set by HindiPage
-  // sessionStorage is set by HindiPage when clicking an anime — cleared after first use
+  // Default to Hindi dub unless explicitly set otherwise
   const initialCategory = (() => {
-    if (searchParams.get("lang") === "dub") return "dub";
-    if (typeof window !== "undefined" && sessionStorage.getItem("preferDub") === "true") {
-      sessionStorage.removeItem("preferDub");
-      return "dub";
-    }
-    return "sub";
+    if (searchParams.get("lang") === "sub") return "sub";
+    if (searchParams.get("lang") === "engdub") return "engdub";
+    if (searchParams.get("lang") === "raw") return "raw";
+    // Default is Hindi dub
+    return "dub";
   })();
 
   const [category, setCategory] = useState<string>(initialCategory);
