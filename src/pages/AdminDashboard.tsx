@@ -4,12 +4,14 @@ import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { useSiteSettings, ThemeType, PlayerTheme, FontStyle, CustomThemeColors, TextEffect, ParticleEffect, SandboxLink } from "@/hooks/useSiteSettings";
 import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, AreaChart, Area } from "recharts";
 import {
   BarChart3, Image, Activity, LogOut, Plus, Trash2,
   ToggleLeft, ToggleRight, Save, Loader2, CheckCircle, XCircle, Globe,
   Users, Shield, UserPlus, UserMinus, Palette, Type, FileText,
   Crown, Copy, Clock, Zap, Server, RefreshCw, MessageCircle, Ban, VolumeX,
-  AlertTriangle, MonitorPlay, Link2, ScrollText, EyeOff, Sparkles, ExternalLink
+  AlertTriangle, MonitorPlay, Link2, ScrollText, EyeOff, Sparkles, ExternalLink,
+  MessageSquare, TrendingUp, Eye
 } from "lucide-react";
 
 interface Ad {
