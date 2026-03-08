@@ -76,6 +76,7 @@ const THEMES: { key: ThemeType; label: string; colors: string[]; tag?: string }[
   { key: "matsuri", label: "Matsuri", colors: ["#e53e3e", "#ecc94b"], tag: "🏮 Japan" },
   { key: "torii", label: "Torii Gate", colors: ["#c53030", "#c69749"], tag: "⛩️ Japan" },
   { key: "zen", label: "Zen Garden", colors: ["#5a9a6e", "#a0815a"], tag: "🍃 Japan" },
+  { key: "mecha-gaming", label: "Mecha Gaming", colors: ["#00ffff", "#ff00aa"], tag: "🎮 ULTRA" },
 ];
 
 const PLAYER_THEMES: { key: PlayerTheme; label: string; desc: string }[] = [
