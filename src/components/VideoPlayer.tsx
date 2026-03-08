@@ -285,24 +285,7 @@ export default function VideoPlayer({
     wasPlayingRef.current = playing;
   }, [playing]);
 
-  // ── FIX: Catch unexpected pause events and auto-resume ────────────────
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    const onPause = () => {
-      // If video paused but user didn't intend it (e.g. browser interference)
-      // and it was playing before, auto-resume after brief delay
-      if (wasPlayingRef.current && !document.hidden) {
-        setTimeout(() => {
-          if (v.paused && wasPlayingRef.current && !v.ended && !document.hidden) {
-            v.play().catch(() => {});
-          }
-        }, 150);
-      }
-    };
-    v.addEventListener("pause", onPause);
-    return () => v.removeEventListener("pause", onPause);
-  }, []);
+  // Removed over-aggressive auto-resume on pause (was causing user pause to be ignored)
 
   // ── Main HLS ──────────────────────────────────────────────────────────────
   useEffect(() => {
