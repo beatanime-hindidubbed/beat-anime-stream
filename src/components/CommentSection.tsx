@@ -29,8 +29,9 @@ interface Props {
 const RATE_LIMIT_SECONDS = 15;
 
 export default function CommentSection({ episodeId, animeId }: Props) {
-  const { user, isAdmin } = useSupabaseAuth();
+  const { user, isAdmin, isModerator } = useSupabaseAuth();
   const { settings } = useSiteSettings();
+  const canModerate = isAdmin || isModerator;
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState("");
   const [replyTo, setReplyTo] = useState<string | null>(null);
