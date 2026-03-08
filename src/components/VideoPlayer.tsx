@@ -672,9 +672,18 @@ export default function VideoPlayer({
           <motion.div
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            exit={{ opacity: 0, y: 100, scale: 0.95 }}
             transition={{ type: "spring", damping: 20, stiffness: 300 }}
-            className="fixed bottom-3 right-3 z-[999] w-48 sm:w-80 rounded-xl sm:rounded-2xl overflow-hidden shadow-[0_8px_40px_rgba(0,0,0,0.8)] border border-white/10 cursor-pointer"
+            drag="y"
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={0.6}
+            onDragEnd={(_, info) => {
+              if (Math.abs(info.offset.y) > 80 || Math.abs(info.velocity.y) > 500) {
+                setMiniPlayer(false);
+                if (videoRef.current) { videoRef.current.pause(); setPlaying(false); }
+              }
+            }}
+            className="fixed bottom-3 right-3 z-[999] w-48 sm:w-80 rounded-xl sm:rounded-2xl overflow-hidden shadow-[0_8px_40px_rgba(0,0,0,0.8)] border border-white/10 cursor-pointer touch-none"
             onClick={() => wrapperRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })}
             style={{ aspectRatio: "16/9" }}
           >
