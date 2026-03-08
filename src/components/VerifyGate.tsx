@@ -125,8 +125,15 @@ export default function VerifyGate({ children }: Props) {
       return;
     }
 
-    // Already failed this session — block immediately
+    // If previously unverified, re-check once in case user just completed verification
+    // on the /verify page in this same tab/session.
     if (verifiedInMemory.current === false) {
+      const validNow = isValidVerification();
+      if (validNow) {
+        verifiedInMemory.current = true;
+        setAllowed(true);
+        return;
+      }
       setAllowed(false);
       navigate("/verify", { replace: true });
       return;
