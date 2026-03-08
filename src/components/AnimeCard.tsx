@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import { Link } from "react-router-dom";
 import { AnimeItem } from "@/lib/api";
 import { motion } from "framer-motion";
@@ -8,9 +9,12 @@ interface Props {
   index?: number;
 }
 
-export default function AnimeCard({ anime, index = 0 }: Props) {
+const AnimeCard = forwardRef<HTMLDivElement, Props>(({ anime, index = 0 }, ref) => {
+  if (!anime?.id) return null;
+
   return (
     <motion.div
+      ref={ref}
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05, duration: 0.3 }}
@@ -19,9 +23,10 @@ export default function AnimeCard({ anime, index = 0 }: Props) {
         <div className="relative aspect-[3/4] rounded-lg overflow-hidden shadow-card">
           <img
             src={anime.poster || "/placeholder.svg"}
-            alt={anime.name}
+            alt={anime.name || "Anime"}
             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
             loading="lazy"
+            onError={(e) => { (e.target as HTMLImageElement).src = "/placeholder.svg"; }}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
             <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-primary/90 flex items-center justify-center">
@@ -50,7 +55,7 @@ export default function AnimeCard({ anime, index = 0 }: Props) {
         </div>
         <div className="mt-1.5 sm:mt-2">
           <h3 className="text-xs sm:text-sm font-medium text-foreground line-clamp-2 group-hover:text-primary transition-colors leading-tight">
-            {anime.name}
+            {anime.name || "Unknown"}
           </h3>
           {anime.type && (
             <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">{anime.type}{anime.duration ? ` · ${anime.duration}` : ""}</p>
@@ -59,4 +64,8 @@ export default function AnimeCard({ anime, index = 0 }: Props) {
       </Link>
     </motion.div>
   );
-}
+});
+
+AnimeCard.displayName = "AnimeCard";
+
+export default AnimeCard;

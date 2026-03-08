@@ -85,18 +85,22 @@ export interface DetectedFestival {
 }
 
 export function detectCurrentFestival(date?: Date): DetectedFestival | null {
-  const now = date || new Date();
-  const month = now.getMonth();
-  const day = now.getDate();
+  try {
+    const now = date || new Date();
+    const month = now.getMonth();
+    const day = now.getDate();
 
-  for (const festival of FESTIVALS) {
-    for (const d of festival.dates) {
-      if (month === d.month && day >= d.startDay && day <= d.endDay) {
-        return { name: festival.name, theme: festival.theme, particle: festival.particle };
+    for (const festival of FESTIVALS) {
+      for (const d of festival.dates) {
+        if (month === d.month && day >= d.startDay && day <= d.endDay) {
+          return { name: festival.name, theme: festival.theme, particle: festival.particle };
+        }
       }
     }
+    return null;
+  } catch {
+    return null;
   }
-  return null;
 }
 
 export function getUpcomingFestival(date?: Date): { name: string; daysUntil: number } | null {

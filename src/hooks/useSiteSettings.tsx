@@ -472,22 +472,29 @@ function applyTheme(theme: ThemeType, customColors?: CustomThemeColors) {
     },
   };
 
-  if (theme === "custom" && customColors) {
-    const c = customColors;
-    const vars: Record<string, string> = {
-      "--primary": c.primary,
-      "--accent": c.accent,
-      "--background": c.background,
-      "--card": c.card,
-      "--border": c.border,
-      "--gradient-primary": `linear-gradient(135deg, hsl(${c.primary}), hsl(${c.accent}))`,
-      "--gradient-accent": `linear-gradient(135deg, hsl(${c.accent}), hsl(${c.primary}))`,
-      "--theme-pattern": "none",
-    };
+  try {
+    if (theme === "custom" && customColors) {
+      const c = customColors;
+      const vars: Record<string, string> = {
+        "--primary": c.primary || "175 80% 50%",
+        "--accent": c.accent || "330 70% 55%",
+        "--background": c.background || "220 20% 7%",
+        "--card": c.card || "220 18% 10%",
+        "--border": c.border || "220 15% 18%",
+        "--gradient-primary": `linear-gradient(135deg, hsl(${c.primary || "175 80% 50%"}), hsl(${c.accent || "330 70% 55%"}))`,
+        "--gradient-accent": `linear-gradient(135deg, hsl(${c.accent || "330 70% 55%"}), hsl(${c.primary || "175 80% 50%"}))`,
+        "--theme-pattern": "none",
+      };
+      Object.entries(vars).forEach(([k, v]) => root.setProperty(k, v));
+    } else {
+      const vars = themes[theme] || themes.classic;
+      Object.entries(vars).forEach(([k, v]) => root.setProperty(k, v));
+    }
+    document.documentElement.setAttribute("data-theme", theme || "classic");
+  } catch (e) {
+    console.warn("Theme application failed, falling back to classic:", e);
+    const vars = themes.classic;
     Object.entries(vars).forEach(([k, v]) => root.setProperty(k, v));
-  } else {
-    const vars = themes[theme] || themes.classic;
-    Object.entries(vars).forEach(([k, v]) => root.setProperty(k, v));
+    document.documentElement.setAttribute("data-theme", "classic");
   }
-  document.documentElement.setAttribute("data-theme", theme);
 }
