@@ -57,6 +57,8 @@ export interface SiteSettings {
   telegramGroup: string;
   hiddenAnimes: string[];
   bannedAnimes: string[];
+  commentsEnabled: boolean;
+  commentsDisabledAnimes: string[];
   failCountThreshold: number;
   apiEndpoints: string[];
 }
