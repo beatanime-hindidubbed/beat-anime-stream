@@ -18,6 +18,32 @@ import { AnimatePresence, motion } from "framer-motion";
 
 const HINDI_API_BASE = "https://beat-anime-api.onrender.com/api/v1";
 
+// Race multiple API endpoints for faster Hindi source fetching
+async function raceHindiFetch(url: string): Promise<any> {
+  const apis = JSON.parse(localStorage.getItem("beat_api_endpoints") || "[]");
+  const bases = apis.length > 0 ? apis : [HINDI_API_BASE];
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
+  try {
+    const promises = bases.slice(0, 3).map(async (base: string) => {
+      const fullUrl = url.replace(HINDI_API_BASE, base);
+      const res = await fetch(fullUrl, { signal: controller.signal });
+      if (!res.ok) throw new Error(`${res.status}`);
+      return res.json();
+    });
+    const results = await Promise.allSettled(promises);
+    clearTimeout(timeout);
+    const fulfilled = results.find(r => r.status === "fulfilled");
+    if (fulfilled && fulfilled.status === "fulfilled") return fulfilled.value;
+    throw new Error("All APIs failed");
+  } catch {
+    clearTimeout(timeout);
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`${res.status}`);
+    return res.json();
+  }
+}
+
 const LANGUAGES = [
   { code: "sub", label: "English (Sub)", short: "ENG SUB" },
   { code: "dub", label: "Hindi (Dub)", short: "HINDI" },
@@ -44,10 +70,7 @@ async function fetchHindiSources(animeInfo: any, episodeNumber: number): Promise
   const paramValue = anilistId || malId;
 
   const url = `${HINDI_API_BASE}/hindiapi/episode?${paramName}=${paramValue}&season=1&episode=${episodeNumber}&type=series`;
-  const res = await fetch(url);
-  const data = await res.json();
-
-  if (!res.ok || data.status !== 200) throw new Error(data.error || "No Hindi sources found");
+  const data = await raceHindiFetch(url);
 
   const sources = data.data?.streams || data.data?.sources || data.data?.servers || [];
   if (!sources.length) throw new Error("No Hindi sources found");

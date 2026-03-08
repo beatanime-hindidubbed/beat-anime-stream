@@ -3,7 +3,8 @@ import Hls from "hls.js";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   Settings, Subtitles, Gauge, Sun, ChevronRight,
-  SkipForward, SkipBack, Loader2, Layers, Zap
+  SkipForward, SkipBack, Loader2, Layers, Zap,
+  Camera, Repeat, Volume1, SlidersHorizontal
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import PlayerWatermark from "@/components/PlayerWatermark"; // ← A. Added import
@@ -100,6 +101,13 @@ export default function VideoPlayer({
   const [previewHasFrame, setPreviewHasFrame] = useState(false);
   const [previewReady, setPreviewReady] = useState(false);
   const [isMobile, setIsMobile]     = useState(false);
+  // Advanced features
+  const [audioBoost, setAudioBoost] = useState(1); // 1x = normal, up to 3x
+  const [abLoop, setAbLoop] = useState<{ a: number | null; b: number | null }>({ a: null, b: null });
+  const [cinemaMode, setCinemaMode] = useState(false);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
+  const audioSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   // Mini player (YouTube-style scroll follow)
   const [miniPlayer, setMiniPlayer] = useState(false);
   // ── B. Added watermark state and timer ──────────────────────────────────
@@ -128,6 +136,54 @@ export default function VideoPlayer({
   const touchOnSeekBar  = useRef(false);
   // Track last playing state before fullscreen / visibility changes
   const wasPlayingRef   = useRef(false);
+
+  // ── Audio boost via Web Audio API ─────────────────────────────────────
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (audioBoost <= 1) {
+      if (gainNodeRef.current) gainNodeRef.current.gain.value = 1;
+      return;
+    }
+    if (!audioCtxRef.current) {
+      const ctx = new AudioContext();
+      const source = ctx.createMediaElementSource(v);
+      const gain = ctx.createGain();
+      source.connect(gain);
+      gain.connect(ctx.destination);
+      audioCtxRef.current = ctx;
+      gainNodeRef.current = gain;
+      audioSourceRef.current = source;
+    }
+    if (gainNodeRef.current) gainNodeRef.current.gain.value = audioBoost;
+  }, [audioBoost]);
+
+  // ── A-B Loop ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || abLoop.a === null || abLoop.b === null) return;
+    const check = () => {
+      if (v.currentTime >= abLoop.b!) v.currentTime = abLoop.a!;
+    };
+    v.addEventListener("timeupdate", check);
+    return () => v.removeEventListener("timeupdate", check);
+  }, [abLoop]);
+
+  // Screenshot function
+  const takeScreenshot = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = v.videoWidth;
+    canvas.height = v.videoHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(v, 0, 0);
+    const link = document.createElement("a");
+    link.download = `screenshot_${Math.floor(v.currentTime)}s.png`;
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+  };
 
   // Detect mobile
   useEffect(() => {
@@ -825,8 +881,24 @@ export default function VideoPlayer({
                       <span className="flex items-center gap-1 text-white/40 text-xs">{qualityLabel(currentQuality)} <ChevronRight className="w-3 h-3" /></span>
                     </button>
                   )}
+                  <button onClick={() => setSettingsPanel("boost" as any)}
+                    className="flex items-center justify-between w-full px-4 py-3 text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
+                    <span className="flex items-center gap-2.5"><Volume1 className="w-4 h-4 text-white/50" /> Audio Boost</span>
+                    <span className="flex items-center gap-1 text-white/40 text-xs">{audioBoost > 1 ? `${audioBoost}x` : "Off"} <ChevronRight className="w-3 h-3" /></span>
+                  </button>
+                  <button onClick={takeScreenshot}
+                    className="flex items-center justify-between w-full px-4 py-3 text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
+                    <span className="flex items-center gap-2.5"><Camera className="w-4 h-4 text-white/50" /> Screenshot</span>
+                    <span className="text-white/40 text-xs">Save</span>
+                  </button>
+                  <button onClick={() => { const v = videoRef.current; if (!v) return; if (abLoop.a === null) setAbLoop({ a: v.currentTime, b: null }); else if (abLoop.b === null) setAbLoop(prev => ({ ...prev, b: v.currentTime })); else setAbLoop({ a: null, b: null }); }}
+                    className="flex items-center justify-between w-full px-4 py-3 text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
+                    <span className="flex items-center gap-2.5"><Repeat className="w-4 h-4 text-white/50" /> A-B Loop</span>
+                    <span className={`text-xs ${abLoop.a !== null ? "text-primary font-medium" : "text-white/40"}`}>{abLoop.a !== null && abLoop.b !== null ? "Active ✓" : abLoop.a !== null ? "Set B →" : "Set A"}</span>
+                  </button>
                   {[
                     { label: "Ambient", icon: Sun, value: ambientEnabled, toggle: () => setAmbientEnabled(!ambientEnabled) },
+                    { label: "Cinema", icon: SlidersHorizontal, value: cinemaMode, toggle: () => setCinemaMode(!cinemaMode) },
                     { label: "Autoplay", icon: SkipForward, value: autoPlayNext, toggle: () => onAutoPlayToggle?.(!autoPlayNext) },
                   ].map(item => (
                     <button key={item.label} onClick={item.toggle}
@@ -894,6 +966,21 @@ export default function VideoPlayer({
                       className={`w-full px-4 py-2.5 text-sm text-left hover:bg-white/10 ${currentQuality === i ? "text-primary font-semibold" : "text-white/80"}`}>
                       {lvl.height ? `${lvl.height}p` : `${Math.round(lvl.bitrate / 1000)}k`}
                       {lvl.height >= 1080 && <span className="ml-2 text-[10px] text-accent font-bold">HD</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {settingsPanel === ("boost" as any) && (
+                <div className="py-1.5">
+                  <button onClick={() => setSettingsPanel("main")}
+                    className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-white/50 hover:bg-white/10">
+                    <ChevronRight className="w-3 h-3 rotate-180" /> Audio Boost
+                  </button>
+                  <div className="border-t border-white/10 mt-1" />
+                  {[1, 1.5, 2, 2.5, 3].map(b => (
+                    <button key={b} onClick={() => { setAudioBoost(b); setSettingsPanel("main"); }}
+                      className={`w-full px-4 py-2.5 text-sm text-left hover:bg-white/10 transition-colors ${audioBoost === b ? "text-primary font-semibold" : "text-white/80"}`}>
+                      {b === 1 ? "Normal" : `${b}× Boost`}
                     </button>
                   ))}
                 </div>
