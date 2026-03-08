@@ -54,7 +54,7 @@ export default function LoginPage() {
     }
 
     // Max attempts
-    if (attempts >= 8) {
+    if (attempts >= 15) {
       setError("Too many attempts. Please try again later.");
       return;
     }
