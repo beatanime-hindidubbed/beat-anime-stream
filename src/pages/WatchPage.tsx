@@ -31,9 +31,11 @@ async function raceHindiFetch(url: string): Promise<any> {
       if (!res.ok) throw new Error(`${res.status}`);
       return res.json();
     });
-    const result = await Promise.any(promises);
+    const results = await Promise.allSettled(promises);
     clearTimeout(timeout);
-    return result;
+    const fulfilled = results.find(r => r.status === "fulfilled");
+    if (fulfilled && fulfilled.status === "fulfilled") return fulfilled.value;
+    throw new Error("All APIs failed");
   } catch {
     clearTimeout(timeout);
     const res = await fetch(url);
