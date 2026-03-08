@@ -87,6 +87,7 @@ const App = () => (
                       </main>
                       <Footer />
                       <CookieConsent />
+                      <ChatWidget />
                     </>
                   </VerifyGate>
                 }
