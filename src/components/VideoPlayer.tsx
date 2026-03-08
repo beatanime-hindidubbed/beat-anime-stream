@@ -1015,7 +1015,7 @@ export default function VideoPlayer({
           {/* Multi-layer gradient for depth */}
           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent pointer-events-none" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.6) 30%, rgba(0,0,0,0.1) 60%, transparent 100%)" }} />
 
-          <div className="relative px-3 sm:px-5 pb-3 sm:pb-4 pt-12">
+          <div className="relative px-2 sm:px-5 pb-1.5 sm:pb-4 pt-8 sm:pt-12">
 
             {/* ── Seek bar — YouTube-style thick hover ──────────────── */}
             <div
