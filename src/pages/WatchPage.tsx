@@ -527,7 +527,7 @@ export default function WatchPage() {
           <span>
             Streaming via{" "}
             <span className="text-primary font-medium">
-              {category === "dub" ? (selectedHindiSource?.name || "Hindi Server") : streamResult?.server}
+            {category === "dub" ? (selectedHindiSource?.displayName || "Hindi Server") : streamResult?.server}
             </span>
             {" · "}
             <span className={category === "dub" ? "text-orange-400 font-medium" : ""}>
