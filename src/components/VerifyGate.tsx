@@ -161,7 +161,7 @@ export default function VerifyGate({ children }: Props) {
       setAllowed(false);
       navigate("/verify", { replace: true });
     }
-  }, [navigate]);
+  }, [navigate, settings.verificationEnabled]);
 
   // ── Run gate on every route change ────────────────────────────────────────
   // After first check, verifiedInMemory is set so subsequent calls are O(1)
