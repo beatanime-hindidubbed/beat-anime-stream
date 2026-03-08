@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Settings, X, Monitor, Volume2, VolumeX, SkipForward, Subtitles, Crown, Send, Moon, Sun, Cloud, CloudOff, Trash2, History, Gauge } from "lucide-react";
+import { Settings, X, Monitor, Volume2, VolumeX, Subtitles, Crown, Send, Moon, Cloud, Trash2 } from "lucide-react";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { useIsPremium } from "@/hooks/useIsPremium";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
