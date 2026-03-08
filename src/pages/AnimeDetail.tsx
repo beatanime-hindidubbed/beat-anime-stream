@@ -256,23 +256,7 @@ export default function AnimeDetail() {
           ) : episodes.length === 0 ? (
             <p className="text-muted-foreground text-sm">No episodes available yet.</p>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
-              {episodes.map((ep) => (
-                <Link
-                  key={ep.episodeId}
-                  to={`/watch/${ep.episodeId}`}
-                  className={`flex flex-col items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors hover:bg-primary hover:text-primary-foreground ${
-                    ep.isFiller
-                      ? "bg-accent/10 text-accent border border-accent/20"
-                      : "bg-secondary text-secondary-foreground"
-                  }`}
-                >
-                  <span className="text-base font-bold">{ep.number}</span>
-                  {ep.title && <span className="text-[10px] text-muted-foreground truncate max-w-full mt-0.5">{ep.title}</span>}
-                  {ep.isFiller && <span className="text-[9px] text-accent">Filler</span>}
-                </Link>
-              ))}
-            </div>
+            <EpisodeGrid episodes={episodes} animeId={id!} />
           )}
         </div>
 
