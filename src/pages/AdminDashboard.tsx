@@ -306,13 +306,44 @@ export default function AdminDashboard() {
   const tabs = [
     { key: "stats" as const, label: "Stats", icon: BarChart3 },
     { key: "branding" as const, label: "Branding", icon: Palette },
+    { key: "player" as const, label: "Player", icon: MonitorPlay },
     { key: "premium" as const, label: "Premium", icon: Crown },
     { key: "chat" as const, label: "Chat", icon: MessageCircle },
+    { key: "banlist" as const, label: "Ban List", icon: EyeOff },
     { key: "policy" as const, label: "Policies", icon: FileText },
     { key: "ads" as const, label: "Ads", icon: Image },
     { key: "users" as const, label: "Users", icon: Users },
     { key: "api" as const, label: "API", icon: Activity },
+    { key: "logs" as const, label: "Logs", icon: ScrollText },
   ];
+
+  const logAction = async (action: string, details?: string, targetId?: string) => {
+    if (!user) return;
+    await supabase.from("admin_logs").insert({ admin_id: user.id, action, details, target_id: targetId });
+  };
+
+  const saveFavicon = async () => {
+    setSaving(true);
+    await updateSettings({ faviconUrl });
+    await logAction("update_favicon", faviconUrl);
+    setSaving(false); setBrandingSaved(true); setTimeout(() => setBrandingSaved(false), 2000);
+  };
+
+  const addBannedAnime = async () => {
+    if (!newBanId.trim()) return;
+    const next = [...bannedAnimes, newBanId.trim()];
+    setBannedAnimes(next);
+    await updateSettings({ bannedAnimes: next });
+    await logAction("ban_anime", newBanId.trim());
+    setNewBanId("");
+  };
+
+  const removeBannedAnime = async (id: string) => {
+    const next = bannedAnimes.filter(a => a !== id);
+    setBannedAnimes(next);
+    await updateSettings({ bannedAnimes: next });
+    await logAction("unban_anime", id);
+  };
 
 
 
