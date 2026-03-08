@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { store, ContinueWatchingItem, mergeCloudWatchHistory } from "@/lib/store";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
@@ -7,8 +7,8 @@ import AnimeSection from "@/components/AnimeSection";
 import SkeletonCard from "@/components/SkeletonCard";
 import SwipeableBanner from "@/components/SwipeableBanner";
 import { useQuery } from "@tanstack/react-query";
-import { api, HomeData } from "@/lib/api";
-import { X, Trash2 } from "lucide-react";
+import { api, HomeData, AnimeItem } from "@/lib/api";
+import { X, Trash2, Sparkles } from "lucide-react";
 
 function dedup(arr?: any[]) {
   if (!arr) return [];
