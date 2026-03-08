@@ -5,7 +5,7 @@ import { lovable } from "@/integrations/lovable";
 import { motion } from "framer-motion";
 import { Loader2, Eye, EyeOff, Shield, Mail, User, Lock } from "lucide-react";
 
-const RATE_LIMIT_MS = 3000; // 3s between attempts
+const RATE_LIMIT_MS = 2000; // 2s between attempts
 
 export default function LoginPage() {
   const [isRegister, setIsRegister] = useState(false);
