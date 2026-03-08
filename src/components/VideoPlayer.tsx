@@ -313,7 +313,7 @@ export default function VideoPlayer({
 
     if (Hls.isSupported()) {
       const hls = new Hls({
-        maxBufferLength: 20, maxMaxBufferLength: 60,
+        maxBufferLength: 180, maxMaxBufferLength: 300,
         startPosition: startTime || -1, enableWorker: true,
         lowLatencyMode: false, abrEwmaDefaultEstimate: 500000,
         abrBandWidthFactor: 0.95, abrBandWidthUpFactor: 0.7,

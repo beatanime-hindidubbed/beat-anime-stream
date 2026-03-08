@@ -99,7 +99,7 @@ export interface SiteSettings {
 const DEFAULTS: SiteSettings = {
   siteName: "Beat Anime",
   siteIcon: "B",
-  theme: "classic",
+  theme: "jade",
   playerTheme: "default",
   fontStyle: "default",
   textEffect: "none",
