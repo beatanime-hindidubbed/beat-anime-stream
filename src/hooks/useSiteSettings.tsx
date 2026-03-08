@@ -7,7 +7,8 @@ export type ThemeType =
   | "crimson" | "arctic" | "ember"
   | "anime-dark" | "anime-pastel" | "anime-retro" | "dragon" | "galaxy"
   | "bloodmoon" | "phantom" | "jade" | "violet-storm" | "golden-hour"
-  | "netflix" | "custom";
+  | "netflix" | "custom"
+  | "diwali" | "holi" | "independence-day";
 
 export type PlayerTheme = "default" | "minimal" | "cinema" | "retro" | "glassmorphism";
 
