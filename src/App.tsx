@@ -10,6 +10,7 @@ import ChatWidget from "@/components/ChatWidget";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import ScrollToTop from "@/components/ScrollToTop";
+import ParticleCanvas from "@/components/ParticleCanvas";
 import VerifyGate from "@/components/VerifyGate";
 import Index from "./pages/Index";
 import SearchPage from "./pages/SearchPage";
