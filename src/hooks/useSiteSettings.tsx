@@ -33,6 +33,8 @@ const DEFAULTS: SiteSettings = {
   siteName: "Beat Anistream",
   siteIcon: "B",
   theme: "classic",
+  playerTheme: "default",
+  faviconUrl: "",
   errorGif: "",
   loadingGif: "",
   dmcaContent:
@@ -44,6 +46,7 @@ const DEFAULTS: SiteSettings = {
   telegramChannel: "https://t.me/beatanime",
   telegramGroup: "https://t.me/beat_discussion_group",
   hiddenAnimes: [],
+  bannedAnimes: [],
   failCountThreshold: 5,
   apiEndpoints: ["https://beat-anime-api.onrender.com/api/v1"],
 };
