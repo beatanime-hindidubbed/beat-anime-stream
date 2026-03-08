@@ -19,14 +19,18 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isModerator, setIsModerator] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const checkAdmin = useCallback(async (userId: string) => {
     try {
       const { data } = await supabase.rpc("has_role", { _user_id: userId, _role: "admin" });
       setIsAdmin(!!data);
+      const { data: modData } = await supabase.rpc("has_role", { _user_id: userId, _role: "moderator" });
+      setIsModerator(!!modData);
     } catch {
       setIsAdmin(false);
+      setIsModerator(false);
     }
   }, []);
 
