@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { store, ContinueWatchingItem } from "@/lib/store";
+import { store, ContinueWatchingItem, mergeCloudWatchHistory } from "@/lib/store";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import AnimeCard from "@/components/AnimeCard";
 import AnimeSection from "@/components/AnimeSection";
