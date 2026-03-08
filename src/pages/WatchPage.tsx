@@ -45,8 +45,9 @@ async function raceHindiFetch(url: string): Promise<any> {
 }
 
 const LANGUAGES = [
+  { code: "dub", label: "Hindi (Dub)", short: "🇮🇳 HINDI" },
   { code: "sub", label: "English (Sub)", short: "ENG SUB" },
-  { code: "dub", label: "Hindi (Dub)", short: "HINDI" },
+  { code: "engdub", label: "English (Dub)", short: "ENG DUB" },
   { code: "raw", label: "Japanese (Raw)", short: "RAW" },
 ] as const;
 
@@ -96,15 +97,13 @@ export default function WatchPage() {
     ? `${episodeId}${searchParams.get("ep") ? `?ep=${searchParams.get("ep")}` : ""}`
     : "";
 
-  // Read dub preference: ?lang=dub URL param OR sessionStorage set by HindiPage
-  // sessionStorage is set by HindiPage when clicking an anime — cleared after first use
+  // Default to Hindi dub unless explicitly set otherwise
   const initialCategory = (() => {
-    if (searchParams.get("lang") === "dub") return "dub";
-    if (typeof window !== "undefined" && sessionStorage.getItem("preferDub") === "true") {
-      sessionStorage.removeItem("preferDub");
-      return "dub";
-    }
-    return "sub";
+    if (searchParams.get("lang") === "sub") return "sub";
+    if (searchParams.get("lang") === "engdub") return "engdub";
+    if (searchParams.get("lang") === "raw") return "raw";
+    // Default is Hindi dub
+    return "dub";
   })();
 
   const [category, setCategory] = useState<string>(initialCategory);
@@ -211,7 +210,7 @@ export default function WatchPage() {
     return () => { cancelled = true; };
   }, [category, info, currentEp, retryKey]);
 
-  // ── HiAnime (sub/raw) stream loader — unchanged from original ─────────
+  // ── HiAnime (sub/engdub/raw) stream loader ─────────────────────────
   useEffect(() => {
     if (category === "dub" || !fullEpisodeId) return;
     let cancelled = false;
@@ -225,6 +224,9 @@ export default function WatchPage() {
       setHindiIframeSrc(null);
       setRetryMessage("");
 
+      // Map engdub → "dub" for HiAnime API, sub/raw → "sub"
+      const apiCategory = category === "engdub" ? "dub" : category === "raw" ? "sub" : "sub";
+
       for (let i = 0; i < HIANIME_SERVERS.length; i++) {
         if (cancelled) return;
         const server = HIANIME_SERVERS[i];
@@ -233,7 +235,7 @@ export default function WatchPage() {
           await new Promise((r) => setTimeout(r, 800));
         }
         try {
-          const result = await getWorkingStream({ episodeId: fullEpisodeId, category: category === "raw" ? "sub" : category, server });
+          const result = await getWorkingStream({ episodeId: fullEpisodeId, category: apiCategory, server });
           if (cancelled) return;
           if (result) { setSelectedServer(server); setStreamResult(result); setStreamLoading(false); setRetryMessage(""); return; }
         } catch {}
@@ -265,7 +267,8 @@ export default function WatchPage() {
   // ── Build episode navigation links preserving lang param ──────────────
   const buildEpLink = (ep: { episodeId?: string }) => {
     if (!ep.episodeId) return "#";
-    return category === "dub" ? `/watch/${ep.episodeId}?lang=dub` : `/watch/${ep.episodeId}`;
+    if (category !== "sub") return `/watch/${ep.episodeId}?lang=${category}`;
+    return `/watch/${ep.episodeId}`;
   };
 
   const renderPlayer = () => {
@@ -428,15 +431,9 @@ export default function WatchPage() {
                   <button
                     key={lang.code}
                     onClick={() => {
-                      // ── NEW: selecting "dub" redirects to the dedicated Hindi watch page ──
-                      if (lang.code === "dub") {
-                        const epNumber = currentEp?.number || 1;
-                        const baseAnimeId = animeId.includes("?") ? animeId.split("?")[0] : animeId;
-                        navigate(`/hindi/watch/${baseAnimeId}/${epNumber}`);
-                        return;
-                      }
                       setCategory(lang.code);
                       setShowLangMenu(false);
+                      setRetryKey(k => k + 1);
                     }}
                     className={`w-full px-4 py-2.5 text-sm text-left transition-colors hover:bg-secondary/80 ${
                       category === lang.code ? "text-primary font-medium bg-secondary/40" : "text-foreground"

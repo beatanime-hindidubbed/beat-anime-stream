@@ -230,39 +230,46 @@ export default function VideoPlayer({
     return () => v.removeEventListener("contextmenu", prevent);
   }, []);
 
-  // ── FIX: Handle visibility change (mobile tab switch / fullscreen) ────
+  // ── FIX: Handle visibility change — robust auto-resume ─────────────────
   useEffect(() => {
     const handleVisibility = () => {
       const v = videoRef.current;
       if (!v) return;
       if (document.hidden) {
-        // Store state but DON'T pause — let browser handle it
         wasPlayingRef.current = !v.paused;
       } else {
-        // Page became visible again — restore play state if needed
-        if (wasPlayingRef.current && v.paused && !isBuffering) {
-          v.play().catch(() => {});
+        // Resume with multiple retries for stubborn mobile browsers
+        if (wasPlayingRef.current && v.paused) {
+          const tryResume = (attempts = 3) => {
+            if (attempts <= 0 || !v.paused || !wasPlayingRef.current) return;
+            v.play().catch(() => {
+              setTimeout(() => tryResume(attempts - 1), 200);
+            });
+          };
+          tryResume();
         }
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, [isBuffering]);
+  }, []);
 
-  // ── FIX: Handle fullscreen changes on mobile without pausing ─────────
+  // ── FIX: Handle fullscreen changes — robust across all devices ────────
   useEffect(() => {
     const handler = () => {
       const isFs = !!document.fullscreenElement;
       setFullscreen(isFs);
       const v = videoRef.current;
       if (!v) return;
-      // After fullscreen transition, resume if we were playing
+      // After fullscreen transition, resume with retries
       if (wasPlayingRef.current && v.paused) {
-        setTimeout(() => {
-          if (wasPlayingRef.current && v.paused) {
-            v.play().catch(() => {});
-          }
-        }, 300);
+        const tryResume = (attempts = 4) => {
+          if (attempts <= 0 || !v.paused || !wasPlayingRef.current) return;
+          v.play().catch(() => {
+            setTimeout(() => tryResume(attempts - 1), 250);
+          });
+        };
+        setTimeout(() => tryResume(), 200);
       }
     };
     document.addEventListener("fullscreenchange", handler);
@@ -277,6 +284,25 @@ export default function VideoPlayer({
   useEffect(() => {
     wasPlayingRef.current = playing;
   }, [playing]);
+
+  // ── FIX: Catch unexpected pause events and auto-resume ────────────────
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const onPause = () => {
+      // If video paused but user didn't intend it (e.g. browser interference)
+      // and it was playing before, auto-resume after brief delay
+      if (wasPlayingRef.current && !document.hidden) {
+        setTimeout(() => {
+          if (v.paused && wasPlayingRef.current && !v.ended && !document.hidden) {
+            v.play().catch(() => {});
+          }
+        }, 150);
+      }
+    };
+    v.addEventListener("pause", onPause);
+    return () => v.removeEventListener("pause", onPause);
+  }, []);
 
   // ── Main HLS ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -660,7 +686,7 @@ export default function VideoPlayer({
     doubleTapTimer.current = setTimeout(() => {
       if (tapCount.current === 1) togglePlay();
       tapCount.current = 0;
-    }, 280);
+    }, 220); // Reduced from 280ms for snappier response
     if (tapCount.current >= 2) {
       tapCount.current = 0;
       if (doubleTapTimer.current) clearTimeout(doubleTapTimer.current);
