@@ -102,7 +102,7 @@ export default function HindiVideoPlayer({
   const [showSkipIntro, setShowSkipIntro] = useState(false);
   const [showSkipOutro, setShowSkipOutro] = useState(false);
   const [settingsOpen, setSettingsOpen]   = useState(false);
-  const [settingsPanel, setSettingsPanel] = useState<"main"|"speed"|"caption"|"quality">("main");
+  const [settingsPanel, setSettingsPanel] = useState<"main"|"speed"|"caption"|"quality"|"boost">("main");
   const [speed, setSpeed]           = useState(1);
   const [captionsOn, setCaptionsOn] = useState(true);
   const [activeTrackIdx, setActiveTrackIdx] = useState(0);
@@ -119,6 +119,13 @@ export default function HindiVideoPlayer({
   const [previewReady, setPreviewReady] = useState(false);
   const [isMobile, setIsMobile]     = useState(false);
   const [miniPlayer, setMiniPlayer] = useState(false);
+  // Advanced features (ported from English player)
+  const [audioBoost, setAudioBoost] = useState(1);
+  const [abLoop, setAbLoop] = useState<{ a: number | null; b: number | null }>({ a: null, b: null });
+  const [cinemaMode, setCinemaMode] = useState(false);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
+  const audioSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
 
   const hideTimer       = useRef<ReturnType<typeof setTimeout>>();
   const ambientFrameRef = useRef<number>();
