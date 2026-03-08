@@ -32,6 +32,7 @@ import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
 import VerifyPage from "./pages/VerifyPage";
 import ReferralPage from "./pages/ReferralPage";
+import SandboxRedirect from "./pages/SandboxRedirect";
 
 const queryClient = new QueryClient({
   defaultOptions: {
