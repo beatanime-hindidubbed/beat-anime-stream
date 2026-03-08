@@ -45,6 +45,14 @@ const THEMES: { key: ThemeType; label: string; colors: string[] }[] = [
   { key: "neon", label: "Neon", colors: ["#00ffaa", "#aa00ff"] },
   { key: "sakura", label: "Sakura", colors: ["#ff6b9d", "#ff9a4d"] },
   { key: "minimal", label: "Minimal", colors: ["#d0d0d0", "#909090"] },
+  { key: "midnight", label: "Midnight", colors: ["#3b82f6", "#d4a030"] },
+  { key: "ocean", label: "Ocean", colors: ["#06b6d4", "#34d399"] },
+  { key: "sunset", label: "Sunset", colors: ["#f97316", "#eab308"] },
+  { key: "forest", label: "Forest", colors: ["#22c55e", "#84cc16"] },
+  { key: "lavender", label: "Lavender", colors: ["#a78bfa", "#60a5fa"] },
+  { key: "crimson", label: "Crimson", colors: ["#ef4444", "#22d3ee"] },
+  { key: "arctic", label: "Arctic", colors: ["#7dd3fc", "#5eead4"] },
+  { key: "ember", label: "Ember", colors: ["#f59e0b", "#ef4444"] },
 ];
 
 export default function AdminDashboard() {

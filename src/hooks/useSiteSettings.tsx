@@ -1,7 +1,20 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-export type ThemeType = "classic" | "cyberpunk" | "neon" | "sakura" | "minimal";
+export type ThemeType =
+  | "classic"
+  | "cyberpunk"
+  | "neon"
+  | "sakura"
+  | "minimal"
+  | "midnight"
+  | "ocean"
+  | "sunset"
+  | "forest"
+  | "lavender"
+  | "crimson"
+  | "arctic"
+  | "ember";
 
 export interface SiteSettings {
   siteName: string;
@@ -176,6 +189,78 @@ function applyTheme(theme: ThemeType) {
       "--border": "0 0% 15%",
       "--gradient-primary": "linear-gradient(135deg, hsl(0 0% 80%), hsl(0 0% 65%))",
       "--gradient-accent": "linear-gradient(135deg, hsl(0 0% 60%), hsl(0 0% 50%))",
+    },
+    midnight: {
+      "--primary": "220 90% 60%",
+      "--accent": "40 95% 55%",
+      "--background": "230 30% 5%",
+      "--card": "230 25% 8%",
+      "--border": "230 20% 15%",
+      "--gradient-primary": "linear-gradient(135deg, hsl(220 90% 60%), hsl(250 80% 65%))",
+      "--gradient-accent": "linear-gradient(135deg, hsl(40 95% 55%), hsl(30 90% 50%))",
+    },
+    ocean: {
+      "--primary": "195 90% 50%",
+      "--accent": "160 70% 45%",
+      "--background": "200 30% 6%",
+      "--card": "200 25% 9%",
+      "--border": "200 20% 16%",
+      "--gradient-primary": "linear-gradient(135deg, hsl(195 90% 50%), hsl(210 85% 55%))",
+      "--gradient-accent": "linear-gradient(135deg, hsl(160 70% 45%), hsl(180 75% 50%))",
+    },
+    sunset: {
+      "--primary": "15 90% 55%",
+      "--accent": "45 95% 55%",
+      "--background": "15 20% 6%",
+      "--card": "15 15% 9%",
+      "--border": "15 12% 18%",
+      "--gradient-primary": "linear-gradient(135deg, hsl(15 90% 55%), hsl(350 80% 55%))",
+      "--gradient-accent": "linear-gradient(135deg, hsl(45 95% 55%), hsl(30 90% 50%))",
+    },
+    forest: {
+      "--primary": "140 70% 45%",
+      "--accent": "80 60% 50%",
+      "--background": "150 25% 5%",
+      "--card": "150 20% 8%",
+      "--border": "150 15% 16%",
+      "--gradient-primary": "linear-gradient(135deg, hsl(140 70% 45%), hsl(160 65% 40%))",
+      "--gradient-accent": "linear-gradient(135deg, hsl(80 60% 50%), hsl(100 55% 45%))",
+    },
+    lavender: {
+      "--primary": "270 70% 65%",
+      "--accent": "200 70% 60%",
+      "--background": "260 20% 7%",
+      "--card": "260 18% 10%",
+      "--border": "260 14% 18%",
+      "--gradient-primary": "linear-gradient(135deg, hsl(270 70% 65%), hsl(290 65% 60%))",
+      "--gradient-accent": "linear-gradient(135deg, hsl(200 70% 60%), hsl(220 65% 55%))",
+    },
+    crimson: {
+      "--primary": "0 85% 55%",
+      "--accent": "180 80% 50%",
+      "--background": "230 25% 7%",
+      "--card": "230 20% 10%",
+      "--border": "230 15% 18%",
+      "--gradient-primary": "linear-gradient(135deg, hsl(0 85% 55%), hsl(0 70% 45%))",
+      "--gradient-accent": "linear-gradient(135deg, hsl(180 80% 50%), hsl(200 80% 55%))",
+    },
+    arctic: {
+      "--primary": "200 80% 70%",
+      "--accent": "180 50% 60%",
+      "--background": "210 25% 6%",
+      "--card": "210 20% 9%",
+      "--border": "210 15% 17%",
+      "--gradient-primary": "linear-gradient(135deg, hsl(200 80% 70%), hsl(220 75% 65%))",
+      "--gradient-accent": "linear-gradient(135deg, hsl(180 50% 60%), hsl(195 55% 55%))",
+    },
+    ember: {
+      "--primary": "25 95% 55%",
+      "--accent": "0 80% 55%",
+      "--background": "20 25% 5%",
+      "--card": "20 20% 8%",
+      "--border": "20 15% 16%",
+      "--gradient-primary": "linear-gradient(135deg, hsl(25 95% 55%), hsl(15 90% 50%))",
+      "--gradient-accent": "linear-gradient(135deg, hsl(0 80% 55%), hsl(345 75% 50%))",
     },
   };
 
