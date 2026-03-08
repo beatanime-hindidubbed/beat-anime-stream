@@ -329,6 +329,8 @@ export default function AdminDashboard() {
   const tabs = [
     { key: "stats" as const, label: "Stats", icon: BarChart3 },
     { key: "branding" as const, label: "Branding", icon: Palette },
+    { key: "effects" as const, label: "Effects", icon: Sparkles },
+    { key: "sandbox" as const, label: "Sandbox", icon: ExternalLink },
     { key: "player" as const, label: "Player", icon: MonitorPlay },
     { key: "premium" as const, label: "Premium", icon: Crown },
     { key: "chat" as const, label: "Chat", icon: MessageCircle },
