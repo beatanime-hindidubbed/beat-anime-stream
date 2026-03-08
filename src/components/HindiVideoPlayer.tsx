@@ -992,9 +992,8 @@ export default function HindiVideoPlayer({
                       ))}
                     </div>
                   )}
-                </motion.div>
-              )}
-            </AnimatePresence>
+                </div>
+            )}
 
             {/* Controls overlay */}
             <div className={`absolute inset-x-0 bottom-0 transition-opacity duration-300 z-20 ${showControls ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
