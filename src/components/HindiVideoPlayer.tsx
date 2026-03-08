@@ -719,7 +719,7 @@ export default function HindiVideoPlayer({
       )}
 
       {/* Hidden preview video (desktop only, not for iframe) */}
-      {!isMobile && !isIframe && <video ref={previewVideoRef} className="hidden" muted playsInline preload="auto" />}
+      {canHover && !isIframe && <video ref={previewVideoRef} className="hidden" muted playsInline preload="auto" />}
 
       <div
         ref={containerRef}
