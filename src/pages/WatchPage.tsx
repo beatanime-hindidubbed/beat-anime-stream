@@ -441,11 +441,11 @@ export default function WatchPage() {
           )}
           <div className="text-center px-4">
             <p className="text-foreground font-medium mb-1">
-              {category === "dub" ? "No Hindi stream found for this episode" : "Stream unavailable right now"}
+              {category === "dub" ? "Hindi Dub Not Available" : "Stream unavailable right now"}
             </p>
             <p className="text-sm text-muted-foreground mb-4">
               {category === "dub"
-                ? streamError !== "all_failed" ? streamError : "This anime may not have a Hindi dub available"
+                ? "This episode doesn't have a Hindi dub yet"
                 : "Try switching the language or come back later"}
             </p>
             <div className="flex gap-2 justify-center flex-wrap">
@@ -453,7 +453,13 @@ export default function WatchPage() {
                 className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:shadow-glow transition-all duration-200">
                 <RefreshCw className="w-4 h-4" /> Try Again
               </button>
-              {category !== "sub" && (
+              {category === "dub" && (
+                <button onClick={() => setCategory("eng")}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm hover:bg-secondary/80 transition-colors">
+                  Switch to English Dub/Sub
+                </button>
+              )}
+              {category !== "dub" && category !== "sub" && (
                 <button onClick={() => setCategory("sub")}
                   className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm hover:bg-secondary/80 transition-colors">
                   Switch to SUB

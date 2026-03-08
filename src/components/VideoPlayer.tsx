@@ -844,7 +844,7 @@ export default function VideoPlayer({
         {/* ── Settings panel ────────────────────────────────────────── */}
         {settingsOpen && (
             <div
-              className={`${settingsPositionClass} left-2 right-2 sm:left-auto sm:right-3 w-auto sm:w-52 max-w-[calc(100vw-1rem)] max-h-[40vh] sm:max-h-[60vh] overflow-y-auto overscroll-contain touch-pan-y bg-black/95 border border-white/10 rounded-lg sm:rounded-xl shadow-2xl text-[11px] sm:text-sm scrollbar-thin`}
+              className={`${settingsPositionClass} left-2 right-2 sm:left-auto sm:right-3 w-auto sm:w-48 max-w-[calc(100vw-1rem)] max-h-[min(35vh,200px)] sm:max-h-[min(50vh,320px)] overflow-y-auto overscroll-contain touch-pan-y bg-black/95 border border-white/10 rounded-lg sm:rounded-xl shadow-2xl text-[10px] sm:text-sm scrollbar-thin`}
               onClick={(e) => e.stopPropagation()}
               onTouchMove={(e) => e.stopPropagation()}
             >
