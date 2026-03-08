@@ -537,6 +537,39 @@ export default function WatchPage() {
         </div>
       )}
 
+      {/* Comments — collapsed by default, just before recommendations */}
+      {episodeId && (
+        <div className="mt-6 mb-2 border border-border rounded-lg overflow-hidden">
+          <button
+            onClick={() => setCommentsExpanded(!commentsExpanded)}
+            className="w-full flex items-center justify-between px-4 py-3 bg-card hover:bg-secondary/50 transition-colors"
+          >
+            <span className="font-display text-sm font-bold text-foreground flex items-center gap-2">
+              <MessageSquare className="w-4 h-4 text-primary" />
+              Comments
+            </span>
+            <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${commentsExpanded ? "rotate-180" : ""}`} />
+          </button>
+          <AnimatePresence>
+            {commentsExpanded && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div className="px-4 pb-4">
+                  <Suspense fallback={<div className="py-8 text-center text-muted-foreground text-sm">Loading comments...</div>}>
+                    <CommentSection episodeId={fullEpisodeId} animeId={animeId} />
+                  </Suspense>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
+
       {/* Recommended */}
       {recommended.length > 0 && (
         <div className="mt-8">
