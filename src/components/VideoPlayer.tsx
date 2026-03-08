@@ -724,8 +724,8 @@ export default function VideoPlayer({
 
       <div
         ref={containerRef}
-        className="relative w-full aspect-video bg-black rounded-2xl overflow-hidden select-none"
-        style={{ boxShadow: "0 8px 40px rgba(0,0,0,0.7), 0 2px 8px rgba(0,0,0,0.5)" }}
+        className="relative w-full aspect-video bg-black rounded-xl sm:rounded-2xl overflow-hidden select-none"
+        style={{ maxHeight: "calc(100vh - 120px)" }}
         onMouseMove={resetHideTimer}
         onMouseLeave={() => { if (playing && !settingsOpen) setShowControls(false); }}
         onTouchStart={handleContainerTouchStart}
