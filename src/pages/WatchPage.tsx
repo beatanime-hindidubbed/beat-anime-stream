@@ -13,6 +13,7 @@ const CommentSection = lazy(() => import("@/components/CommentSection"));
 import AnimeCard from "@/components/AnimeCard";
 import AnimeReportButton from "@/components/AnimeReportButton";
 import { getWorkingStream, StreamResult, HIANIME_SERVERS } from "@/lib/streaming";
+import { getCachedStream, setCachedStream } from "@/lib/streamCache";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { ChevronLeft, ChevronRight, List, Loader2, Server, RefreshCw, Globe, ChevronDown, MessageSquare, ArrowUp } from "lucide-react";
 
