@@ -599,7 +599,7 @@ export default function HindiVideoPlayer({
       if (!track.cues) return;
       for (let i = 0; i < track.cues.length; i++) {
         const cue = track.cues[i] as VTTCue;
-        if (cue.line === "auto" || cue.line === undefined) cue.line = -4;
+        if (cue.line === "auto" || cue.line === undefined) cue.line = -2;
       }
     };
     const onTrackLoad = () => {
