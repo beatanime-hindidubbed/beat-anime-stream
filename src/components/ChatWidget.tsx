@@ -257,7 +257,7 @@ export default function ChatWidget() {
         <motion.button
           initial={{ scale: 0 }} animate={{ scale: 1 }}
           onClick={() => { setOpen(true); setUnread(0); }}
-          className="fixed bottom-4 right-4 z-50 w-12 h-12 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center"
+          className="fixed bottom-20 right-3 sm:bottom-4 sm:right-4 z-50 w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center safe-area-bottom"
         >
           <MessageCircle className="w-5 h-5" />
           {unread > 0 && (
