@@ -101,6 +101,13 @@ export default function VideoPlayer({
   const [previewHasFrame, setPreviewHasFrame] = useState(false);
   const [previewReady, setPreviewReady] = useState(false);
   const [isMobile, setIsMobile]     = useState(false);
+  // Advanced features
+  const [audioBoost, setAudioBoost] = useState(1); // 1x = normal, up to 3x
+  const [abLoop, setAbLoop] = useState<{ a: number | null; b: number | null }>({ a: null, b: null });
+  const [cinemaMode, setCinemaMode] = useState(false);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
+  const audioSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   // Mini player (YouTube-style scroll follow)
   const [miniPlayer, setMiniPlayer] = useState(false);
   // ── B. Added watermark state and timer ──────────────────────────────────
