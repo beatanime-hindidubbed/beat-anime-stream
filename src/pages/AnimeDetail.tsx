@@ -1,187 +1,300 @@
+import { useParams, Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { api, AnimeInfo, AnimeItem } from "@/lib/api";
+import { store } from "@/lib/store";
+import { useSiteSettings } from "@/hooks/useSiteSettings";
+import AnimeCard from "@/components/AnimeCard";
+import SkeletonCard from "@/components/SkeletonCard";
+import BackButton from "@/components/BackButton";
+import DownloadButton from "@/components/DownloadButton";
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import { Shield, CheckCircle, AlertCircle, Loader2, Smartphone } from "lucide-react";
+import {
+  Play, Bookmark, BookmarkCheck, Star, Clock, Tv, Calendar,
+  ChevronDown, ChevronUp, Loader2, Globe, Mic
+} from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
-const VERIFY_KEY = "beat-verified";
-// Use the correct verification bot API (not supabase proxy)
-const BOT_API = "https://beat-verification-bot.onrender.com/telegram-verify";
-// Secret for the bot API - store in env or hardcode a hashed version
-const BOT_SECRET = import.meta.env.VITE_BOT_SECRET || "beat_secret_2024";
+export default function AnimeDetail() {
+  const { id } = useParams<{ id: string }>();
+  const { isHidden } = useSiteSettings();
+  const [inWatchlist, setInWatchlist] = useState(false);
+  const [showFullDesc, setShowFullDesc] = useState(false);
+  const [selectedSeason, setSelectedSeason] = useState<string | null>(null);
 
-function getDeviceId(): string {
-  let id = localStorage.getItem("beat-device-id");
-  if (!id) {
-    id = crypto.randomUUID();
-    localStorage.setItem("beat-device-id", id);
-  }
-  return id;
-}
+  const { data: info, isLoading, error } = useQuery({
+    queryKey: ["anime-info", id],
+    queryFn: () => api.getAnimeInfo(id!),
+    enabled: !!id,
+  });
 
-interface VerifyState {
-  verified: boolean;
-  telegramId?: string;
-  devicesUsed?: number;
-  devicesMax?: number;
-  code?: string;
-  verifiedAt?: number;
-}
-
-export function isVerified(): boolean {
-  try {
-    const raw = localStorage.getItem(VERIFY_KEY);
-    if (!raw) return false;
-    const state: VerifyState = JSON.parse(raw);
-    return !!state.verified;
-  } catch { return false; }
-}
-
-export default function VerifyPage() {
-  const [code, setCode] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState(false);
-  const [verifyState, setVerifyState] = useState<VerifyState | null>(null);
+  const { data: episodesData, isLoading: epsLoading } = useQuery({
+    queryKey: ["anime-episodes", selectedSeason || id],
+    queryFn: () => api.getEpisodes(selectedSeason || id!),
+    enabled: !!(selectedSeason || id),
+  });
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(VERIFY_KEY);
-      if (raw) {
-        const state = JSON.parse(raw);
-        if (state.verified) { setVerifyState(state); setSuccess(true); }
-      }
-    } catch {}
-  }, []);
+    if (id) setInWatchlist(store.isInWatchlist(id));
+  }, [id]);
 
-  const handleVerify = async () => {
-    if (code.length !== 6) { setError("Enter a 6-digit code"); return; }
-    setLoading(true);
-    setError("");
-
-    try {
-      // Use the correct bot API endpoint with POST and secret in header
-      const res = await fetch(`${BOT_API}?action=verify`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-API-Secret": BOT_SECRET,
-        },
-        body: JSON.stringify({
-          code,
-          device_id: getDeviceId(),
-          secret: BOT_SECRET, // also in body as fallback
-        }),
-      });
-
-      let data: any = {};
-      try { data = await res.json(); } catch {}
-
-      if (!res.ok || data.error) {
-        const msg = data.error || data.message || `Server error (${res.status})`;
-        setError(msg);
-        return;
-      }
-
-      const state: VerifyState = {
-        verified: true,
-        telegramId: data.telegram_id || data.telegramId,
-        devicesUsed: data.devices_used || data.devicesUsed || 1,
-        devicesMax: data.devices_max || data.devicesMax || 2,
-        code,
-        verifiedAt: Date.now(),
-      };
-      localStorage.setItem(VERIFY_KEY, JSON.stringify(state));
-      setVerifyState(state);
-      setSuccess(true);
-    } catch (err: any) {
-      // More specific error messages
-      if (err?.name === "TypeError" && err?.message?.includes("fetch")) {
-        setError("Cannot reach verification server. Check your internet connection.");
-      } else {
-        setError(err?.message || "Verification failed. Please try again.");
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (success && verifyState) {
+  if (isHidden(id || "")) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4 bg-background">
-        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-card border border-border rounded-2xl p-8 text-center max-w-md w-full">
-          <CheckCircle className="w-16 h-16 text-accent mx-auto mb-4" />
-          <h1 className="font-display text-2xl font-bold text-foreground mb-2">Verified!</h1>
-          <p className="text-muted-foreground text-sm mb-4">Your device is verified and linked.</p>
-          <div className="bg-secondary rounded-lg p-4 text-left text-sm space-y-2">
-            <div className="flex justify-between"><span className="text-muted-foreground">Devices</span><span className="text-foreground">{verifyState.devicesUsed}/{verifyState.devicesMax}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Code</span><span className="text-foreground font-mono">{verifyState.code}</span></div>
-          </div>
-          <a href="/" className="inline-block mt-6 px-6 py-2.5 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:opacity-90 transition-opacity">
-            Start Watching
-          </a>
-        </motion.div>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <p className="text-muted-foreground">This anime is currently unavailable.</p>
       </div>
     );
   }
 
+  const anime = info?.anime?.info;
+  const moreInfo = info?.anime?.moreInfo;
+  const stats = anime?.stats;
+  const episodes = episodesData?.episodes || [];
+  const seasons = info?.seasons || [];
+  const related = info?.relatedAnimes || [];
+  const recommended = info?.recommendedAnimes || [];
+
+  const toggleWatchlist = () => {
+    if (!id || !anime) return;
+    if (inWatchlist) {
+      store.removeFromWatchlist(id);
+      setInWatchlist(false);
+    } else {
+      store.addToWatchlist({ id, name: anime.name || "", poster: anime.poster });
+      setInWatchlist(true);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (error || !anime) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-4">
+        <div className="text-center">
+          <p className="text-destructive text-lg font-medium mb-2">Failed to load anime</p>
+          <p className="text-muted-foreground text-sm mb-4">The anime might not exist or the server is down.</p>
+          <Link to="/" className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium">
+            Go Home
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const description = anime.description || "";
+  const shortDesc = description.length > 300 ? description.slice(0, 300) + "..." : description;
+
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 bg-background">
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-border rounded-2xl p-8 max-w-md w-full">
-        <div className="text-center mb-8">
-          <Shield className="w-12 h-12 text-primary mx-auto mb-3" />
-          <h1 className="font-display text-2xl font-bold text-foreground mb-2">Verify Your Device</h1>
-          <p className="text-muted-foreground text-sm">
-            Join our{" "}
-            <a href="https://t.me/beatanime" target="_blank" rel="noopener" className="text-accent hover:underline font-medium">
-              Telegram Channel
-            </a>
-            {" "}to get your 6-digit code from the bot, then enter it below.
-          </p>
-        </div>
-
-        <div className="flex gap-2 justify-center mb-6">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div
-              key={i}
-              className={`w-11 h-14 rounded-lg border-2 flex items-center justify-center text-xl font-bold font-mono transition-colors ${
-                code[i] ? "border-primary text-foreground bg-secondary" : "border-border text-muted-foreground"
-              }`}
-            >
-              {code[i] || "·"}
-            </div>
-          ))}
-        </div>
-
-        <input
-          type="text"
-          inputMode="numeric"
-          maxLength={6}
-          value={code}
-          onChange={(e) => { setCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }}
-          onKeyDown={(e) => { if (e.key === "Enter" && code.length === 6) handleVerify(); }}
-          className="w-full h-12 text-center text-lg font-mono rounded-lg bg-secondary border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary mb-4"
-          placeholder="000000"
-          autoFocus
+    <div className="min-h-screen bg-background">
+      {/* Hero Banner */}
+      <div className="relative w-full h-[40vh] sm:h-[50vh] overflow-hidden">
+        <img
+          src={anime.poster || "/placeholder.svg"}
+          alt={anime.name}
+          className="w-full h-full object-cover blur-sm scale-110 opacity-30"
         />
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
+      </div>
 
-        {error && (
-          <div className="flex items-center gap-2 text-destructive text-sm mb-4 bg-destructive/10 rounded-lg px-3 py-2">
-            <AlertCircle className="w-4 h-4 shrink-0" /> {error}
+      <div className="container -mt-32 sm:-mt-40 relative z-10 pb-12">
+        <BackButton />
+
+        <div className="flex flex-col sm:flex-row gap-6 mt-4">
+          {/* Poster */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex-shrink-0 w-40 sm:w-52 mx-auto sm:mx-0"
+          >
+            <img
+              src={anime.poster || "/placeholder.svg"}
+              alt={anime.name}
+              className="w-full rounded-xl shadow-2xl border border-border"
+            />
+          </motion.div>
+
+          {/* Info */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="flex-1 min-w-0"
+          >
+            <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground leading-tight mb-2">
+              {anime.name}
+            </h1>
+
+            {/* Stats badges */}
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              {stats?.rating && (
+                <span className="flex items-center gap-1 px-2 py-1 rounded-md bg-accent/20 text-accent text-xs font-medium">
+                  <Star className="w-3 h-3" /> {stats.rating}
+                </span>
+              )}
+              {stats?.type && (
+                <span className="flex items-center gap-1 px-2 py-1 rounded-md bg-primary/20 text-primary text-xs font-medium">
+                  <Tv className="w-3 h-3" /> {stats.type}
+                </span>
+              )}
+              {stats?.duration && (
+                <span className="flex items-center gap-1 px-2 py-1 rounded-md bg-secondary text-secondary-foreground text-xs font-medium">
+                  <Clock className="w-3 h-3" /> {stats.duration}
+                </span>
+              )}
+              {stats?.quality && (
+                <span className="px-2 py-1 rounded-md bg-secondary text-secondary-foreground text-xs font-medium">
+                  {stats.quality}
+                </span>
+              )}
+              {stats?.episodes?.sub != null && (
+                <span className="px-2 py-1 rounded-md bg-primary/20 text-primary text-xs font-medium">
+                  SUB {stats.episodes.sub}
+                </span>
+              )}
+              {stats?.episodes?.dub != null && (
+                <span className="px-2 py-1 rounded-md bg-accent/20 text-accent text-xs font-medium">
+                  DUB {stats.episodes.dub}
+                </span>
+              )}
+            </div>
+
+            {/* More info */}
+            {moreInfo && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1.5 mb-4 text-xs">
+                {Object.entries(moreInfo).slice(0, 9).map(([k, v]) => (
+                  <div key={k}>
+                    <span className="text-muted-foreground capitalize">{k.replace(/([A-Z])/g, " $1")}: </span>
+                    <span className="text-foreground">{v}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Description */}
+            <div className="mb-4">
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {showFullDesc ? description : shortDesc}
+              </p>
+              {description.length > 300 && (
+                <button
+                  onClick={() => setShowFullDesc(!showFullDesc)}
+                  className="flex items-center gap-1 text-xs text-primary mt-1 hover:underline"
+                >
+                  {showFullDesc ? <><ChevronUp className="w-3 h-3" /> Show less</> : <><ChevronDown className="w-3 h-3" /> Read more</>}
+                </button>
+              )}
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex flex-wrap gap-3">
+              {episodes.length > 0 && (
+                <Link
+                  to={`/watch/${episodes[0].episodeId}`}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold text-sm hover:opacity-90 transition-opacity"
+                >
+                  <Play className="w-4 h-4" /> Watch Now
+                </Link>
+              )}
+              <button
+                onClick={toggleWatchlist}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                  inWatchlist
+                    ? "bg-accent/20 text-accent border border-accent/30"
+                    : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                }`}
+              >
+                {inWatchlist ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
+                {inWatchlist ? "In Watchlist" : "Add to Watchlist"}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+
+        {/* Seasons */}
+        {seasons.length > 1 && (
+          <div className="mt-8">
+            <h2 className="font-display text-lg font-bold text-foreground mb-3">Seasons</h2>
+            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+              {seasons.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => setSelectedSeason(s.id || null)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+                    (selectedSeason || id) === s.id
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                  }`}
+                >
+                  {s.poster && <img src={s.poster} alt="" className="w-6 h-8 rounded object-cover" />}
+                  {s.title || s.name || "Season"}
+                  {s.isCurrent && <span className="text-[10px] bg-accent/20 text-accent px-1.5 py-0.5 rounded">Current</span>}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
-        <button
-          onClick={handleVerify}
-          disabled={loading || code.length !== 6}
-          className="w-full py-3 rounded-lg bg-primary text-primary-foreground font-bold text-sm hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
-        >
-          {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</> : "Verify Device"}
-        </button>
-
-        <div className="mt-6 flex items-center gap-2 text-xs text-muted-foreground">
-          <Smartphone className="w-4 h-4" />
-          <span>Max 2 devices per code. 3rd device kicks oldest.</span>
+        {/* Episodes */}
+        <div className="mt-8">
+          <h2 className="font-display text-lg font-bold text-foreground mb-3 flex items-center gap-2">
+            Episodes {episodesData?.totalEpisodes ? `(${episodesData.totalEpisodes})` : ""}
+          </h2>
+          {epsLoading ? (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" /> Loading episodes...
+            </div>
+          ) : episodes.length === 0 ? (
+            <p className="text-muted-foreground text-sm">No episodes available yet.</p>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
+              {episodes.map((ep) => (
+                <Link
+                  key={ep.episodeId}
+                  to={`/watch/${ep.episodeId}`}
+                  className={`flex flex-col items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors hover:bg-primary hover:text-primary-foreground ${
+                    ep.isFiller
+                      ? "bg-accent/10 text-accent border border-accent/20"
+                      : "bg-secondary text-secondary-foreground"
+                  }`}
+                >
+                  <span className="text-base font-bold">{ep.number}</span>
+                  {ep.title && <span className="text-[10px] text-muted-foreground truncate max-w-full mt-0.5">{ep.title}</span>}
+                  {ep.isFiller && <span className="text-[9px] text-accent">Filler</span>}
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
-      </motion.div>
+
+        {/* Related Anime */}
+        {related.length > 0 && (
+          <div className="mt-10">
+            <h2 className="font-display text-lg font-bold text-foreground mb-4">Related</h2>
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
+              {related.slice(0, 8).map((a, i) => (
+                <AnimeCard key={a.id} anime={a} index={i} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Recommended */}
+        {recommended.length > 0 && (
+          <div className="mt-10">
+            <h2 className="font-display text-lg font-bold text-foreground mb-4">Recommended</h2>
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
+              {recommended.slice(0, 8).map((a, i) => (
+                <AnimeCard key={a.id} anime={a} index={i} />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
