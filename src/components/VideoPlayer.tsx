@@ -1015,7 +1015,7 @@ export default function VideoPlayer({
 
             {/* ── Seek bar — YouTube-style thick hover ──────────────── */}
             <div
-              className="w-full mb-3 sm:mb-3.5 cursor-pointer group/progress relative"
+              className="w-full mb-3 sm:mb-3.5 cursor-pointer group/progress relative touch-none"
               style={{ height: "32px", display: "flex", alignItems: "center" }}
               onClick={seek}
               onMouseMove={handleProgressHover}
