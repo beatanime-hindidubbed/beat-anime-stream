@@ -546,12 +546,10 @@ export default function VideoPlayer({
   };
 
   const toggleFullscreen = () => {
-    flashWatermark(); // ← C. Added
+    flashWatermark();
     if (!containerRef.current) return;
-    wasPlayingRef.current = playing;
     if (!document.fullscreenElement) {
       containerRef.current.requestFullscreen().catch(() => {
-        // Fallback for iOS Safari
         const v = containerRef.current as any;
         if (v?.webkitRequestFullscreen) v.webkitRequestFullscreen();
       });

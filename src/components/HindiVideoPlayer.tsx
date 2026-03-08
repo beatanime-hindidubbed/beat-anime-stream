@@ -553,12 +553,8 @@ export default function HindiVideoPlayer({
     if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
   };
 
-  // ── FIX: toggleFullscreen reads wasPlayingRef instead of stale `playing` state ──
   const toggleFullscreen = () => {
     if (!containerRef.current) return;
-    // Store current play state from the video element directly (not from stale React state)
-    const v = videoRef.current;
-    wasPlayingRef.current = v ? !v.paused : playing;
     if (!document.fullscreenElement) {
       containerRef.current.requestFullscreen().catch(() => {
         const el = containerRef.current as any;
