@@ -244,45 +244,10 @@ export default function HindiVideoPlayer({
     return () => v.removeEventListener("contextmenu", prevent);
   }, []);
 
-  // ── FIX: Handle visibility change — robust auto-resume ─────────────────
-  useEffect(() => {
-    const handleVisibility = () => {
-      const v = videoRef.current;
-      if (!v) return;
-      if (document.hidden) {
-        wasPlayingRef.current = !v.paused;
-      } else {
-        if (wasPlayingRef.current && v.paused) {
-          const tryResume = (attempts = 3) => {
-            if (attempts <= 0 || !v.paused || !wasPlayingRef.current) return;
-            v.play().catch(() => {
-              setTimeout(() => tryResume(attempts - 1), 200);
-            });
-          };
-          tryResume();
-        }
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, []);
-
-  // ── FIX: Handle fullscreen changes — robust across all devices ────────
+  // ── Handle fullscreen state tracking ────────────────────────────────────
   useEffect(() => {
     const handler = () => {
-      const isFs = !!document.fullscreenElement;
-      setFullscreen(isFs);
-      const v = videoRef.current;
-      if (!v) return;
-      if (wasPlayingRef.current && v.paused) {
-        const tryResume = (attempts = 4) => {
-          if (attempts <= 0 || !v.paused || !wasPlayingRef.current) return;
-          v.play().catch(() => {
-            setTimeout(() => tryResume(attempts - 1), 250);
-          });
-        };
-        setTimeout(() => tryResume(), 200);
-      }
+      setFullscreen(!!document.fullscreenElement);
     };
     document.addEventListener("fullscreenchange", handler);
     document.addEventListener("webkitfullscreenchange", handler);
@@ -291,11 +256,6 @@ export default function HindiVideoPlayer({
       document.removeEventListener("webkitfullscreenchange", handler);
     };
   }, []);
-
-  // Track wasPlayingRef continuously
-  useEffect(() => { wasPlayingRef.current = playing; }, [playing]);
-
-  // Removed over-aggressive auto-resume on pause (was causing user pause to be ignored)
 
   // ── HLS loader ────────────────────────────────────────────────────────
   // Hindi CDN URLs need specific Referer headers — always proxy them
@@ -593,12 +553,8 @@ export default function HindiVideoPlayer({
     if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
   };
 
-  // ── FIX: toggleFullscreen reads wasPlayingRef instead of stale `playing` state ──
   const toggleFullscreen = () => {
     if (!containerRef.current) return;
-    // Store current play state from the video element directly (not from stale React state)
-    const v = videoRef.current;
-    wasPlayingRef.current = v ? !v.paused : playing;
     if (!document.fullscreenElement) {
       containerRef.current.requestFullscreen().catch(() => {
         const el = containerRef.current as any;
