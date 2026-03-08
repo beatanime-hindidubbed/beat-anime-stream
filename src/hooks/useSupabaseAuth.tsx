@@ -6,6 +6,7 @@ interface AuthCtx {
   user: User | null;
   session: Session | null;
   isAdmin: boolean;
+  isModerator: boolean;
   loading: boolean;
   login: (email: string, password: string) => Promise<{ error?: string }>;
   register: (email: string, password: string, username: string) => Promise<{ error?: string }>;
