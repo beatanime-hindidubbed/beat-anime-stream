@@ -206,7 +206,7 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <Ctx.Provider value={{ settings, updateSettings, reportAnimeFail, isHidden }}>
+    <Ctx.Provider value={{ settings, updateSettings, reportAnimeFail, isHidden, currentFestival }}>
       {children}
     </Ctx.Provider>
   );
