@@ -55,7 +55,7 @@ function makeAccessor(enc: string) {
 
 export default function VideoPlayer({
   src, tracks, intro, outro, onTimeUpdate, onEnded,
-  startTime, ambientMode = false, autoPlayNext = true, onAutoPlayToggle,
+  startTime, ambientMode = false, autoPlayNext = true, onAutoPlayToggle, disableInternalMiniPlayer = false,
 }: Props) {
   const videoRef     = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
