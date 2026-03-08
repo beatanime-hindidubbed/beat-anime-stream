@@ -915,43 +915,43 @@ export default function VideoPlayer({
                 </div>
               )}
               {settingsPanel === "caption" && (
-                <div className="py-1.5">
+                <div className="py-1">
                   <button onClick={() => setSettingsPanel("main")}
-                    className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-white/50 hover:bg-white/10">
+                    className="flex items-center gap-2 w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-white/50 hover:bg-white/10">
                     <ChevronRight className="w-3 h-3 rotate-180" /> Captions
                   </button>
-                  <div className="border-t border-white/10 mt-1" />
+                  <div className="border-t border-white/10 mt-0.5" />
                   <button onClick={() => {
                     setCaptionsOn(false);
                     const v = videoRef.current;
                     if (v) for (let i = 0; i < v.textTracks.length; i++) v.textTracks[i].mode = "hidden";
                     setSettingsPanel("main");
-                  }} className={`w-full px-4 py-2.5 text-sm text-left hover:bg-white/10 ${!captionsOn ? "text-primary font-semibold" : "text-white/80"}`}>
+                  }} className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 ${!captionsOn ? "text-primary font-semibold" : "text-white/80"}`}>
                     Off
                   </button>
                   {subtitleTracks.map((t, i) => (
                     <button key={i} onClick={() => { setCaptionsOn(true); selectTrack(i); }}
-                      className={`w-full px-4 py-2.5 text-sm text-left hover:bg-white/10 ${captionsOn && activeTrackIdx === i ? "text-primary font-semibold" : "text-white/80"}`}>
+                      className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 ${captionsOn && activeTrackIdx === i ? "text-primary font-semibold" : "text-white/80"}`}>
                       {t.label || "Unknown"}
                     </button>
                   ))}
-                  {subtitleTracks.length === 0 && <p className="px-4 py-2 text-xs text-white/30">No captions available</p>}
+                  {subtitleTracks.length === 0 && <p className="px-3 py-1.5 text-[10px] text-white/30">No captions available</p>}
                 </div>
               )}
               {settingsPanel === "quality" && (
-                <div className="py-1.5">
+                <div className="py-1">
                   <button onClick={() => setSettingsPanel("main")}
-                    className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-white/50 hover:bg-white/10">
+                    className="flex items-center gap-2 w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-white/50 hover:bg-white/10">
                     <ChevronRight className="w-3 h-3 rotate-180" /> Quality
                   </button>
-                  <div className="border-t border-white/10 mt-1" />
+                  <div className="border-t border-white/10 mt-0.5" />
                   <button onClick={() => changeQuality(-1)}
-                    className={`w-full px-4 py-2.5 text-sm text-left hover:bg-white/10 ${currentQuality === -1 ? "text-primary font-semibold" : "text-white/80"}`}>
+                    className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 ${currentQuality === -1 ? "text-primary font-semibold" : "text-white/80"}`}>
                     Auto
                   </button>
                   {qualityLevels.map((lvl, i) => (
                     <button key={i} onClick={() => changeQuality(i)}
-                      className={`w-full px-4 py-2.5 text-sm text-left hover:bg-white/10 ${currentQuality === i ? "text-primary font-semibold" : "text-white/80"}`}>
+                      className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 ${currentQuality === i ? "text-primary font-semibold" : "text-white/80"}`}>
                       {lvl.height ? `${lvl.height}p` : `${Math.round(lvl.bitrate / 1000)}k`}
                       {lvl.height >= 1080 && <span className="ml-2 text-[10px] text-accent font-bold">HD</span>}
                     </button>
@@ -959,15 +959,15 @@ export default function VideoPlayer({
                 </div>
               )}
               {settingsPanel === ("boost" as any) && (
-                <div className="py-1.5">
+                <div className="py-1">
                   <button onClick={() => setSettingsPanel("main")}
-                    className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-white/50 hover:bg-white/10">
+                    className="flex items-center gap-2 w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-white/50 hover:bg-white/10">
                     <ChevronRight className="w-3 h-3 rotate-180" /> Audio Boost
                   </button>
-                  <div className="border-t border-white/10 mt-1" />
+                  <div className="border-t border-white/10 mt-0.5" />
                   {[1, 1.5, 2, 2.5, 3].map(b => (
                     <button key={b} onClick={() => { setAudioBoost(b); setSettingsPanel("main"); }}
-                      className={`w-full px-4 py-2.5 text-sm text-left hover:bg-white/10 transition-colors ${audioBoost === b ? "text-primary font-semibold" : "text-white/80"}`}>
+                      className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 transition-colors ${audioBoost === b ? "text-primary font-semibold" : "text-white/80"}`}>
                       {b === 1 ? "Normal" : `${b}× Boost`}
                     </button>
                   ))}
