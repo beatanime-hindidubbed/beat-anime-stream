@@ -1048,23 +1048,23 @@ export default function HindiVideoPlayer({
                   )}
                 </div>
 
-                <div className="flex items-center justify-between gap-1">
-                  <div className="flex items-center gap-0.5 sm:gap-1">
+                <div className="flex items-center justify-between gap-0.5 sm:gap-1">
+                  <div className="flex items-center gap-0">
                     <button onClick={() => { const v = videoRef.current; if (v) { v.currentTime = Math.max(0, v.currentTime - 10); flashCenter("rw"); } }}
-                      className="relative w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all rounded-full group/btn overflow-hidden">
+                      className="relative w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all rounded-full group/btn overflow-hidden">
                       <span className="absolute inset-0 rounded-full bg-white/0 group-hover/btn:bg-white/10 transition-colors duration-150" />
-                      <SkipBack className="relative w-4.5 h-4.5 sm:w-4 sm:h-4" />
+                      <SkipBack className="relative w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     </button>
                     <button onClick={togglePlay}
-                      className="relative w-11 h-11 sm:w-10 sm:h-10 flex items-center justify-center transition-all rounded-full group/btn overflow-hidden">
+                      className="relative w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center transition-all rounded-full group/btn overflow-hidden">
                       <span className="absolute inset-0 rounded-full bg-white/0 group-hover/btn:bg-white/15 transition-colors duration-150" />
-                      {playing ? <Pause className="relative w-5 h-5 sm:w-4.5 sm:h-4.5 text-white drop-shadow-md" />
-                               : <Play  className="relative w-5 h-5 sm:w-4.5 sm:h-4.5 text-white drop-shadow-md ml-0.5" />}
+                      {playing ? <Pause className="relative w-4 h-4 sm:w-4.5 sm:h-4.5 text-white drop-shadow-md" />
+                               : <Play  className="relative w-4 h-4 sm:w-4.5 sm:h-4.5 text-white drop-shadow-md ml-0.5" />}
                     </button>
                     <button onClick={() => { const v = videoRef.current; if (v) { v.currentTime = Math.min(v.duration, v.currentTime + 10); flashCenter("ff"); } }}
-                      className="relative w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all rounded-full group/btn overflow-hidden">
+                      className="relative w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all rounded-full group/btn overflow-hidden">
                       <span className="absolute inset-0 rounded-full bg-white/0 group-hover/btn:bg-white/10 transition-colors duration-150" />
-                      <SkipForward className="relative w-4.5 h-4.5 sm:w-4 sm:h-4" />
+                      <SkipForward className="relative w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     </button>
 
                     <div className="hidden sm:flex items-center gap-1 group/vol">
@@ -1084,42 +1084,36 @@ export default function HindiVideoPlayer({
                       </div>
                     </div>
 
-                    <div className="hidden xs:flex items-center ml-1.5">
-                      <span className="text-[11px] sm:text-xs font-medium tabular-nums" style={{ color: "rgba(255,255,255,0.9)" }}>{fmt(currentTime)}</span>
-                      <span className="text-[11px] sm:text-xs mx-1" style={{ color: "rgba(255,255,255,0.3)" }}>/</span>
-                      <span className="text-[11px] sm:text-xs tabular-nums" style={{ color: "rgba(255,255,255,0.5)" }}>{fmt(duration)}</span>
+                    <div className="flex items-center ml-1">
+                      <span className="text-[9px] sm:text-xs font-medium tabular-nums" style={{ color: "rgba(255,255,255,0.9)" }}>{fmt(currentTime)}</span>
+                      <span className="text-[9px] sm:text-xs mx-0.5 sm:mx-1" style={{ color: "rgba(255,255,255,0.3)" }}>/</span>
+                      <span className="text-[9px] sm:text-xs tabular-nums" style={{ color: "rgba(255,255,255,0.5)" }}>{fmt(duration)}</span>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-0.5">
+                  <div className="flex items-center gap-0">
                     {speed !== 1 && (
-                      <span className="text-[10px] sm:text-xs text-primary font-bold px-1.5 py-0.5 rounded-md bg-primary/15 border border-primary/20">{speed}×</span>
+                      <span className="text-[8px] sm:text-xs text-primary font-bold px-1 sm:px-1.5 py-0.5 rounded bg-primary/15 border border-primary/20">{speed}×</span>
                     )}
                     {currentQuality !== -1 && qualityLevels[currentQuality] && (
                       <span className="hidden sm:inline text-[10px] text-accent font-medium px-1.5 py-0.5 rounded-md bg-accent/10 border border-accent/20">{qualityLabel(currentQuality)}</span>
                     )}
                     <button onClick={toggleMute}
-                      className="sm:hidden relative w-9 h-9 flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all rounded-full group/btn overflow-hidden">
+                      className="sm:hidden relative w-7 h-7 flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all rounded-full group/btn overflow-hidden">
                       <span className="absolute inset-0 rounded-full bg-white/0 group-hover/btn:bg-white/10 transition-colors" />
-                      {muted || volume === 0 ? <VolumeX className="relative w-4 h-4" /> : <Volume2 className="relative w-4 h-4" />}
+                      {muted || volume === 0 ? <VolumeX className="relative w-3.5 h-3.5" /> : <Volume2 className="relative w-3.5 h-3.5" />}
                     </button>
                     <button onClick={() => { setSettingsOpen(!settingsOpen); setSettingsPanel("main"); }}
-                      className={`relative w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center transition-all rounded-full group/btn overflow-hidden ${settingsOpen ? "text-primary" : "text-white/70 hover:text-white"}`}>
+                      className={`relative w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center transition-all rounded-full group/btn overflow-hidden ${settingsOpen ? "text-primary" : "text-white/70 hover:text-white"}`}>
                       <span className={`absolute inset-0 rounded-full transition-colors ${settingsOpen ? "bg-primary/15" : "bg-white/0 group-hover/btn:bg-white/10"}`} />
-                      <Settings className={`relative w-4 h-4 transition-transform duration-300 ${settingsOpen ? "rotate-45" : ""}`} />
+                      <Settings className={`relative w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform duration-300 ${settingsOpen ? "rotate-45" : ""}`} />
                     </button>
                     <button onClick={toggleFullscreen}
-                      className="relative w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all rounded-full group/btn overflow-hidden">
+                      className="relative w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all rounded-full group/btn overflow-hidden">
                       <span className="absolute inset-0 rounded-full bg-white/0 group-hover/btn:bg-white/10 transition-colors" />
-                      {fullscreen ? <Minimize className="relative w-4 h-4" /> : <Maximize className="relative w-4 h-4" />}
+                      {fullscreen ? <Minimize className="relative w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Maximize className="relative w-3.5 h-3.5 sm:w-4 sm:h-4" />}
                     </button>
                   </div>
-                </div>
-
-                <div className="sm:hidden flex justify-center mt-1">
-                  <span className="text-[10px] tabular-nums" style={{ color: "rgba(255,255,255,0.4)" }}>
-                    {fmt(currentTime)} / {fmt(duration)}
-                  </span>
                 </div>
               </div>
             </div>
