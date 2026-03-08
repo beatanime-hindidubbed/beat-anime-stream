@@ -97,7 +97,7 @@ interface SiteSettingsCtx {
   settings: SiteSettings;
   updateSettings: (partial: Partial<SiteSettings>) => Promise<void>;
   reportAnimeFail: (animeId: string) => void;
-  isHidden: (animeId: string) => boolean;
+  isHidden: (animeId: string, animeName?: string) => boolean;
   currentFestival: DetectedFestival | null;
 }
 
