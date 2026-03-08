@@ -984,7 +984,7 @@ export default function VideoPlayer({
                     </button>
                   ))}
                 </div>
-              )
+              )}
             </motion.div>
           )}
         </AnimatePresence>
