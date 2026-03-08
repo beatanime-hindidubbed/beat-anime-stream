@@ -91,10 +91,12 @@ export interface SiteSettings {
   apiEndpoints: string[];
   chatEnabled: boolean;
   chatPermissions: ChatPermissions;
+  verificationEnabled: boolean;
+  verificationMode: "code" | "captcha" | "checkbox";
 }
 
 const DEFAULTS: SiteSettings = {
-  siteName: "Beat Anistream",
+  siteName: "Beat Anime",
   siteIcon: "B",
   theme: "classic",
   playerTheme: "default",
@@ -123,6 +125,8 @@ const DEFAULTS: SiteSettings = {
   apiEndpoints: ["https://beat-anime-api.onrender.com/api/v1"],
   chatEnabled: true,
   chatPermissions: DEFAULT_CHAT_PERMISSIONS,
+  verificationEnabled: true,
+  verificationMode: "code" as const,
 };
 
 interface SiteSettingsCtx {

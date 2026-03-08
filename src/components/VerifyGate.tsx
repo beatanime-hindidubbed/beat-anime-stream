@@ -1,6 +1,7 @@
 // src/components/VerifyGate.tsx — BULLETPROOF
 import { useEffect, useState, ReactNode, useRef, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useSiteSettings } from "@/hooks/useSiteSettings";
 
 // ─── Only these paths are accessible without verification ───────────────────
 const PUBLIC_PATHS = [
@@ -101,6 +102,7 @@ interface Props { children: ReactNode }
 export default function VerifyGate({ children }: Props) {
   const navigate  = useNavigate();
   const location  = useLocation();
+  const { settings } = useSiteSettings();
 
   /**
    * verifiedInMemory is the single source of truth for this session.
@@ -113,8 +115,15 @@ export default function VerifyGate({ children }: Props) {
 
   // ── Core gate function ─────────────────────────────────────────────────────
   const gate = useCallback((pathname: string) => {
-    // Public paths are always allowed — no verification needed
+    // Public paths are always allowed
     if (isPublicPath(pathname)) {
+      setAllowed(true);
+      return;
+    }
+
+    // If verification is disabled by admin, allow everything
+    if (!settings.verificationEnabled) {
+      verifiedInMemory.current = true;
       setAllowed(true);
       return;
     }
@@ -152,7 +161,7 @@ export default function VerifyGate({ children }: Props) {
       setAllowed(false);
       navigate("/verify", { replace: true });
     }
-  }, [navigate]);
+  }, [navigate, settings.verificationEnabled]);
 
   // ── Run gate on every route change ────────────────────────────────────────
   // After first check, verifiedInMemory is set so subsequent calls are O(1)
