@@ -68,10 +68,7 @@ async function fetchHindiSources(animeInfo: any, episodeNumber: number): Promise
   const paramValue = anilistId || malId;
 
   const url = `${HINDI_API_BASE}/hindiapi/episode?${paramName}=${paramValue}&season=1&episode=${episodeNumber}&type=series`;
-  const res = await fetch(url);
-  const data = await res.json();
-
-  if (!res.ok || data.status !== 200) throw new Error(data.error || "No Hindi sources found");
+  const data = await raceHindiFetch(url);
 
   const sources = data.data?.streams || data.data?.sources || data.data?.servers || [];
   if (!sources.length) throw new Error("No Hindi sources found");
