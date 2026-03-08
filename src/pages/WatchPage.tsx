@@ -389,17 +389,6 @@ export default function WatchPage() {
 
       <div className="mb-2">{renderPlayer()}</div>
 
-  // PiP: show mini player when main player scrolls out of view
-  useEffect(() => {
-    const el = playerWrapperRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setShowPip(!entry.isIntersecting),
-      { threshold: 0.15 }
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
 
       {/* Stream info */}
       {(streamResult || hindiHlsSrc || hindiIframeSrc) && (
