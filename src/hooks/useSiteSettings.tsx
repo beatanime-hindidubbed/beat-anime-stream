@@ -96,7 +96,7 @@ export interface SiteSettings {
 }
 
 const DEFAULTS: SiteSettings = {
-  siteName: "Beat Anistream",
+  siteName: "Beat Anime",
   siteIcon: "B",
   theme: "classic",
   playerTheme: "default",
