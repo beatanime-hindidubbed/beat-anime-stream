@@ -138,7 +138,7 @@ export default function DownloadButton({
   };
 
   const downloadHLS = async (proxyUrl: string, apiBase: string, signal: AbortSignal): Promise<Uint8Array> => {
-    const referer     = extractParam(proxyUrl, "referer") || "https://megacloud.blog/";
+    const referer     = extractParam(proxyUrl, "referer") || undefined;
     const originalUrl = extractParam(proxyUrl, "url");
 
     const m3u8Res = await fetch(proxyUrl, { signal });
