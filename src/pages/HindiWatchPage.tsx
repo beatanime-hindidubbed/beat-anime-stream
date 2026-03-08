@@ -13,7 +13,7 @@ import { AnimatePresence, motion } from "framer-motion";
 // Only allow these providers, mapped to friendly names
 const ALLOWED_PROVIDERS: Record<string, string> = {
   "StreamHG": "Server 1",
-  "EarnVids": "Server 2",
+  "EarnVids": "Server 2 Embedded",
 };
 
 interface HindiSource {

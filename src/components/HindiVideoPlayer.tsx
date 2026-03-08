@@ -789,7 +789,7 @@ export default function HindiVideoPlayer({
             </video>
 
             {/* Watermark on HLS player */}
-            <PlayerWatermark showIcon={false} />
+            <PlayerWatermark showIcon />
 
             {/* Center flash icon */}
             <AnimatePresence>
