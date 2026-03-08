@@ -695,9 +695,7 @@ export default function VideoPlayer({
   const PREVIEW_W = 160;
   const previewLeft = `clamp(${PREVIEW_W / 2}px, ${hoverPct}%, calc(100% - ${PREVIEW_W / 2}px))`;
 
-  const settingsPositionClass = isMobile
-    ? "fixed bottom-24 right-3 z-[200]"
-    : "absolute bottom-20 right-3 z-30";
+  const settingsPositionClass = "absolute bottom-20 right-3 z-40";
 
   return (
     <div ref={wrapperRef} className="relative">
