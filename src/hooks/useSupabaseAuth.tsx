@@ -43,6 +43,7 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
         setTimeout(() => checkAdmin(sess.user.id), 0);
       } else {
         setIsAdmin(false);
+        setIsModerator(false);
       }
       setLoading(false);
     });
