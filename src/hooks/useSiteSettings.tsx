@@ -8,10 +8,14 @@ export type ThemeType =
   | "anime-dark" | "anime-pastel" | "anime-retro" | "dragon" | "galaxy"
   | "bloodmoon" | "phantom" | "jade" | "violet-storm" | "golden-hour";
 
+export type PlayerTheme = "default" | "minimal" | "cinema" | "retro" | "glassmorphism";
+
 export interface SiteSettings {
   siteName: string;
   siteIcon: string;
   theme: ThemeType;
+  playerTheme: PlayerTheme;
+  faviconUrl: string;
   errorGif: string;
   loadingGif: string;
   dmcaContent: string;
@@ -20,6 +24,7 @@ export interface SiteSettings {
   telegramChannel: string;
   telegramGroup: string;
   hiddenAnimes: string[];
+  bannedAnimes: string[];
   failCountThreshold: number;
   apiEndpoints: string[];
 }
