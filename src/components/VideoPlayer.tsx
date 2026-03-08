@@ -196,6 +196,10 @@ export default function VideoPlayer({
 
   // ── YouTube-style mini player on scroll ────────────────────────────────
   useEffect(() => {
+    if (disableInternalMiniPlayer) {
+      setMiniPlayer(false);
+      return;
+    }
     if (!wrapperRef.current) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
@@ -206,7 +210,7 @@ export default function VideoPlayer({
     );
     observer.observe(wrapperRef.current);
     return () => observer.disconnect();
-  }, [playing]);
+  }, [playing, disableInternalMiniPlayer]);
 
   // Update mini player state when playing changes
   useEffect(() => {
