@@ -40,19 +40,10 @@ export default function CommentSection({ episodeId, animeId }: Props) {
   const [showAll, setShowAll] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Check if comments are disabled
   const isDisabled = !settings.commentsEnabled || (settings.commentsDisabledAnimes || []).includes(animeId);
 
-  if (isDisabled) {
-    return (
-      <div className="mt-6 sm:mt-8 p-6 rounded-xl bg-card border border-border text-center">
-        <MessageCircleOff className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-        <p className="text-sm text-muted-foreground">Comments are disabled for this content.</p>
-      </div>
-    );
-  }
-
   const loadComments = useCallback(async () => {
+    if (isDisabled) { setLoading(false); return; }
     const { data } = await supabase
       .from("comments")
       .select("*")
@@ -63,7 +54,6 @@ export default function CommentSection({ episodeId, animeId }: Props) {
 
     if (!data) { setLoading(false); return; }
 
-    // Enrich with profile data
     const userIds = [...new Set(data.map(c => c.user_id))];
     const { data: profiles } = await supabase
       .from("profiles")
@@ -78,21 +68,18 @@ export default function CommentSection({ episodeId, animeId }: Props) {
       avatar_url: profileMap.get(c.user_id)?.avatar_url || null,
     }));
 
-    // Build tree
     const topLevel = enriched.filter(c => !c.parent_id);
     const replies = enriched.filter(c => c.parent_id);
-    topLevel.forEach(c => {
-      c.replies = replies.filter(r => r.parent_id === c.id);
-    });
+    topLevel.forEach(c => { c.replies = replies.filter(r => r.parent_id === c.id); });
 
     setComments(topLevel);
     setLoading(false);
-  }, [episodeId]);
+  }, [episodeId, isDisabled]);
 
   useEffect(() => { loadComments(); }, [loadComments]);
 
-  // Realtime subscription
   useEffect(() => {
+    if (isDisabled) return;
     const channel = supabase
       .channel(`comments-${episodeId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "comments", filter: `episode_id=eq.${episodeId}` }, () => {
@@ -100,7 +87,16 @@ export default function CommentSection({ episodeId, animeId }: Props) {
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [episodeId, loadComments]);
+  }, [episodeId, loadComments, isDisabled]);
+
+  if (isDisabled) {
+    return (
+      <div className="mt-6 sm:mt-8 p-6 rounded-xl bg-card border border-border text-center">
+        <MessageCircleOff className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+        <p className="text-sm text-muted-foreground">Comments are disabled for this content.</p>
+      </div>
+    );
+  }
 
   const checkRateLimit = async (): Promise<boolean> => {
     if (!user) return false;
