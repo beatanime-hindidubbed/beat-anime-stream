@@ -381,6 +381,28 @@ function applyTheme(theme: ThemeType, customColors?: CustomThemeColors) {
       "--gradient-accent": "linear-gradient(135deg, hsl(20 85% 55%), hsl(10 80% 50%))",
       "--theme-pattern": "linear-gradient(135deg, hsl(40 90% 50% / 0.04) 0%, transparent 40%, transparent 60%, hsl(20 85% 55% / 0.03) 100%)",
     },
+    // ── Indian Festival Themes ──
+    diwali: {
+      "--primary": "35 95% 55%", "--accent": "15 90% 55%",
+      "--background": "25 25% 5%", "--card": "25 20% 8%", "--border": "25 15% 16%",
+      "--gradient-primary": "linear-gradient(135deg, hsl(35 95% 55%), hsl(45 90% 50%))",
+      "--gradient-accent": "linear-gradient(135deg, hsl(15 90% 55%), hsl(0 85% 50%))",
+      "--theme-pattern": "radial-gradient(3px 3px at 10% 15%, hsl(35 95% 55% / 0.3), transparent), radial-gradient(2px 2px at 30% 70%, hsl(45 90% 50% / 0.25), transparent), radial-gradient(4px 4px at 60% 20%, hsl(15 90% 55% / 0.2), transparent), radial-gradient(2px 2px at 80% 50%, hsl(35 95% 60% / 0.3), transparent), radial-gradient(3px 3px at 50% 85%, hsl(45 90% 55% / 0.15), transparent), radial-gradient(2.5px 2.5px at 90% 75%, hsl(35 95% 55% / 0.25), transparent)",
+    },
+    holi: {
+      "--primary": "320 80% 60%", "--accent": "160 80% 55%",
+      "--background": "280 20% 6%", "--card": "280 15% 9%", "--border": "280 12% 16%",
+      "--gradient-primary": "linear-gradient(135deg, hsl(320 80% 60%), hsl(280 70% 55%), hsl(200 80% 55%), hsl(120 70% 50%))",
+      "--gradient-accent": "linear-gradient(135deg, hsl(40 90% 60%), hsl(0 85% 55%), hsl(270 80% 60%))",
+      "--theme-pattern": "radial-gradient(8px 8px at 15% 20%, hsl(320 80% 60% / 0.08), transparent), radial-gradient(12px 12px at 40% 60%, hsl(160 80% 55% / 0.06), transparent), radial-gradient(10px 10px at 70% 30%, hsl(40 90% 60% / 0.07), transparent), radial-gradient(6px 6px at 85% 80%, hsl(270 80% 60% / 0.08), transparent), radial-gradient(9px 9px at 55% 10%, hsl(0 85% 55% / 0.05), transparent)",
+    },
+    "independence-day": {
+      "--primary": "25 90% 55%", "--accent": "140 70% 45%",
+      "--background": "220 20% 5%", "--card": "220 18% 8%", "--border": "220 15% 15%",
+      "--gradient-primary": "linear-gradient(180deg, hsl(25 90% 55%), hsl(0 0% 98%), hsl(140 70% 45%))",
+      "--gradient-accent": "linear-gradient(135deg, hsl(220 80% 50%), hsl(220 70% 40%))",
+      "--theme-pattern": "linear-gradient(180deg, hsl(25 90% 55% / 0.04) 0%, hsl(25 90% 55% / 0.02) 33%, transparent 33%, transparent 66%, hsl(140 70% 45% / 0.02) 66%, hsl(140 70% 45% / 0.04) 100%)",
+    },
   };
 
   if (theme === "custom" && customColors) {
