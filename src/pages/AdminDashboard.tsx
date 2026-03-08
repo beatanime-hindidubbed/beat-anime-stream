@@ -406,6 +406,7 @@ export default function AdminDashboard() {
     { key: "player" as const, label: "Player", icon: MonitorPlay },
     { key: "premium" as const, label: "Premium", icon: Crown },
     { key: "chat" as const, label: "Chat", icon: MessageCircle },
+    { key: "comments" as const, label: "Comments", icon: MessageSquare },
     { key: "banlist" as const, label: "Ban List", icon: EyeOff },
     { key: "policy" as const, label: "Policies", icon: FileText },
     { key: "ads" as const, label: "Ads", icon: Image },
