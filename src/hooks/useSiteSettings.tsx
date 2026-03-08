@@ -36,6 +36,34 @@ export interface CustomThemeColors {
   border: string;
 }
 
+export interface ChatPermissions {
+  sendMessages: boolean;
+  sendPhotos: boolean;
+  sendVideos: boolean;
+  sendMusic: boolean;
+  sendFiles: boolean;
+  sendStickers: boolean;
+  sendLinks: boolean;
+  sendPolls: boolean;
+  addMembers: boolean;
+  pinMessages: boolean;
+  slowMode: number; // 0=off, seconds between messages
+}
+
+const DEFAULT_CHAT_PERMISSIONS: ChatPermissions = {
+  sendMessages: true,
+  sendPhotos: true,
+  sendVideos: true,
+  sendMusic: true,
+  sendFiles: true,
+  sendStickers: true,
+  sendLinks: true,
+  sendPolls: true,
+  addMembers: true,
+  pinMessages: false,
+  slowMode: 0,
+};
+
 export interface SiteSettings {
   siteName: string;
   siteIcon: string;
@@ -61,6 +89,8 @@ export interface SiteSettings {
   commentsDisabledAnimes: string[];
   failCountThreshold: number;
   apiEndpoints: string[];
+  chatEnabled: boolean;
+  chatPermissions: ChatPermissions;
 }
 
 const DEFAULTS: SiteSettings = {
