@@ -170,6 +170,9 @@ export default function AdminDashboard() {
     chatActivity: { date: string; messages: number }[];
   }>({ dailyComments: [], roleDistribution: [], apiResponseTimes: [], chatActivity: [] });
 
+  // Censor alert
+  const [censorAlert, setCensorAlert] = useState<{ count: number; total: number; rate: number; timestamp: string; samples: any[] } | null>(null);
+
   useEffect(() => {
     setBrandName(settings.siteName); setBrandIcon(settings.siteIcon);
     setTgChannel(settings.telegramChannel); setTgGroup(settings.telegramGroup);
