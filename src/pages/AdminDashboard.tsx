@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
-import { useSiteSettings, ThemeType, PlayerTheme, FontStyle, CustomThemeColors, TextEffect, ParticleEffect, SandboxLink } from "@/hooks/useSiteSettings";
+import { useSiteSettings, ThemeType, PlayerTheme, FontStyle, CustomThemeColors, TextEffect, ParticleEffect, SandboxLink, ChatPermissions } from "@/hooks/useSiteSettings";
 import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, AreaChart, Area } from "recharts";
