@@ -80,9 +80,12 @@ export default function AnimeDetail() {
         <div className="text-center">
           <p className="text-destructive text-lg font-medium mb-2">Failed to load anime</p>
           <p className="text-muted-foreground text-sm mb-4">The anime might not exist or the server is down.</p>
-          <Link to="/" className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium">
-            Go Home
-          </Link>
+          <div className="flex gap-3 justify-center flex-wrap">
+            <Link to="/" className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
+              Go Home
+            </Link>
+            {id && <AnimeReportButton animeId={id} />}
+          </div>
         </div>
       </div>
     );
