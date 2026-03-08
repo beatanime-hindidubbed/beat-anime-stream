@@ -91,7 +91,10 @@
     inset: 0;
     z-index: -1;
     pointer-events: none;
-    background-image: var(--theme-pattern, none);
+    background-image: 
+      var(--theme-pattern, none),
+      radial-gradient(ellipse 80% 50% at 50% -20%, hsl(165 80% 45% / 0.06), transparent 70%),
+      radial-gradient(ellipse 60% 40% at 80% 100%, hsl(var(--primary) / 0.04), transparent 60%);
     background-size: 100% 100%;
     opacity: 1;
   }
