@@ -880,7 +880,7 @@ export default function VideoPlayer({
                     <span className="text-white/40 text-[10px] sm:text-xs">Save</span>
                   </button>
                   <button onClick={() => { const v = videoRef.current; if (!v) return; if (abLoop.a === null) setAbLoop({ a: v.currentTime, b: null }); else if (abLoop.b === null) setAbLoop(prev => ({ ...prev, b: v.currentTime })); else setAbLoop({ a: null, b: null }); }}
-                    className="flex items-center justify-between w-full px-2.5 sm:px-4 py-1.5 sm:py-2.5 text-[11px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
+                    className="flex items-center justify-between w-full px-2 sm:px-4 py-1 sm:py-2 text-[10px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
                     <span className="flex items-center gap-2"><Repeat className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> A-B Loop</span>
                     <span className={`text-[10px] sm:text-xs ${abLoop.a !== null ? "text-primary font-medium" : "text-white/40"}`}>{abLoop.a !== null && abLoop.b !== null ? "Active ✓" : abLoop.a !== null ? "Set B →" : "Set A"}</span>
                   </button>
