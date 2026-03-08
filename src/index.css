@@ -59,6 +59,7 @@
     --shadow-glow: 0 0 20px hsl(0 85% 55% / 0.2);
     --shadow-card: 0 4px 24px hsl(0 0% 0% / 0.5);
     --shadow-neon: 0 0 15px hsl(180 80% 50% / 0.3);
+    --shadow-diamond: 0 0 40px hsl(var(--primary) / 0.08), 0 0 80px hsl(var(--accent) / 0.04), inset 0 1px 0 hsl(0 0% 100% / 0.03);
     --theme-pattern: none;
     --theme-bg-image: none;
   }
@@ -71,6 +72,7 @@
 
   body {
     @apply bg-background text-foreground font-body antialiased;
+    box-shadow: var(--shadow-diamond);
   }
 
   body::before {
@@ -106,20 +108,36 @@
     font-family: var(--font-body);
   }
 
-  /* Custom scrollbar */
-  ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: hsl(230 20% 10%); }
+  ::-webkit-scrollbar-thumb { background: hsl(var(--primary) / 0.4); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--primary) / 0.7); }
+
+  /* Mecha Gaming theme enhancements */
+  [data-theme="mecha-gaming"] * {
+    --radius: 0.25rem;
   }
-  ::-webkit-scrollbar-track {
-    background: hsl(230 25% 10%);
+  [data-theme="mecha-gaming"] .bg-card,
+  [data-theme="mecha-gaming"] .bg-secondary {
+    border: 1px solid hsl(180 100% 50% / 0.06);
   }
-  ::-webkit-scrollbar-thumb {
-    background: hsl(0 85% 55%);
-    border-radius: 4px;
+  [data-theme="mecha-gaming"] h1,
+  [data-theme="mecha-gaming"] h2,
+  [data-theme="mecha-gaming"] h3 {
+    text-shadow: 0 0 20px hsl(180 100% 50% / 0.15);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
   }
-  ::-webkit-scrollbar-thumb:hover {
-    background: hsl(0 85% 45%);
+  [data-theme="mecha-gaming"] .card-hover:hover {
+    box-shadow: 0 0 30px hsl(180 100% 50% / 0.25), 0 0 60px hsl(320 100% 60% / 0.1);
+    border-color: hsl(180 100% 50% / 0.2);
+  }
+  [data-theme="mecha-gaming"] button:not(:disabled):hover {
+    filter: brightness(1.15);
+  }
+  [data-theme="mecha-gaming"] .bg-primary {
+    box-shadow: 0 0 12px hsl(180 100% 50% / 0.3);
   }
 }
 

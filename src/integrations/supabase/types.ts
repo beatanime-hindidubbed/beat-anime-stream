@@ -80,6 +80,36 @@ export type Database = {
         }
         Relationships: []
       }
+      anime_reviews: {
+        Row: {
+          anime_id: string
+          content: string | null
+          created_at: string
+          id: string
+          rating: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          anime_id: string
+          content?: string | null
+          created_at?: string
+          id?: string
+          rating: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          anime_id?: string
+          content?: string | null
+          created_at?: string
+          id?: string
+          rating?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       chat_bans: {
         Row: {
           ban_type: string

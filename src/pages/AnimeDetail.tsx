@@ -1,4 +1,5 @@
 import { useParams, Link } from "react-router-dom";
+import AnimeReviews from "@/components/AnimeReviews";
 import { useQuery } from "@tanstack/react-query";
 import { api, AnimeInfo, AnimeItem } from "@/lib/api";
 import { store } from "@/lib/store";
@@ -280,6 +281,13 @@ export default function AnimeDetail() {
                 <AnimeCard key={a.id} anime={a} index={i} />
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Reviews */}
+        {id && (
+          <div className="mt-10">
+            <AnimeReviews animeId={id} />
           </div>
         )}
 

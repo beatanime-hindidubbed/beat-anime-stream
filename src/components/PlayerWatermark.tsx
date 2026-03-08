@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
+import { useIsPremium } from "@/hooks/useIsPremium";
+import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 
 interface Props {
   showIcon?: boolean;
 }
 
 export default function PlayerWatermark({ showIcon = false }: Props) {
-  // Randomize position slightly to prevent easy cropping
+  const { isPremium } = useIsPremium();
+  const { isAdmin } = useSupabaseAuth();
   const [pos, setPos] = useState({ top: true, right: true });
 
   useEffect(() => {
@@ -14,9 +17,12 @@ export default function PlayerWatermark({ showIcon = false }: Props) {
         top: Math.random() > 0.3,
         right: Math.random() > 0.3,
       });
-    }, 30000); // shift every 30s
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  // Premium users and admins don't see watermark
+  if (isPremium || isAdmin) return null;
 
   return (
     <div
@@ -44,7 +50,7 @@ export default function PlayerWatermark({ showIcon = false }: Props) {
           userSelect: "none",
         }}
       >
-        Beat AniStream
+        @BeatAnime
       </span>
     </div>
   );
