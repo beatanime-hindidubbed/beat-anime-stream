@@ -499,25 +499,31 @@ export default function HindiVideoPlayer({
 
   // ── Seek bar touch ────────────────────────────────────────────────────
   const handleSeekBarTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
     touchOnSeekBar.current = true;
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
     touchMoved.current = true;
+    wasPlayingRef.current = playing;
     const v = videoRef.current;
     if (!v || !duration) return;
+    if (wasPlayingRef.current) v.pause();
     const rect = e.currentTarget.getBoundingClientRect();
     v.currentTime = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width)) * duration;
   };
 
   const handleSeekBarTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
     const v = videoRef.current;
     if (!v || !duration) return;
     const rect = e.currentTarget.getBoundingClientRect();
     v.currentTime = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width)) * duration;
-    e.stopPropagation();
   };
 
   const handleSeekBarTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    e.stopPropagation();
     touchOnSeekBar.current = false;
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
     const v = videoRef.current;
@@ -527,7 +533,7 @@ export default function HindiVideoPlayer({
       const rect = e.currentTarget.getBoundingClientRect();
       v.currentTime = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width)) * duration;
     }
-    e.stopPropagation();
+    if (wasPlayingRef.current && v.paused) v.play();
   };
 
   // ── Preview thumbnail hover (desktop/laptop hover devices) ────────────
@@ -995,7 +1001,7 @@ export default function HindiVideoPlayer({
 
               <div className="relative px-2 sm:px-5 pb-1.5 sm:pb-4 pt-8 sm:pt-12">
                 {/* Seek bar — YouTube-style with preview thumbnail */}
-                <div className="w-full mb-3 sm:mb-3.5 cursor-pointer group/progress relative"
+                <div className="w-full mb-3 sm:mb-3.5 cursor-pointer group/progress relative touch-none"
                   style={{ height: "32px", display: "flex", alignItems: "center" }}
                   onClick={seek}
                   onMouseMove={handleProgressHover}
