@@ -329,36 +329,50 @@ export default function HindiVideoPlayer({
     }
   }, [src, startTime, isIframe]);
 
-  // ── Preview HLS (desktop only, feature parity with VideoPlayer) ───────
-  // Also proxy for Hindi CDN headers
+  // ── Preview HLS — use ENGLISH HiAnime stream (same frames, much faster) ─
   useEffect(() => {
-    if (isIframe || isMobile || !src) return;
+    if (isIframe || isMobile || !episodeId) return;
     const preview = previewVideoRef.current;
-    let realSrc: string;
-    try { realSrc = getUrl.current(); } catch { return; }
-    if (!preview || !realSrc) return;
+    if (!preview) return;
 
-    const proxyBase = getHindiProxy();
-    const proxiedSrc = realSrc.includes("/hindiapi/proxy") ? realSrc : proxyBase + "?url=" + encodeURIComponent(realSrc);
+    let cancelled = false;
 
-    if (Hls.isSupported()) {
-      const hls = new Hls({
-        maxBufferLength: 4, maxMaxBufferLength: 10,
-        startPosition: -1, enableWorker: false, startLevel: 0,
-        capLevelToPlayerSize: false,
-        xhrSetup: (xhr) => { xhr.withCredentials = false; },
-      });
-      hls.loadSource(proxiedSrc);
-      hls.attachMedia(preview);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        hls.currentLevel = 0;
-        preview.pause();
-        setPreviewReady(true);
-      });
-      previewHlsRef.current = hls;
-      return () => { hls.destroy(); previewHlsRef.current = null; setPreviewReady(false); };
-    }
-  }, [src, isMobile, isIframe]);
+    const loadEnglishPreview = async () => {
+      try {
+        const apiBase = getNextApi();
+        const res = await fetch(
+          `${apiBase}/hianime/episode/sources?animeEpisodeId=${encodeURIComponent(episodeId)}&server=hd-2&category=sub`
+        );
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        const rawUrl = data?.data?.sources?.[0]?.url;
+        if (!rawUrl || cancelled) return;
+
+        const proxiedUrl = `${apiBase}/hindiapi/proxy?url=${encodeURIComponent(rawUrl)}&referer=${encodeURIComponent("https://megacloud.blog/")}`;
+
+        if (Hls.isSupported()) {
+          const hls = new Hls({
+            maxBufferLength: 4, maxMaxBufferLength: 10,
+            startPosition: -1, enableWorker: false, startLevel: 0,
+            capLevelToPlayerSize: false,
+            xhrSetup: (xhr) => { xhr.withCredentials = false; },
+          });
+          hls.loadSource(proxiedUrl);
+          hls.attachMedia(preview);
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            if (cancelled) { hls.destroy(); return; }
+            hls.currentLevel = 0;
+            preview.pause();
+            setPreviewReady(true);
+          });
+          previewHlsRef.current = hls;
+        }
+      } catch { /* silent */ }
+    };
+
+    loadEnglishPreview();
+    return () => { cancelled = true; if (previewHlsRef.current) { previewHlsRef.current.destroy(); previewHlsRef.current = null; } setPreviewReady(false); };
+  }, [episodeId, isMobile, isIframe]);
 
   // Draw preview frame to canvas
   useEffect(() => {
