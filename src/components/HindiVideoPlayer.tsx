@@ -284,23 +284,7 @@ export default function HindiVideoPlayer({
   // Track wasPlayingRef continuously
   useEffect(() => { wasPlayingRef.current = playing; }, [playing]);
 
-  // ── FIX: Catch unexpected pause events and auto-resume ────────────────
-  useEffect(() => {
-    if (isIframe) return;
-    const v = videoRef.current;
-    if (!v) return;
-    const onPause = () => {
-      if (wasPlayingRef.current && !document.hidden) {
-        setTimeout(() => {
-          if (v.paused && wasPlayingRef.current && !v.ended && !document.hidden) {
-            v.play().catch(() => {});
-          }
-        }, 150);
-      }
-    };
-    v.addEventListener("pause", onPause);
-    return () => v.removeEventListener("pause", onPause);
-  }, [isIframe]);
+  // Removed over-aggressive auto-resume on pause (was causing user pause to be ignored)
 
   // ── HLS loader ────────────────────────────────────────────────────────
   // Hindi CDN URLs need specific Referer headers — always proxy them
