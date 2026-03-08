@@ -8,7 +8,8 @@ import {
   BarChart3, Image, Activity, LogOut, Plus, Trash2,
   ToggleLeft, ToggleRight, Save, Loader2, CheckCircle, XCircle, Globe,
   Users, Shield, UserPlus, UserMinus, Palette, Type, FileText,
-  Crown, Copy, Clock, Zap, Server, RefreshCw, MessageCircle, Ban, VolumeX, Trash2 as Trash2Icon, AlertTriangle
+  Crown, Copy, Clock, Zap, Server, RefreshCw, MessageCircle, Ban, VolumeX,
+  AlertTriangle, MonitorPlay, Link2, ScrollText, EyeOff
 } from "lucide-react";
 
 interface Ad {
