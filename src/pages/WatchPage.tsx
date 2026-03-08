@@ -100,9 +100,9 @@ export default function WatchPage() {
 
   // Default to Hindi dub unless explicitly set otherwise
   const initialCategory = (() => {
-    if (searchParams.get("lang") === "sub") return "sub";
-    if (searchParams.get("lang") === "engdub") return "engdub";
-    if (searchParams.get("lang") === "raw") return "raw";
+    const lang = searchParams.get("lang");
+    if (lang === "sub" || lang === "engdub" || lang === "eng") return "eng";
+    if (lang === "raw") return "raw";
     // Default is Hindi dub
     return "dub";
   })();
