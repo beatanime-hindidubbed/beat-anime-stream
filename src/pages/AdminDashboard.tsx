@@ -128,6 +128,16 @@ export default function AdminDashboard() {
 
   useEffect(() => { if (tab === "users") loadUserRoles(); }, [tab]);
   useEffect(() => { if (tab === "premium") loadPremiumCodes(); }, [tab]);
+  useEffect(() => {
+    if (tab === "chat") {
+      supabase.from("chat_messages").select("*").eq("type", "report").order("created_at", { ascending: false }).limit(50)
+        .then(({ data }) => { if (data) setChatReports(data); });
+      supabase.from("chat_messages").select("*").eq("type", "group").order("created_at", { ascending: false }).limit(50)
+        .then(({ data }) => { if (data) setChatMessages(data); });
+      supabase.from("chat_bans").select("*").order("created_at", { ascending: false })
+        .then(({ data }) => { if (data) setChatBans(data); });
+    }
+  }, [tab]);
 
   const loadUserRoles = async () => {
     const { data: roles } = await supabase.from("user_roles").select("*");
