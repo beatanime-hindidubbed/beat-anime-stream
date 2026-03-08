@@ -41,8 +41,8 @@ export default function LoginPage() {
     // Honeypot check (bots fill hidden fields)
     if (honeypot) return;
 
-    // Time-based bot detection — form filled too fast
-    if (Date.now() - formStartTime.current < 1500) {
+    // Time-based bot detection — form filled too fast (only for register)
+    if (isRegister && Date.now() - formStartTime.current < 800) {
       setError("Please take your time filling the form");
       return;
     }
