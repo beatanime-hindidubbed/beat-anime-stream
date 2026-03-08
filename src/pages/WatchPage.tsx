@@ -126,10 +126,20 @@ export default function WatchPage() {
   const langRef = useRef<HTMLDivElement>(null);
   const playerWrapperRef = useRef<HTMLDivElement>(null);
   const [showPip, setShowPip] = useState(false);
+  const [mobileCompact, setMobileCompact] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
+  const touchStartY = useRef<number | null>(null);
   const { settings } = useSiteSettings();
 
   const animeId = fullEpisodeId.split("?")[0];
 
+  // Detect mobile
+  useEffect(() => {
+    const check = () => setIsMobile(window.matchMedia("(max-width: 768px)").matches);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (langRef.current && !langRef.current.contains(e.target as Node)) setShowLangMenu(false);
