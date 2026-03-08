@@ -199,7 +199,7 @@ export default function HindiWatchPage() {
     }
 
     if (hindiHlsSrc) {
-      return <HindiVideoPlayer src={hindiHlsSrc} tracks={subtitleTracks} onEnded={() => navigate(`/hindi/watch/${animeId}/${epNum + 1}`)} />;
+      return <HindiVideoPlayer src={hindiHlsSrc} tracks={subtitleTracks} episodeId={currentEp?.episodeId} onEnded={() => navigate(`/hindi/watch/${animeId}/${epNum + 1}`)} />;
     }
     if (hindiIframeSrc) {
       return <HindiVideoPlayer iframeSrc={hindiIframeSrc} tracks={subtitleTracks} onEnded={() => navigate(`/hindi/watch/${animeId}/${epNum + 1}`)} />;
