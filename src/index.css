@@ -231,6 +231,10 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
+
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
 }
 
 @keyframes neon-flicker {
