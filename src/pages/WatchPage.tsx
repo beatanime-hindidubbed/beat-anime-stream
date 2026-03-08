@@ -162,33 +162,20 @@ export default function WatchPage() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // PiP: robust visibility when user scrolls past the main player
+  // PiP: decide visibility from anchor position (prevents fixed-player flicker)
   useEffect(() => {
-    const el = playerWrapperRef.current;
-    if (!el) return;
-
     const updatePip = () => {
-      const rect = el.getBoundingClientRect();
-      const hasScrolledPast = rect.bottom < window.innerHeight * 0.35;
-      const farBelow = rect.top > window.innerHeight * 0.9;
-      setShowPip(hasScrolledPast || farBelow);
+      const anchor = playerAnchorRef.current;
+      if (!anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      setShowPip(rect.top < -120);
     };
 
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        setShowPip(!entry.isIntersecting);
-        updatePip();
-      },
-      { threshold: 0.15, rootMargin: "0px 0px -10% 0px" }
-    );
-
-    observer.observe(el);
     window.addEventListener("scroll", updatePip, { passive: true });
     window.addEventListener("resize", updatePip);
     updatePip();
 
     return () => {
-      observer.disconnect();
       window.removeEventListener("scroll", updatePip);
       window.removeEventListener("resize", updatePip);
     };
