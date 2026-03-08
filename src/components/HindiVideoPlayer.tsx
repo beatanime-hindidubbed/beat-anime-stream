@@ -235,7 +235,8 @@ export default function HindiVideoPlayer({
     if (!video || !realSrc) return;
 
     // Always proxy Hindi streams for correct headers
-    const proxiedSrc = realSrc.includes("/hindiapi/proxy") ? realSrc : HINDI_PROXY + "?url=" + encodeURIComponent(realSrc);
+    const proxyBase = getHindiProxy();
+    const proxiedSrc = realSrc.includes("/hindiapi/proxy") ? realSrc : proxyBase + "?url=" + encodeURIComponent(realSrc);
 
     if (Hls.isSupported()) {
       const hls = new Hls({
