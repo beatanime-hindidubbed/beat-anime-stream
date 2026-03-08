@@ -97,10 +97,11 @@ const FONT_STYLES: { key: FontStyle; label: string; desc: string; preview: strin
 type TabKey = "stats" | "branding" | "effects" | "sandbox" | "ads" | "api" | "users" | "policy" | "premium" | "chat" | "comments" | "player" | "banlist" | "logs";
 
 export default function AdminDashboard() {
-  const { user, isAdmin, loading: authLoading, logout } = useSupabaseAuth();
+  const { user, isAdmin, isModerator, loading: authLoading, logout } = useSupabaseAuth();
   const { settings, updateSettings } = useSiteSettings();
   const navigate = useNavigate();
   const [tab, setTab] = useState<TabKey>("stats");
+  const [showMobileTabs, setShowMobileTabs] = useState(false);
   const [ads, setAds] = useState<Ad[]>([]);
   const [apiHealth, setApiHealth] = useState<Record<string, { status: "ok" | "fail" | "loading"; ms?: number }>>({});
   const [saving, setSaving] = useState(false);
