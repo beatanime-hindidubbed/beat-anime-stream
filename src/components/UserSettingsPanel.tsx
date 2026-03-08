@@ -45,7 +45,7 @@ export default function UserSettingsPanel() {
   const [open, setOpen] = useState(false);
   const [prefs, setPrefs] = useState<UserPrefs>(getPrefs);
 
-  if (!user) return null;
+  const isLoggedIn = !!user;
 
   const update = (partial: Partial<UserPrefs>) => {
     const next = { ...prefs, ...partial };
@@ -97,13 +97,15 @@ export default function UserSettingsPanel() {
                   <div className="flex items-center gap-2 mb-2">
                     <Crown className={`w-5 h-5 ${isPremium ? "text-yellow-500" : "text-muted-foreground"}`} />
                     <span className="font-display font-bold text-foreground">
-                      {isPremium ? "Premium Active ✨" : "Free Plan"}
+                      {isPremium ? "Premium Active ✨" : isLoggedIn ? "Free Plan" : "Guest Mode"}
                     </span>
                   </div>
                   {!isPremium && (
                     <div className="space-y-2">
                       <p className="text-xs text-muted-foreground">
-                        Get ad-free streaming, no watermarks, bulk downloads & more!
+                        {isLoggedIn
+                          ? "Get ad-free streaming, no watermarks, bulk downloads & more!"
+                          : "You can still use local playback settings. Sign in to sync settings across devices."}
                       </p>
                       <a
                         href={tgGroup}
@@ -111,7 +113,7 @@ export default function UserSettingsPanel() {
                         rel="noopener noreferrer"
                         className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity w-full justify-center"
                       >
-                        <Send className="w-4 h-4" /> Request Premium on Telegram
+                        <Send className="w-4 h-4" /> {isLoggedIn ? "Request Premium on Telegram" : "Join Telegram"}
                       </a>
                     </div>
                   )}

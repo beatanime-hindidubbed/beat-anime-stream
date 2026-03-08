@@ -130,6 +130,24 @@ const DEFAULTS: SiteSettings = {
   verificationMode: "code" as const,
 };
 
+const SETTINGS_CACHE_KEY = "beat_site_settings_cache_v1";
+
+function getCachedSettings(): SiteSettings {
+  try {
+    const raw = localStorage.getItem(SETTINGS_CACHE_KEY);
+    if (!raw) return DEFAULTS;
+    return { ...DEFAULTS, ...JSON.parse(raw) };
+  } catch {
+    return DEFAULTS;
+  }
+}
+
+function cacheSettings(next: SiteSettings) {
+  try {
+    localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(next));
+  } catch {}
+}
+
 interface SiteSettingsCtx {
   settings: SiteSettings;
   updateSettings: (partial: Partial<SiteSettings>) => Promise<void>;
@@ -147,22 +165,29 @@ const Ctx = createContext<SiteSettingsCtx>({
 });
 
 export function SiteSettingsProvider({ children }: { children: ReactNode }) {
-  const [settings, setSettings] = useState<SiteSettings>(DEFAULTS);
+  const [settings, setSettings] = useState<SiteSettings>(getCachedSettings);
   const [currentFestival, setCurrentFestival] = useState<DetectedFestival | null>(null);
   const [dbLoaded, setDbLoaded] = useState(false);
 
   useEffect(() => {
-    supabase
-      .from("site_settings")
-      .select("*")
-      .then(({ data, error }) => {
+    const loadSettings = async () => {
+      try {
+        const { data, error } = await supabase.from("site_settings").select("*");
         if (!error && data?.length) {
           const map: Record<string, any> = {};
           data.forEach((row) => { map[row.key] = row.value; });
-          setSettings((prev) => ({ ...prev, ...map }));
+          setSettings((prev) => {
+            const next = { ...prev, ...map };
+            cacheSettings(next);
+            return next;
+          });
         }
+      } finally {
         setDbLoaded(true);
-      });
+      }
+    };
+
+    loadSettings();
   }, []);
 
   // Auto-festival detection — only after DB settings are loaded
@@ -210,6 +235,7 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
     async (partial: Partial<SiteSettings>) => {
       const next = { ...settings, ...partial };
       setSettings(next);
+      cacheSettings(next);
       for (const [key, value] of Object.entries(partial)) {
         await supabase
           .from("site_settings")
