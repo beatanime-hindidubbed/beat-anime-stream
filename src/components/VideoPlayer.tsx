@@ -772,21 +772,22 @@ export default function VideoPlayer({
           )}
         </AnimatePresence>
 
-        {/* ── Buffering / Paused overlay ────────────────────────────── */}
-        {(isBuffering || (!playing && currentTime > 0 && !showCenterIcon)) && (
+        {/* ── Buffering / Paused overlay (mobile only for pause) ──── */}
+        {isBuffering && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-            {isBuffering ? (
-              <div className="flex flex-col items-center gap-2">
-                <div className="w-14 h-14 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center">
-                  <Loader2 className="w-7 h-7 text-primary animate-spin" />
-                </div>
-                <span className="text-xs text-white/60 font-medium">Buffering…</span>
+            <div className="flex flex-col items-center gap-2">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center">
+                <Loader2 className="w-6 h-6 sm:w-7 sm:h-7 text-primary animate-spin" />
               </div>
-            ) : (
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center">
-                <Play className="w-8 h-8 text-white/80 ml-1" />
-              </div>
-            )}
+              <span className="text-[10px] sm:text-xs text-white/60 font-medium">Buffering…</span>
+            </div>
+          </div>
+        )}
+        {!playing && currentTime > 0 && !showCenterIcon && !isBuffering && isMobile && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+            <div className="w-14 h-14 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center">
+              <Play className="w-7 h-7 text-white/80 ml-0.5" />
+            </div>
           </div>
         )}
 

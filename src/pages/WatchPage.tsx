@@ -504,25 +504,10 @@ export default function WatchPage() {
       {/* Player — DOM style mutated directly for PiP (no React re-render) */}
       <div
         ref={playerWrapperRef}
-        className={`mb-2 ${isMobile && mobileCompact && !showPip ? "max-h-[35vh] overflow-hidden" : ""}`}
+        className="mb-2"
         onClick={showPip ? scrollToPlayer : undefined}
-        onTouchStart={!showPip ? (e) => { touchStartY.current = e.touches[0].clientY; } : undefined}
-        onTouchEnd={!showPip ? (e) => {
-          if (touchStartY.current === null) return;
-          const diff = e.changedTouches[0].clientY - touchStartY.current;
-          if (Math.abs(diff) > 50) setMobileCompact(diff < 0);
-          touchStartY.current = null;
-        } : undefined}
       >
         {renderPlayer()}
-        {!showPip && isMobile && (
-          <div className="flex justify-center py-1">
-            <button onClick={() => setMobileCompact(!mobileCompact)} className="flex items-center gap-1 text-[10px] text-muted-foreground">
-              <ChevronDown className={`w-3 h-3 transition-transform ${mobileCompact ? "" : "rotate-180"}`} />
-              {mobileCompact ? "Swipe up to expand" : "Swipe down to minimize"}
-            </button>
-          </div>
-        )}
       </div>
       {/* Spacer so content doesn't jump when player is fixed */}
       {showPip && <div className="mb-2" style={{ aspectRatio: "16/9" }} />}
