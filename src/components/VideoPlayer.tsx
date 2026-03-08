@@ -876,8 +876,9 @@ export default function VideoPlayer({
         {/* ── Settings panel ────────────────────────────────────────── */}
         {settingsOpen && (
             <div
-              className={`${settingsPositionClass} w-52 sm:w-56 max-h-[70vh] overflow-y-auto overscroll-contain bg-black/95 border border-white/10 rounded-2xl shadow-2xl`}
+              className={`${settingsPositionClass} w-44 sm:w-56 max-h-[50vh] sm:max-h-[70vh] overflow-y-auto overscroll-contain touch-pan-y bg-black/95 border border-white/10 rounded-xl sm:rounded-2xl shadow-2xl`}
               onClick={(e) => e.stopPropagation()}
+              onTouchMove={(e) => e.stopPropagation()}
             >
               {settingsPanel === "main" && (
                 <div className="py-1.5">
