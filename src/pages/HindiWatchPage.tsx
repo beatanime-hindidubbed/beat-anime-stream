@@ -134,6 +134,34 @@ export default function HindiWatchPage() {
     return () => { cancelled = true; };
   }, [info, epNum, retryKey, anilistId, malId]);
 
+  // Fetch subtitles from English HiAnime endpoint
+  useEffect(() => {
+    if (!currentEp?.episodeId) { setSubtitleTracks([]); return; }
+    let cancelled = false;
+    const fetchSubs = async () => {
+      const apiBase = getNextApi();
+      try {
+        const res = await fetch(
+          `${apiBase}/hianime/episode/sources?animeEpisodeId=${encodeURIComponent(currentEp.episodeId!)}&server=hd-2&category=sub`
+        );
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        const rawTracks = data?.data?.tracks || [];
+        const subs = rawTracks
+          .filter((t: any) => (t.kind || t.lang) !== "thumbnails" && t.lang !== "thumbnails")
+          .map((t: any) => ({
+            file: makeProxyUrl(t.url || t.file, "https://megacloud.blog/", apiBase),
+            label: t.label || t.lang || "Unknown",
+            kind: t.kind || "subtitles",
+            default: t.default || false,
+          }));
+        if (!cancelled) setSubtitleTracks(subs);
+      } catch { /* silent */ }
+    };
+    fetchSubs();
+    return () => { cancelled = true; };
+  }, [currentEp?.episodeId]);
+
   const hindiHlsSrc = selectedSource?.isHLS ? selectedSource.url : null;
   const hindiIframeSrc = selectedSource && !selectedSource.isHLS ? selectedSource.url : null;
 
