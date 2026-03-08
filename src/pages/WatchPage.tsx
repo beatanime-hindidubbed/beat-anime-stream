@@ -606,7 +606,7 @@ export default function WatchPage() {
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {src.name}
+                {src.displayName}
                 {!src.isHLS && <span className="ml-1 text-[9px] opacity-60">EMBED</span>}
               </button>
             ))}
