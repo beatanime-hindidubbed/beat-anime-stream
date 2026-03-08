@@ -120,7 +120,7 @@ export default function Navbar() {
             <Link
               key={l.to}
               to={l.to}
-              className="text-sm text-muted-foreground hover:text-primary transition-colors font-body"
+              className="relative text-sm text-muted-foreground hover:text-primary transition-all duration-200 font-body py-1 after:absolute after:bottom-0 after:left-0 after:w-full after:h-0.5 after:bg-primary after:scale-x-0 after:origin-left after:transition-transform after:duration-300 hover:after:scale-x-100"
             >
               {l.label}
             </Link>
