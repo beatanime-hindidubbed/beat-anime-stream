@@ -187,9 +187,12 @@ export default function VideoPlayer({
     link.click();
   };
 
-  // Detect mobile
+  // Detect mobile + hover capability
   useEffect(() => {
-    const check = () => setIsMobile(window.matchMedia("(max-width: 768px), (pointer: coarse)").matches);
+    const check = () => {
+      setIsMobile(window.matchMedia("(max-width: 768px), (pointer: coarse)").matches);
+      setCanHover(window.matchMedia("(hover: hover) and (pointer: fine)").matches);
+    };
     check();
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
