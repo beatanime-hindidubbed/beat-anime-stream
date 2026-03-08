@@ -8,6 +8,7 @@ import VideoPlayer from "@/components/VideoPlayer";
 import HindiVideoPlayer from "@/components/HindiVideoPlayer";
 import DownloadButton from "@/components/DownloadButton";
 import BackButton from "@/components/BackButton";
+import CommentSection from "@/components/CommentSection";
 import AnimeCard from "@/components/AnimeCard";
 import { getWorkingStream, StreamResult, HIANIME_SERVERS } from "@/lib/streaming";
 import { useState, useEffect, useCallback, useRef } from "react";
