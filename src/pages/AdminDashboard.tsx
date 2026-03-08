@@ -485,6 +485,35 @@ export default function AdminDashboard() {
     setChatBans(prev => prev.filter(b => b.id !== id));
   };
 
+  const clearAllChat = async () => {
+    if (!confirm("Are you sure you want to delete ALL chat messages? This cannot be undone.")) return;
+    await supabase.from("chat_messages").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    setChatMessages([]);
+    setChatReports([]);
+    await logAction("clear_all_chat", "Cleared all chat messages");
+  };
+
+  const SLOW_MODE_OPTIONS = [
+    { label: "Off", value: 0 },
+    { label: "5s", value: 5 },
+    { label: "10s", value: 10 },
+    { label: "30s", value: 30 },
+    { label: "1m", value: 60 },
+    { label: "5m", value: 300 },
+    { label: "15m", value: 900 },
+    { label: "1h", value: 3600 },
+  ];
+
+  const toggleChatPerm = async (key: keyof ChatPermissions) => {
+    const perms = { ...settings.chatPermissions, [key]: !settings.chatPermissions[key] };
+    await updateSettings({ chatPermissions: perms });
+  };
+
+  const setSlowMode = async (val: number) => {
+    const perms = { ...settings.chatPermissions, slowMode: val };
+    await updateSettings({ chatPermissions: perms });
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-card/50 backdrop-blur-xl sticky top-0 z-40">
