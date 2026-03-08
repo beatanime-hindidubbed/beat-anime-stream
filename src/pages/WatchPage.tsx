@@ -149,16 +149,36 @@ export default function WatchPage() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // PiP: show floating mini-player when user scrolls past the main player
+  // PiP: robust visibility when user scrolls past the main player
   useEffect(() => {
     const el = playerWrapperRef.current;
     if (!el) return;
+
+    const updatePip = () => {
+      const rect = el.getBoundingClientRect();
+      const hasScrolledPast = rect.bottom < window.innerHeight * 0.35;
+      const farBelow = rect.top > window.innerHeight * 0.9;
+      setShowPip(hasScrolledPast || farBelow);
+    };
+
     const observer = new IntersectionObserver(
-      ([entry]) => setShowPip(!entry.isIntersecting),
-      { threshold: 0.15 }
+      ([entry]) => {
+        setShowPip(!entry.isIntersecting);
+        updatePip();
+      },
+      { threshold: 0.15, rootMargin: "0px 0px -10% 0px" }
     );
+
     observer.observe(el);
-    return () => observer.disconnect();
+    window.addEventListener("scroll", updatePip, { passive: true });
+    window.addEventListener("resize", updatePip);
+    updatePip();
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("scroll", updatePip);
+      window.removeEventListener("resize", updatePip);
+    };
   }, []);
 
   const scrollToPlayer = () => {
@@ -634,7 +654,7 @@ export default function WatchPage() {
             episodeId={currentEp.episodeId}
             episodeNumber={currentEp.number}
             animeName={animeName}
-            streamUrl={streamResult?.url}
+            streamUrl={category === "dub" ? (hindiHlsSrc || undefined) : streamResult?.url}
           />
         )}
       </div>

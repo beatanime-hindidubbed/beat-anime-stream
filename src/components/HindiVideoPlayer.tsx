@@ -694,7 +694,7 @@ export default function HindiVideoPlayer({
   const PREVIEW_W = 160;
   const previewLeft = `clamp(${PREVIEW_W / 2}px, ${hoverPct}%, calc(100% - ${PREVIEW_W / 2}px))`;
 
-  const settingsPositionClass = isMobile ? "fixed bottom-24 right-3 z-[200]" : "absolute bottom-20 right-3 z-30";
+  const settingsPositionClass = "absolute bottom-20 right-3 z-40";
 
   return (
     <div ref={wrapperRef} className="relative">
@@ -748,7 +748,7 @@ export default function HindiVideoPlayer({
         className="relative w-full aspect-video bg-black rounded-2xl overflow-hidden select-none"
         style={{ boxShadow: "0 8px 40px rgba(0,0,0,0.7), 0 2px 8px rgba(0,0,0,0.5)" }}
         onMouseMove={resetHideTimer}
-        onMouseLeave={() => { if (playing) { setShowControls(false); setSettingsOpen(false); } }}
+        onMouseLeave={() => { if (playing && !settingsOpen) setShowControls(false); }}
         onTouchStart={handleContainerTouchStart}
         onTouchMove={handleContainerTouchMove}
         onTouchEnd={handleContainerTouchEnd}
@@ -861,7 +861,7 @@ export default function HindiVideoPlayer({
             <AnimatePresence>
               {settingsOpen && (
                 <motion.div key="settings" initial={{ opacity: 0, scale: 0.95, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 8 }}
-                  className={`${settingsPositionClass} w-52 sm:w-56 bg-black/90 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden`}>
+                  className={`${settingsPositionClass} w-52 sm:w-56 max-h-[70vh] overflow-y-auto overscroll-contain bg-black/90 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl`}>
                   {settingsPanel === "main" && (
                     <div className="py-1.5">
                       {[

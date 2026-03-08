@@ -21,8 +21,10 @@ const SEGMENT_DELAY_MS  = 8;
 
 type DLState = "idle" | "finding" | "downloading" | "done" | "error";
 
-const proxyify = (base: string, raw: string, ref = "https://megacloud.blog/") =>
-  `${base}/hindiapi/proxy?url=${encodeURIComponent(raw)}&referer=${encodeURIComponent(ref)}`;
+const proxyify = (base: string, raw: string, ref?: string) => {
+  const refererPart = ref ? `&referer=${encodeURIComponent(ref)}` : "";
+  return `${base}/hindiapi/proxy?url=${encodeURIComponent(raw)}${refererPart}`;
+};
 
 const extractParam = (pUrl: string, param: string) => {
   try { return decodeURIComponent(new URL(pUrl).searchParams.get(param) || ""); } catch { return ""; }
@@ -42,6 +44,34 @@ const fmtBytes = (b: number) => {
   if (b < 1048576) return `${(b / 1024).toFixed(1)}KB`;
   if (b < 1073741824) return `${(b / 1048576).toFixed(1)}MB`;
   return `${(b / 1073741824).toFixed(2)}GB`;
+};
+
+const inferRefererFromRaw = (raw: string): string | undefined => {
+  const lowered = raw.toLowerCase();
+  if (lowered.includes("megacloud") || lowered.includes("vizcloud") || lowered.includes("vidplay")) {
+    return "https://megacloud.blog/";
+  }
+  return undefined;
+};
+
+const buildProxyCandidatesFromStreamUrl = (rawOrProxy: string) => {
+  if (rawOrProxy.includes("/hindiapi/proxy")) {
+    const original = extractParam(rawOrProxy, "url");
+    const referer = extractParam(rawOrProxy, "referer") || undefined;
+    if (!original) return [] as { proxyUrl: string; apiBase: string; apiNum: number }[];
+    return API_POOL.map((apiBase, idx) => ({
+      proxyUrl: proxyify(apiBase, original, referer),
+      apiBase,
+      apiNum: idx + 1,
+    }));
+  }
+
+  const referer = inferRefererFromRaw(rawOrProxy);
+  return API_POOL.map((apiBase, idx) => ({
+    proxyUrl: proxyify(apiBase, rawOrProxy, referer),
+    apiBase,
+    apiNum: idx + 1,
+  }));
 };
 
 const fmtTime = (s: number) => {
@@ -195,9 +225,29 @@ export default function DownloadButton({
       let proxyUrl = "", apiBase = API_POOL[0], apiNum = 1;
 
       if (streamUrl) {
-        // If streamUrl is already proxied, use it directly; otherwise proxy it
-        const isAlreadyProxied = streamUrl.includes("/hindiapi/proxy");
-        proxyUrl = isAlreadyProxied ? streamUrl : proxyify(API_POOL[0], streamUrl);
+        // Race all API proxies in parallel and pick first healthy one for this stream
+        const candidates = buildProxyCandidatesFromStreamUrl(streamUrl);
+        const checks = await Promise.allSettled(
+          candidates.map(async (candidate) => {
+            const r = await fetch(candidate.proxyUrl, { signal: controller.signal });
+            if (!r.ok) throw new Error(String(r.status));
+            const text = await r.text();
+            if (!text || (!text.includes("#EXTM3U") && !text.includes("#EXT-X"))) throw new Error("invalid_playlist");
+            return candidate;
+          })
+        );
+
+        const firstOk = checks.find((c): c is PromiseFulfilledResult<{ proxyUrl: string; apiBase: string; apiNum: number }> => c.status === "fulfilled");
+        if (!firstOk) {
+          setErrorMsg("All download APIs failed for this stream");
+          setDlState("error");
+          setTimeout(() => { setDlState("idle"); setErrorMsg(""); }, 3500);
+          return;
+        }
+
+        proxyUrl = firstOk.value.proxyUrl;
+        apiBase = firstOk.value.apiBase;
+        apiNum = firstOk.value.apiNum;
       } else {
         const found = await findSource(controller.signal);
         if (!found) { setErrorMsg("No source found"); setDlState("error"); setTimeout(() => { setDlState("idle"); setErrorMsg(""); }, 3500); return; }
