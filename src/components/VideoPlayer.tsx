@@ -866,7 +866,7 @@ export default function VideoPlayer({
               initial={{ opacity: 0, scale: 0.95, y: 8 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 8 }}
-              className={`${settingsPositionClass} w-52 sm:w-56 bg-black/90 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden`}
+              className={`${settingsPositionClass} w-52 sm:w-56 max-h-[70vh] overflow-y-auto overscroll-contain bg-black/90 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl`}
             >
               {settingsPanel === "main" && (
                 <div className="py-1.5">
