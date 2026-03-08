@@ -1543,7 +1543,7 @@ export default function AdminDashboard() {
                 {bannedAnimes.length === 0 && <p className="text-sm text-muted-foreground">No banned anime.</p>}
                 {bannedAnimes.map(id => (
                   <div key={id} className="flex items-center justify-between p-3 rounded-lg bg-secondary">
-                    <span className="text-sm font-mono text-foreground">{id}</span>
+                    <span className="text-sm text-foreground">{id}</span>
                     <button onClick={() => removeBannedAnime(id)} className="px-2 py-1 rounded text-xs bg-accent text-accent-foreground hover:opacity-80">Unban</button>
                   </div>
                 ))}

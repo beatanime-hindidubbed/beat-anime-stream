@@ -210,9 +210,19 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
   );
 
   const isHidden = useCallback(
-    (animeId: string) =>
-      (settings.hiddenAnimes || []).includes(animeId) ||
-      (settings.bannedAnimes || []).includes(animeId),
+    (animeId: string, animeName?: string) => {
+      if ((settings.hiddenAnimes || []).includes(animeId)) return true;
+      const banned = (settings.bannedAnimes || []).map(b => b.toLowerCase());
+      if (banned.length === 0) return false;
+      // Match by name (case-insensitive)
+      if (animeName && banned.includes(animeName.toLowerCase())) return true;
+      // Match by checking if slug contains a slugified version of banned name
+      const slug = animeId.toLowerCase();
+      return banned.some(name => {
+        const slugified = name.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        return slugified && slug.includes(slugified);
+      });
+    },
     [settings.hiddenAnimes, settings.bannedAnimes]
   );
 
