@@ -10,7 +10,8 @@ export type ThemeType =
   | "bloodmoon" | "phantom" | "jade" | "violet-storm" | "golden-hour"
   | "netflix" | "custom"
   | "diwali" | "holi" | "independence-day"
-  | "cherry-blossom" | "matsuri" | "torii" | "zen";
+  | "cherry-blossom" | "matsuri" | "torii" | "zen"
+  | "mecha-gaming";
 
 export type PlayerTheme = "default" | "minimal" | "cinema" | "retro" | "glassmorphism";
 
