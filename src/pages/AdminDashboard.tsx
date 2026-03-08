@@ -104,6 +104,11 @@ export default function AdminDashboard() {
   const [apiEndpoints, setApiEndpoints] = useState<string[]>(settings.apiEndpoints || []);
   const [newApiUrl, setNewApiUrl] = useState("");
 
+  // Chat admin state
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [chatBans, setChatBans] = useState<any[]>([]);
+  const [chatReports, setChatReports] = useState<any[]>([]);
+
   useEffect(() => {
     setBrandName(settings.siteName); setBrandIcon(settings.siteIcon);
     setTgChannel(settings.telegramChannel); setTgGroup(settings.telegramGroup);
