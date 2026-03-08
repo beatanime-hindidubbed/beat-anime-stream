@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { lovable } from "@/integrations/lovable";
 import { motion } from "framer-motion";
-import { Loader2, Eye, EyeOff } from "lucide-react";
+import { Loader2, Eye, EyeOff, Shield, Mail, User, Lock } from "lucide-react";
+
+const RATE_LIMIT_MS = 3000; // 3s between attempts
 
 export default function LoginPage() {
   const [isRegister, setIsRegister] = useState(false);
@@ -15,93 +17,112 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
+  const [honeypot, setHoneypot] = useState(""); // Bot trap
+  const [lastAttempt, setLastAttempt] = useState(0);
+  const [attempts, setAttempts] = useState(0);
   const { login, register, user } = useSupabaseAuth();
   const navigate = useNavigate();
+  const formStartTime = useRef(Date.now());
+
+  useEffect(() => { formStartTime.current = Date.now(); }, [isRegister]);
 
   if (user) {
     navigate("/", { replace: true });
     return null;
   }
 
+  const validateEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e);
+  const validateUsername = (u: string) => /^[a-zA-Z0-9_]{3,20}$/.test(u);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
-    setSuccessMsg("");
+    setError(""); setSuccessMsg("");
 
-    if (!email || !password) {
-      setError("Email and password are required");
-      return;
-    }
-    if (isRegister && !username) {
-      setError("Username is required");
-      return;
-    }
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters");
+    // Honeypot check (bots fill hidden fields)
+    if (honeypot) return;
+
+    // Time-based bot detection — form filled too fast
+    if (Date.now() - formStartTime.current < 1500) {
+      setError("Please take your time filling the form");
       return;
     }
 
+    // Rate limiting
+    if (Date.now() - lastAttempt < RATE_LIMIT_MS) {
+      setError("Too fast! Please wait a moment.");
+      return;
+    }
+
+    // Max attempts
+    if (attempts >= 8) {
+      setError("Too many attempts. Please try again later.");
+      return;
+    }
+
+    if (!email || !password) { setError("Email and password are required"); return; }
+    if (!validateEmail(email)) { setError("Please enter a valid email address"); return; }
+    if (isRegister && !username) { setError("Username is required"); return; }
+    if (isRegister && !validateUsername(username)) {
+      setError("Username: 3-20 chars, letters/numbers/underscores only");
+      return;
+    }
+    if (password.length < 6) { setError("Password must be at least 6 characters"); return; }
+
+    setLastAttempt(Date.now());
+    setAttempts(a => a + 1);
     setLoading(true);
+
     if (isRegister) {
       const result = await register(email, password, username);
       setLoading(false);
-      if (result.error) {
-        setError(result.error);
-      } else {
-        setSuccessMsg("Account created! Check your email to verify, then log in.");
-      }
+      if (result.error) { setError(result.error); }
+      else { setSuccessMsg("Account created! Check your email to verify, then log in."); }
     } else {
       const result = await login(email, password);
       setLoading(false);
-      if (result.error) {
-        setError(result.error);
-      } else {
-        navigate("/");
-      }
+      if (result.error) { setError(result.error); }
+      else { navigate("/"); }
     }
   };
 
   const handleGoogleLogin = async () => {
-    setGoogleLoading(true);
-    setError("");
+    if (honeypot) return;
+    setGoogleLoading(true); setError("");
     try {
       const result = await lovable.auth.signInWithOAuth("google", {
         redirect_uri: window.location.origin,
       });
-      if (result.error) {
-        setError(result.error.message || "Google login failed");
-      }
+      if (result.error) setError(result.error.message || "Google login failed");
     } catch (err: any) {
       setError(err?.message || "Google login failed");
-    } finally {
-      setGoogleLoading(false);
-    }
+    } finally { setGoogleLoading(false); }
   };
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center px-4">
+    <div className="min-h-[80vh] flex items-center justify-center px-4 py-8">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-sm"
       >
-        <div className="text-center mb-8">
-          <div className="w-14 h-14 rounded-xl bg-gradient-primary flex items-center justify-center mx-auto mb-4">
-            <span className="font-display font-bold text-primary-foreground text-2xl">B</span>
+        {/* Header */}
+        <div className="text-center mb-6 sm:mb-8">
+          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-primary flex items-center justify-center mx-auto mb-4 shadow-lg shadow-primary/20">
+            <span className="font-display font-bold text-primary-foreground text-2xl sm:text-3xl">B</span>
           </div>
-          <h1 className="font-display text-2xl font-bold text-foreground">
+          <h1 className="font-display text-xl sm:text-2xl font-bold text-foreground">
             {isRegister ? "Create Account" : "Welcome Back"}
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
             {isRegister ? "Join Beat Anistream" : "Login to your account"}
           </p>
         </div>
 
-        {/* Google Login Button */}
+        {/* Google Login */}
         <button
           onClick={handleGoogleLogin}
           disabled={googleLoading}
-          className="w-full h-10 rounded-lg bg-secondary text-sm font-medium text-foreground border border-border hover:bg-secondary/80 transition-colors flex items-center justify-center gap-2 mb-4 disabled:opacity-50"
+          className="w-full h-11 sm:h-12 rounded-xl bg-secondary text-sm font-medium text-foreground border border-border hover:bg-secondary/80 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mb-4 disabled:opacity-50"
         >
           {googleLoading ? (
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -122,47 +143,74 @@ export default function LoginPage() {
           <div className="flex-1 h-px bg-border" />
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
+          {/* Honeypot — invisible to users, bots fill it */}
+          <input
+            type="text"
+            name="website"
+            value={honeypot}
+            onChange={e => setHoneypot(e.target.value)}
+            tabIndex={-1}
+            autoComplete="off"
+            style={{ position: "absolute", left: "-9999px", opacity: 0, height: 0 }}
+          />
+
           {error && (
-            <p className="text-sm text-destructive text-center bg-destructive/10 rounded-lg py-2">{error}</p>
+            <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
+              className="text-sm text-destructive text-center bg-destructive/10 rounded-xl py-2.5 px-3">{error}</motion.p>
           )}
           {successMsg && (
-            <p className="text-sm text-accent text-center bg-accent/10 rounded-lg py-2">{successMsg}</p>
+            <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
+              className="text-center bg-accent/10 rounded-xl py-3 px-3 space-y-1">
+              <Mail className="w-8 h-8 text-accent mx-auto" />
+              <p className="text-sm text-accent font-medium">{successMsg}</p>
+              <p className="text-[11px] text-muted-foreground">Check your spam folder too!</p>
+            </motion.div>
           )}
 
           {isRegister && (
             <div>
-              <label className="text-sm text-muted-foreground block mb-1">Username</label>
+              <label className="text-xs sm:text-sm text-muted-foreground block mb-1 flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5" /> Username
+              </label>
               <input
                 type="text"
                 value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full h-10 px-3 rounded-lg bg-secondary text-foreground border border-border focus:outline-none focus:ring-1 focus:ring-primary"
-                placeholder="Your username"
+                onChange={e => setUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, ""))}
+                className="w-full h-11 sm:h-12 px-3 rounded-xl bg-secondary text-foreground border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all text-sm"
+                placeholder="your_username"
+                maxLength={20}
               />
+              {username && !validateUsername(username) && (
+                <p className="text-[10px] text-destructive mt-0.5">3-20 chars, letters/numbers/underscores</p>
+              )}
             </div>
           )}
 
           <div>
-            <label className="text-sm text-muted-foreground block mb-1">Email</label>
+            <label className="text-xs sm:text-sm text-muted-foreground block mb-1 flex items-center gap-1.5">
+              <Mail className="w-3.5 h-3.5" /> Email
+            </label>
             <input
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full h-10 px-3 rounded-lg bg-secondary text-foreground border border-border focus:outline-none focus:ring-1 focus:ring-primary"
+              onChange={e => setEmail(e.target.value)}
+              className="w-full h-11 sm:h-12 px-3 rounded-xl bg-secondary text-foreground border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all text-sm"
               placeholder="you@example.com"
               required
             />
           </div>
 
           <div>
-            <label className="text-sm text-muted-foreground block mb-1">Password</label>
+            <label className="text-xs sm:text-sm text-muted-foreground block mb-1 flex items-center gap-1.5">
+              <Lock className="w-3.5 h-3.5" /> Password
+            </label>
             <div className="relative">
               <input
                 type={showPassword ? "text" : "password"}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full h-10 px-3 pr-10 rounded-lg bg-secondary text-foreground border border-border focus:outline-none focus:ring-1 focus:ring-primary"
+                onChange={e => setPassword(e.target.value)}
+                className="w-full h-11 sm:h-12 px-3 pr-10 rounded-xl bg-secondary text-foreground border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all text-sm"
                 placeholder="••••••••"
                 required
                 minLength={6}
@@ -170,27 +218,36 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
+            {password && password.length < 6 && (
+              <p className="text-[10px] text-destructive mt-0.5">Min 6 characters</p>
+            )}
           </div>
 
           <button
             type="submit"
-            disabled={loading}
-            className="w-full h-10 rounded-lg bg-gradient-primary text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity flex items-center justify-center gap-2 disabled:opacity-50"
+            disabled={loading || attempts >= 8}
+            className="w-full h-11 sm:h-12 rounded-xl bg-gradient-primary text-sm font-semibold text-primary-foreground hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg shadow-primary/20"
           >
             {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-            {isRegister ? "Register" : "Login"}
+            {isRegister ? "Create Account" : "Sign In"}
           </button>
         </form>
 
-        <p className="text-sm text-muted-foreground text-center mt-4">
+        {/* Security badge */}
+        <div className="flex items-center justify-center gap-1.5 mt-3 text-[10px] text-muted-foreground">
+          <Shield className="w-3 h-3" /> Protected by anti-spam system
+        </div>
+
+        <p className="text-xs sm:text-sm text-muted-foreground text-center mt-4">
           {isRegister ? "Already have an account?" : "Don't have an account?"}{" "}
-          <button onClick={() => { setIsRegister(!isRegister); setError(""); setSuccessMsg(""); }} className="text-primary hover:underline">
-            {isRegister ? "Login" : "Register"}
+          <button onClick={() => { setIsRegister(!isRegister); setError(""); setSuccessMsg(""); setAttempts(0); }}
+            className="text-primary hover:underline font-medium">
+            {isRegister ? "Sign In" : "Create Account"}
           </button>
         </p>
       </motion.div>

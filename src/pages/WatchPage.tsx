@@ -521,6 +521,11 @@ export default function WatchPage() {
           </div>
         </div>
       )}
+
+      {/* Comments Section */}
+      {episodeId && (
+        <CommentSection episodeId={fullEpisodeId} animeId={animeId} />
+      )}
     </div>
   );
 }
