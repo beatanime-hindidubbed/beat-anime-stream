@@ -102,6 +102,7 @@ interface Props { children: ReactNode }
 export default function VerifyGate({ children }: Props) {
   const navigate  = useNavigate();
   const location  = useLocation();
+  const { settings } = useSiteSettings();
 
   /**
    * verifiedInMemory is the single source of truth for this session.
