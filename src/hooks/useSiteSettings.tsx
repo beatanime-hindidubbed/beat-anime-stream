@@ -138,8 +138,10 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
   );
 
   const isHidden = useCallback(
-    (animeId: string) => (settings.hiddenAnimes || []).includes(animeId),
-    [settings.hiddenAnimes]
+    (animeId: string) =>
+      (settings.hiddenAnimes || []).includes(animeId) ||
+      (settings.bannedAnimes || []).includes(animeId),
+    [settings.hiddenAnimes, settings.bannedAnimes]
   );
 
   return (
