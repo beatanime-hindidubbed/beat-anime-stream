@@ -480,11 +480,15 @@ export default function VideoPlayer({
 
   // ── Seek bar touch ────────────────────────────────────────────────────
   const handleSeekBarTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
     touchOnSeekBar.current = true;
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
     touchMoved.current = true;
+    wasPlayingRef.current = playing;
     const v = videoRef.current;
     if (!v || !duration) return;
+    if (wasPlayingRef.current) v.pause();
     const rect = e.currentTarget.getBoundingClientRect();
     const touch = e.touches[0];
     const pct = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
@@ -492,6 +496,8 @@ export default function VideoPlayer({
   };
 
   const handleSeekBarTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
     const v = videoRef.current;
     if (!v || !duration) return;
@@ -499,10 +505,10 @@ export default function VideoPlayer({
     const touch = e.touches[0];
     const pct = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
     v.currentTime = pct * duration;
-    e.stopPropagation();
   };
 
   const handleSeekBarTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    e.stopPropagation();
     touchOnSeekBar.current = false;
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
     const v = videoRef.current;
@@ -513,7 +519,7 @@ export default function VideoPlayer({
       const pct = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
       v.currentTime = pct * duration;
     }
-    e.stopPropagation();
+    if (wasPlayingRef.current && v.paused) v.play();
   };
 
    // ── Preview thumbnail hover (desktop/laptop hover devices) ─────────────
