@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
+import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { sanitizeMessage } from "@/lib/profanityFilter";
 import { AnimatePresence, motion } from "framer-motion";
 import {
