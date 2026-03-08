@@ -686,7 +686,7 @@ export default function VideoPlayer({
     doubleTapTimer.current = setTimeout(() => {
       if (tapCount.current === 1) togglePlay();
       tapCount.current = 0;
-    }, 280);
+    }, 220); // Reduced from 280ms for snappier response
     if (tapCount.current >= 2) {
       tapCount.current = 0;
       if (doubleTapTimer.current) clearTimeout(doubleTapTimer.current);
