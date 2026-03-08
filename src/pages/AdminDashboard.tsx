@@ -665,7 +665,7 @@ export default function AdminDashboard() {
               </div>
 
               {/* Admin permission levels */}
-              <div className="p-4 sm:p-5 rounded-xl bg-card border border-border">
+              <div className="glass-card rounded-xl p-4 sm:p-5">
                 <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
                   <Shield className="w-4 h-4 text-accent" /> Admin Permission Levels
                 </h3>
