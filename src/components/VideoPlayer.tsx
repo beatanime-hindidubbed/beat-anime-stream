@@ -720,7 +720,7 @@ export default function VideoPlayer({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             transition={{ type: "spring", damping: 20, stiffness: 300 }}
-            className="fixed bottom-4 right-4 z-[999] w-72 sm:w-80 rounded-2xl overflow-hidden shadow-[0_8px_40px_rgba(0,0,0,0.8)] border border-white/10 cursor-pointer"
+            className="fixed bottom-3 right-3 z-[999] w-48 sm:w-80 rounded-xl sm:rounded-2xl overflow-hidden shadow-[0_8px_40px_rgba(0,0,0,0.8)] border border-white/10 cursor-pointer"
             onClick={() => wrapperRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })}
             style={{ aspectRatio: "16/9" }}
           >
