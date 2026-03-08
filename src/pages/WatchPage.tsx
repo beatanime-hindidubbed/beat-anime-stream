@@ -212,6 +212,8 @@ export default function WatchPage() {
   }, [category, info, currentEp, retryKey]);
 
   // ── HiAnime (sub/engdub/raw) stream loader ─────────────────────────
+  const [engMode, setEngMode] = useState<"sub" | "dub">("sub");
+
   useEffect(() => {
     if (category === "dub" || !fullEpisodeId) return;
     let cancelled = false;
@@ -225,21 +227,27 @@ export default function WatchPage() {
       setHindiIframeSrc(null);
       setRetryMessage("");
 
-      // Map engdub → "dub" for HiAnime API, sub/raw → "sub"
-      const apiCategory = category === "engdub" ? "dub" : category === "raw" ? "sub" : "sub";
+      // For "eng", try sub first then dub; for "raw" use sub
+      const categoriesToTry = category === "eng" ? ["sub", "dub"] : ["sub"];
 
-      for (let i = 0; i < HIANIME_SERVERS.length; i++) {
-        if (cancelled) return;
-        const server = HIANIME_SERVERS[i];
-        if (i > 0) {
-          setRetryMessage(`Trying server ${i + 1}/${HIANIME_SERVERS.length}: ${server.toUpperCase()}...`);
-          await new Promise((r) => setTimeout(r, 800));
-        }
-        try {
-          const result = await getWorkingStream({ episodeId: fullEpisodeId, category: apiCategory, server });
+      for (const apiCat of categoriesToTry) {
+        for (let i = 0; i < HIANIME_SERVERS.length; i++) {
           if (cancelled) return;
-          if (result) { setSelectedServer(server); setStreamResult(result); setStreamLoading(false); setRetryMessage(""); return; }
-        } catch {}
+          const server = HIANIME_SERVERS[i];
+          setRetryMessage(`Trying ${apiCat.toUpperCase()} on ${server.toUpperCase()}...`);
+          try {
+            const result = await getWorkingStream({ episodeId: fullEpisodeId, category: apiCat, server });
+            if (cancelled) return;
+            if (result) {
+              setSelectedServer(server);
+              setStreamResult(result);
+              setStreamLoading(false);
+              setRetryMessage("");
+              if (category === "eng") setEngMode(apiCat as "sub" | "dub");
+              return;
+            }
+          } catch {}
+        }
       }
 
       if (!cancelled) { setStreamError("all_failed"); setStreamLoading(false); }
