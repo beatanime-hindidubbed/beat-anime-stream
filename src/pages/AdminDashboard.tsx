@@ -499,6 +499,100 @@ export default function AdminDashboard() {
           </motion.div>
         )}
 
+        {/* ── Chat Moderation ── */}
+        {tab === "chat" && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+            {/* Bug Reports */}
+            <div className="p-5 rounded-xl bg-card border border-border">
+              <h2 className="font-display text-base font-bold text-foreground mb-3 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-destructive" /> Bug Reports ({chatReports.length})
+              </h2>
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {chatReports.length === 0 && <p className="text-sm text-muted-foreground">No reports yet.</p>}
+                {chatReports.map((msg: any) => (
+                  <div key={msg.id} className={`flex items-start gap-3 p-3 rounded-lg ${msg.is_deleted ? "bg-destructive/5 opacity-50" : "bg-secondary"}`}>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-xs font-medium text-foreground">{msg.username || "Anonymous"}</span>
+                        <span className="text-[10px] text-muted-foreground">{new Date(msg.created_at).toLocaleString()}</span>
+                      </div>
+                      <p className="text-sm text-foreground break-words">{msg.content}</p>
+                    </div>
+                    {!msg.is_deleted && (
+                      <button onClick={() => adminDeleteMsg(msg.id)} className="p-1 rounded hover:bg-destructive/20 flex-shrink-0">
+                        <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Recent Chat Messages */}
+            <div className="p-5 rounded-xl bg-card border border-border">
+              <h2 className="font-display text-base font-bold text-foreground mb-3 flex items-center gap-2">
+                <MessageCircle className="w-4 h-4 text-primary" /> Recent Chat ({chatMessages.length})
+              </h2>
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {chatMessages.length === 0 && <p className="text-sm text-muted-foreground">No messages yet.</p>}
+                {chatMessages.map((msg: any) => (
+                  <div key={msg.id} className={`flex items-start gap-3 p-2 rounded-lg ${msg.is_deleted ? "opacity-40" : "hover:bg-secondary/50"}`}>
+                    <div className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center text-[10px] font-bold text-secondary-foreground flex-shrink-0">
+                      {(msg.username || "?")[0]?.toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium text-foreground">{msg.username}</span>
+                        <span className="text-[10px] text-muted-foreground">{new Date(msg.created_at).toLocaleTimeString()}</span>
+                      </div>
+                      <p className="text-sm text-foreground/80 break-words">{msg.content}</p>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {!msg.is_deleted && (
+                        <button onClick={() => adminDeleteMsg(msg.id)} className="p-1 rounded hover:bg-destructive/20">
+                          <Trash2 className="w-3 h-3 text-muted-foreground hover:text-destructive" />
+                        </button>
+                      )}
+                      <button onClick={() => adminBanUser(msg.user_id, "mute")} title="Mute 7d" className="p-1 rounded hover:bg-destructive/20">
+                        <VolumeX className="w-3 h-3 text-muted-foreground hover:text-destructive" />
+                      </button>
+                      <button onClick={() => adminBanUser(msg.user_id, "ban")} title="Ban 7d" className="p-1 rounded hover:bg-destructive/20">
+                        <Ban className="w-3 h-3 text-muted-foreground hover:text-destructive" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Active Bans */}
+            <div className="p-5 rounded-xl bg-card border border-border">
+              <h2 className="font-display text-base font-bold text-foreground mb-3 flex items-center gap-2">
+                <Ban className="w-4 h-4 text-destructive" /> Active Bans ({chatBans.length})
+              </h2>
+              <div className="space-y-2">
+                {chatBans.length === 0 && <p className="text-sm text-muted-foreground">No bans.</p>}
+                {chatBans.map((ban: any) => (
+                  <div key={ban.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary">
+                    <div>
+                      <span className="text-xs font-mono text-foreground">{ban.user_id.slice(0, 8)}...</span>
+                      <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] font-medium ${ban.ban_type === "ban" ? "bg-destructive/20 text-destructive" : "bg-primary/20 text-primary"}`}>
+                        {ban.ban_type}
+                      </span>
+                      {ban.expires_at && (
+                        <span className="ml-2 text-[10px] text-muted-foreground">until {new Date(ban.expires_at).toLocaleDateString()}</span>
+                      )}
+                    </div>
+                    <button onClick={() => removeBan(ban.id)} className="px-2 py-1 rounded text-xs bg-accent text-accent-foreground hover:opacity-80">
+                      Unban
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         {/* ── Policy ── */}
         {tab === "policy" && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5">
