@@ -9,7 +9,7 @@ import AnimeCard from "@/components/AnimeCard";
 import SkeletonCard from "@/components/SkeletonCard";
 import BackButton from "@/components/BackButton";
 import DownloadButton from "@/components/DownloadButton";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Play, Bookmark, BookmarkCheck, Star, Clock, Tv, Calendar,
   ChevronDown, ChevronUp, Loader2, Globe, Mic
