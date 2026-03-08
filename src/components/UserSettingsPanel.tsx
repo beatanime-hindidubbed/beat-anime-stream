@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Settings, X, Monitor, Volume2, VolumeX, Subtitles, Crown, Send, Moon, Cloud, Trash2 } from "lucide-react";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { useIsPremium } from "@/hooks/useIsPremium";
