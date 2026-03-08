@@ -399,7 +399,7 @@ export default function WatchPage() {
             </span>
             {" · "}
             <span className={category === "dub" ? "text-orange-400 font-medium" : ""}>
-              {category === "dub" ? "🇮🇳 हिंदी DUB" : (streamResult?.category || category).toUpperCase()}
+              {category === "dub" ? "🇮🇳 हिंदी DUB" : category === "eng" ? engLabel : (streamResult?.category || category).toUpperCase()}
             </span>
           </span>
         </div>
