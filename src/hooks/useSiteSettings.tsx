@@ -91,6 +91,8 @@ export interface SiteSettings {
   apiEndpoints: string[];
   chatEnabled: boolean;
   chatPermissions: ChatPermissions;
+  verificationEnabled: boolean;
+  verificationMode: "code" | "captcha" | "checkbox";
 }
 
 const DEFAULTS: SiteSettings = {
