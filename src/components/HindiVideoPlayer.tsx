@@ -1001,7 +1001,7 @@ export default function HindiVideoPlayer({
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent pointer-events-none"
                 style={{ background: "linear-gradient(to top, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.6) 30%, rgba(0,0,0,0.1) 60%, transparent 100%)" }} />
 
-              <div className="relative px-3 sm:px-5 pb-3 sm:pb-4 pt-12">
+              <div className="relative px-2 sm:px-5 pb-1.5 sm:pb-4 pt-8 sm:pt-12">
                 {/* Seek bar — YouTube-style with preview thumbnail */}
                 <div className="w-full mb-3 sm:mb-3.5 cursor-pointer group/progress relative"
                   style={{ height: "32px", display: "flex", alignItems: "center" }}
@@ -1028,41 +1028,43 @@ export default function HindiVideoPlayer({
                     style={{ width: "14px", height: "14px", left: `${progress}%`, top: "50%", transform: "translateX(-50%) translateY(-50%)",
                       background: "white", boxShadow: "0 0 0 3px hsl(var(--primary) / 0.4), 0 2px 8px rgba(0,0,0,0.8)" }} />
 
-                  {/* Preview thumbnail (desktop only) */}
-                  {!isMobile && hoverTime !== null && (
+                  {/* Preview thumbnail */}
+                  {hoverTime !== null && (
                     <div
-                      className="absolute bottom-8 flex-col items-center gap-1.5 pointer-events-none z-20 -translate-x-1/2 hidden sm:flex"
+                      className="absolute bottom-6 sm:bottom-8 flex flex-col items-center gap-1 sm:gap-1.5 pointer-events-none z-20 -translate-x-1/2"
                       style={{ left: previewLeft }}
                     >
-                      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-px h-6 bg-white/40" style={{ bottom: "-24px" }} />
-                      <div className={`rounded-xl overflow-hidden border border-white/20 shadow-2xl bg-black/90 transition-opacity duration-75 ${previewHasFrame ? "opacity-100" : "opacity-40"}`}
-                        style={{ boxShadow: "0 12px 32px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,255,255,0.1)" }}>
-                        <canvas ref={previewCanvasRef} width={160} height={90} className="block" />
-                      </div>
-                      <span className="text-[11px] text-white font-bold px-2.5 py-1 rounded-lg bg-black/90 backdrop-blur-sm shadow tabular-nums border border-white/10">
+                      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-px h-4 sm:h-6 bg-white/40" style={{ bottom: "-16px" }} />
+                      {!isMobile && (
+                        <div className={`rounded-lg sm:rounded-xl overflow-hidden border border-white/20 shadow-2xl bg-black/90 transition-opacity duration-75 ${previewHasFrame ? "opacity-100" : "opacity-40"}`}
+                          style={{ boxShadow: "0 12px 32px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,255,255,0.1)" }}>
+                          <canvas ref={previewCanvasRef} width={160} height={90} className="block" />
+                        </div>
+                      )}
+                      <span className="text-[9px] sm:text-[11px] text-white font-bold px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg bg-black/90 shadow tabular-nums border border-white/10">
                         {fmt(hoverTime)}
                       </span>
                     </div>
                   )}
                 </div>
 
-                <div className="flex items-center justify-between gap-1">
-                  <div className="flex items-center gap-0.5 sm:gap-1">
+                <div className="flex items-center justify-between gap-0.5 sm:gap-1">
+                  <div className="flex items-center gap-0">
                     <button onClick={() => { const v = videoRef.current; if (v) { v.currentTime = Math.max(0, v.currentTime - 10); flashCenter("rw"); } }}
-                      className="relative w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all rounded-full group/btn overflow-hidden">
+                      className="relative w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all rounded-full group/btn overflow-hidden">
                       <span className="absolute inset-0 rounded-full bg-white/0 group-hover/btn:bg-white/10 transition-colors duration-150" />
-                      <SkipBack className="relative w-4.5 h-4.5 sm:w-4 sm:h-4" />
+                      <SkipBack className="relative w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     </button>
                     <button onClick={togglePlay}
-                      className="relative w-11 h-11 sm:w-10 sm:h-10 flex items-center justify-center transition-all rounded-full group/btn overflow-hidden">
+                      className="relative w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center transition-all rounded-full group/btn overflow-hidden">
                       <span className="absolute inset-0 rounded-full bg-white/0 group-hover/btn:bg-white/15 transition-colors duration-150" />
-                      {playing ? <Pause className="relative w-5 h-5 sm:w-4.5 sm:h-4.5 text-white drop-shadow-md" />
-                               : <Play  className="relative w-5 h-5 sm:w-4.5 sm:h-4.5 text-white drop-shadow-md ml-0.5" />}
+                      {playing ? <Pause className="relative w-4 h-4 sm:w-4.5 sm:h-4.5 text-white drop-shadow-md" />
+                               : <Play  className="relative w-4 h-4 sm:w-4.5 sm:h-4.5 text-white drop-shadow-md ml-0.5" />}
                     </button>
                     <button onClick={() => { const v = videoRef.current; if (v) { v.currentTime = Math.min(v.duration, v.currentTime + 10); flashCenter("ff"); } }}
-                      className="relative w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all rounded-full group/btn overflow-hidden">
+                      className="relative w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all rounded-full group/btn overflow-hidden">
                       <span className="absolute inset-0 rounded-full bg-white/0 group-hover/btn:bg-white/10 transition-colors duration-150" />
-                      <SkipForward className="relative w-4.5 h-4.5 sm:w-4 sm:h-4" />
+                      <SkipForward className="relative w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     </button>
 
                     <div className="hidden sm:flex items-center gap-1 group/vol">
@@ -1082,42 +1084,36 @@ export default function HindiVideoPlayer({
                       </div>
                     </div>
 
-                    <div className="hidden xs:flex items-center ml-1.5">
-                      <span className="text-[11px] sm:text-xs font-medium tabular-nums" style={{ color: "rgba(255,255,255,0.9)" }}>{fmt(currentTime)}</span>
-                      <span className="text-[11px] sm:text-xs mx-1" style={{ color: "rgba(255,255,255,0.3)" }}>/</span>
-                      <span className="text-[11px] sm:text-xs tabular-nums" style={{ color: "rgba(255,255,255,0.5)" }}>{fmt(duration)}</span>
+                    <div className="flex items-center ml-1">
+                      <span className="text-[9px] sm:text-xs font-medium tabular-nums" style={{ color: "rgba(255,255,255,0.9)" }}>{fmt(currentTime)}</span>
+                      <span className="text-[9px] sm:text-xs mx-0.5 sm:mx-1" style={{ color: "rgba(255,255,255,0.3)" }}>/</span>
+                      <span className="text-[9px] sm:text-xs tabular-nums" style={{ color: "rgba(255,255,255,0.5)" }}>{fmt(duration)}</span>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-0.5">
+                  <div className="flex items-center gap-0">
                     {speed !== 1 && (
-                      <span className="text-[10px] sm:text-xs text-primary font-bold px-1.5 py-0.5 rounded-md bg-primary/15 border border-primary/20">{speed}×</span>
+                      <span className="text-[8px] sm:text-xs text-primary font-bold px-1 sm:px-1.5 py-0.5 rounded bg-primary/15 border border-primary/20">{speed}×</span>
                     )}
                     {currentQuality !== -1 && qualityLevels[currentQuality] && (
                       <span className="hidden sm:inline text-[10px] text-accent font-medium px-1.5 py-0.5 rounded-md bg-accent/10 border border-accent/20">{qualityLabel(currentQuality)}</span>
                     )}
                     <button onClick={toggleMute}
-                      className="sm:hidden relative w-9 h-9 flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all rounded-full group/btn overflow-hidden">
+                      className="sm:hidden relative w-7 h-7 flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all rounded-full group/btn overflow-hidden">
                       <span className="absolute inset-0 rounded-full bg-white/0 group-hover/btn:bg-white/10 transition-colors" />
-                      {muted || volume === 0 ? <VolumeX className="relative w-4 h-4" /> : <Volume2 className="relative w-4 h-4" />}
+                      {muted || volume === 0 ? <VolumeX className="relative w-3.5 h-3.5" /> : <Volume2 className="relative w-3.5 h-3.5" />}
                     </button>
                     <button onClick={() => { setSettingsOpen(!settingsOpen); setSettingsPanel("main"); }}
-                      className={`relative w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center transition-all rounded-full group/btn overflow-hidden ${settingsOpen ? "text-primary" : "text-white/70 hover:text-white"}`}>
+                      className={`relative w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center transition-all rounded-full group/btn overflow-hidden ${settingsOpen ? "text-primary" : "text-white/70 hover:text-white"}`}>
                       <span className={`absolute inset-0 rounded-full transition-colors ${settingsOpen ? "bg-primary/15" : "bg-white/0 group-hover/btn:bg-white/10"}`} />
-                      <Settings className={`relative w-4 h-4 transition-transform duration-300 ${settingsOpen ? "rotate-45" : ""}`} />
+                      <Settings className={`relative w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform duration-300 ${settingsOpen ? "rotate-45" : ""}`} />
                     </button>
                     <button onClick={toggleFullscreen}
-                      className="relative w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all rounded-full group/btn overflow-hidden">
+                      className="relative w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all rounded-full group/btn overflow-hidden">
                       <span className="absolute inset-0 rounded-full bg-white/0 group-hover/btn:bg-white/10 transition-colors" />
-                      {fullscreen ? <Minimize className="relative w-4 h-4" /> : <Maximize className="relative w-4 h-4" />}
+                      {fullscreen ? <Minimize className="relative w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Maximize className="relative w-3.5 h-3.5 sm:w-4 sm:h-4" />}
                     </button>
                   </div>
-                </div>
-
-                <div className="sm:hidden flex justify-center mt-1">
-                  <span className="text-[10px] tabular-nums" style={{ color: "rgba(255,255,255,0.4)" }}>
-                    {fmt(currentTime)} / {fmt(duration)}
-                  </span>
                 </div>
               </div>
             </div>
