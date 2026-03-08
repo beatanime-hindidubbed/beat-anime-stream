@@ -857,8 +857,24 @@ export default function HindiVideoPlayer({
                           <span className="flex items-center gap-1 text-white/40 text-xs">{qualityLabel(currentQuality)} <ChevronRight className="w-3 h-3" /></span>
                         </button>
                       )}
+                      <button onClick={() => setSettingsPanel("boost")}
+                        className="flex items-center justify-between w-full px-4 py-3 text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
+                        <span className="flex items-center gap-2.5"><Volume1 className="w-4 h-4 text-white/50" /> Audio Boost</span>
+                        <span className="flex items-center gap-1 text-white/40 text-xs">{audioBoost > 1 ? `${audioBoost}x` : "Off"} <ChevronRight className="w-3 h-3" /></span>
+                      </button>
+                      <button onClick={takeScreenshot}
+                        className="flex items-center justify-between w-full px-4 py-3 text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
+                        <span className="flex items-center gap-2.5"><Camera className="w-4 h-4 text-white/50" /> Screenshot</span>
+                        <span className="text-white/40 text-xs">Save</span>
+                      </button>
+                      <button onClick={() => { const v = videoRef.current; if (!v) return; if (abLoop.a === null) setAbLoop({ a: v.currentTime, b: null }); else if (abLoop.b === null) setAbLoop(prev => ({ ...prev, b: v.currentTime })); else setAbLoop({ a: null, b: null }); }}
+                        className="flex items-center justify-between w-full px-4 py-3 text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
+                        <span className="flex items-center gap-2.5"><Repeat className="w-4 h-4 text-white/50" /> A-B Loop</span>
+                        <span className={`text-xs ${abLoop.a !== null ? "text-primary font-medium" : "text-white/40"}`}>{abLoop.a !== null && abLoop.b !== null ? "Active ✓" : abLoop.a !== null ? "Set B →" : "Set A"}</span>
+                      </button>
                       {[
                         { label: "Ambient",  icon: Sun,         value: ambientEnabled, toggle: () => setAmbientEnabled(!ambientEnabled) },
+                        { label: "Cinema",   icon: SlidersHorizontal, value: cinemaMode, toggle: () => setCinemaMode(!cinemaMode) },
                         { label: "Autoplay", icon: SkipForward, value: autoPlayNext,   toggle: () => onAutoPlayToggle?.(!autoPlayNext) },
                       ].map(item => (
                         <button key={item.label} onClick={item.toggle}
