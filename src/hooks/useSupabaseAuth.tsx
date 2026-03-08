@@ -6,6 +6,7 @@ interface AuthCtx {
   user: User | null;
   session: Session | null;
   isAdmin: boolean;
+  isModerator: boolean;
   loading: boolean;
   login: (email: string, password: string) => Promise<{ error?: string }>;
   register: (email: string, password: string, username: string) => Promise<{ error?: string }>;
@@ -18,14 +19,18 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isModerator, setIsModerator] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const checkAdmin = useCallback(async (userId: string) => {
     try {
       const { data } = await supabase.rpc("has_role", { _user_id: userId, _role: "admin" });
       setIsAdmin(!!data);
+      const { data: modData } = await supabase.rpc("has_role", { _user_id: userId, _role: "moderator" });
+      setIsModerator(!!modData);
     } catch {
       setIsAdmin(false);
+      setIsModerator(false);
     }
   }, []);
 
@@ -38,6 +43,7 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
         setTimeout(() => checkAdmin(sess.user.id), 0);
       } else {
         setIsAdmin(false);
+        setIsModerator(false);
       }
       setLoading(false);
     });
@@ -99,7 +105,7 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, session, isAdmin, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, session, isAdmin, isModerator, loading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

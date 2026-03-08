@@ -97,10 +97,11 @@ const FONT_STYLES: { key: FontStyle; label: string; desc: string; preview: strin
 type TabKey = "stats" | "branding" | "effects" | "sandbox" | "ads" | "api" | "users" | "policy" | "premium" | "chat" | "comments" | "player" | "banlist" | "logs";
 
 export default function AdminDashboard() {
-  const { user, isAdmin, loading: authLoading, logout } = useSupabaseAuth();
+  const { user, isAdmin, isModerator, loading: authLoading, logout } = useSupabaseAuth();
   const { settings, updateSettings } = useSiteSettings();
   const navigate = useNavigate();
   const [tab, setTab] = useState<TabKey>("stats");
+  const [showMobileTabs, setShowMobileTabs] = useState(false);
   const [ads, setAds] = useState<Ad[]>([]);
   const [apiHealth, setApiHealth] = useState<Record<string, { status: "ok" | "fail" | "loading"; ms?: number }>>({});
   const [saving, setSaving] = useState(false);
@@ -181,8 +182,10 @@ export default function AdminDashboard() {
   }, [settings]);
 
   useEffect(() => {
-    if (!authLoading && (!user || !isAdmin)) navigate("/admin", { replace: true });
-  }, [user, isAdmin, authLoading, navigate]);
+    if (!authLoading && !user) navigate("/admin", { replace: true });
+    if (!authLoading && user && !isAdmin && !isModerator) navigate("/admin", { replace: true });
+  }, [user, isAdmin, isModerator, authLoading, navigate]);
+  
 
   useEffect(() => {
     supabase.from("ads").select("*").then(({ data }) => { if (data) setAds(data); });
@@ -398,7 +401,9 @@ export default function AdminDashboard() {
     </div>
   );
 
-  const tabs = [
+  const MODERATOR_TABS: TabKey[] = ["stats", "chat", "comments"];
+
+  const allTabs = [
     { key: "stats" as const, label: "Stats", icon: BarChart3 },
     { key: "branding" as const, label: "Branding", icon: Palette },
     { key: "effects" as const, label: "Effects", icon: Sparkles },
@@ -414,6 +419,9 @@ export default function AdminDashboard() {
     { key: "api" as const, label: "API", icon: Activity },
     { key: "logs" as const, label: "Logs", icon: ScrollText },
   ];
+
+  // Moderators only see limited tabs
+  const tabs = isAdmin ? allTabs : allTabs.filter(t => MODERATOR_TABS.includes(t.key));
 
   const logAction = async (action: string, details?: string, targetId?: string) => {
     if (!user) return;
@@ -471,8 +479,10 @@ export default function AdminDashboard() {
           <div className="flex items-center gap-3">
             <Link to="/" className="text-sm text-muted-foreground hover:text-primary">← Site</Link>
             <span className="text-border">|</span>
-            <h1 className="font-display font-bold text-foreground">Owner Panel</h1>
-            <span className="px-2 py-0.5 rounded-md bg-gradient-accent text-accent-foreground text-xs font-medium">Owner</span>
+            <h1 className="font-display font-bold text-foreground">{isAdmin ? "Owner Panel" : "Mod Panel"}</h1>
+            <span className={`px-2 py-0.5 rounded-md text-xs font-medium ${isAdmin ? "bg-gradient-accent text-accent-foreground" : "bg-primary/20 text-primary"}`}>
+              {isAdmin ? "Owner" : "Moderator"}
+            </span>
           </div>
           <button onClick={() => { logout(); navigate("/"); }} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-destructive">
             <LogOut className="w-4 h-4" /> Logout
@@ -481,13 +491,14 @@ export default function AdminDashboard() {
       </header>
 
       <div className="container py-6">
-        <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
+        {/* Mobile: horizontal scroll tabs with slide-out feel */}
+        <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide -mx-3 px-3 snap-x snap-mandatory">
           {tabs.map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+              className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap snap-start flex-shrink-0 ${
                 tab === t.key ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
               }`}>
-              <t.icon className="w-4 h-4" /> {t.label}
+              <t.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> {t.label}
             </button>
           ))}
         </div>
