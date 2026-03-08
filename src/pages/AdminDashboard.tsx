@@ -185,7 +185,7 @@ export default function AdminDashboard() {
     if (!authLoading && !user) navigate("/admin", { replace: true });
     if (!authLoading && user && !isAdmin && !isModerator) navigate("/admin", { replace: true });
   }, [user, isAdmin, isModerator, authLoading, navigate]);
-  }, [user, isAdmin, authLoading, navigate]);
+  
 
   useEffect(() => {
     supabase.from("ads").select("*").then(({ data }) => { if (data) setAds(data); });
