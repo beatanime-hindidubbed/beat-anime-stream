@@ -269,11 +269,46 @@ export default function AdminDashboard() {
     { key: "stats" as const, label: "Stats", icon: BarChart3 },
     { key: "branding" as const, label: "Branding", icon: Palette },
     { key: "premium" as const, label: "Premium", icon: Crown },
+    { key: "chat" as const, label: "Chat", icon: MessageCircle },
     { key: "policy" as const, label: "Policies", icon: FileText },
     { key: "ads" as const, label: "Ads", icon: Image },
     { key: "users" as const, label: "Users", icon: Users },
     { key: "api" as const, label: "API", icon: Activity },
   ];
+
+  // Chat admin state
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [chatBans, setChatBans] = useState<any[]>([]);
+  const [chatReports, setChatReports] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (tab === "chat") {
+      supabase.from("chat_messages").select("*").eq("type", "report").order("created_at", { ascending: false }).limit(50)
+        .then(({ data }) => { if (data) setChatReports(data); });
+      supabase.from("chat_messages").select("*").eq("type", "group").order("created_at", { ascending: false }).limit(50)
+        .then(({ data }) => { if (data) setChatMessages(data); });
+      supabase.from("chat_bans").select("*").order("created_at", { ascending: false })
+        .then(({ data }) => { if (data) setChatBans(data); });
+    }
+  }, [tab]);
+
+  const adminDeleteMsg = async (id: string) => {
+    await supabase.from("chat_messages").update({ is_deleted: true, content: "[deleted by admin]" }).eq("id", id);
+    setChatMessages(prev => prev.map(m => m.id === id ? { ...m, is_deleted: true } : m));
+    setChatReports(prev => prev.map(m => m.id === id ? { ...m, is_deleted: true } : m));
+  };
+
+  const adminBanUser = async (userId: string, type: "mute" | "ban") => {
+    if (!user) return;
+    const expires = new Date(); expires.setDate(expires.getDate() + 7);
+    await supabase.from("chat_bans").insert({ user_id: userId, banned_by: user.id, ban_type: type, reason: "Admin action", expires_at: expires.toISOString() });
+    supabase.from("chat_bans").select("*").order("created_at", { ascending: false }).then(({ data }) => { if (data) setChatBans(data); });
+  };
+
+  const removeBan = async (id: string) => {
+    await supabase.from("chat_bans").delete().eq("id", id);
+    setChatBans(prev => prev.filter(b => b.id !== id));
+  };
 
   return (
     <div className="min-h-screen bg-background">
