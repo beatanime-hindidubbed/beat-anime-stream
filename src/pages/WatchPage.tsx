@@ -459,22 +459,41 @@ export default function WatchPage() {
     <div className="container py-4 max-w-6xl">
       <BackButton />
 
-      {/* Player with mobile swipe compact/expand */}
+      {/* Player — becomes fixed mini player when scrolled past */}
       <div
         ref={playerWrapperRef}
-        className={`mb-2 transition-all duration-300 ${isMobile && mobileCompact ? "max-h-[35vh] overflow-hidden" : ""}`}
-        onTouchStart={(e) => { touchStartY.current = e.touches[0].clientY; }}
-        onTouchEnd={(e) => {
+        className={`mb-2 transition-all duration-300 ${
+          showPip
+            ? "fixed bottom-4 right-4 z-50 w-60 sm:w-72 rounded-xl overflow-hidden shadow-2xl border border-border cursor-pointer [&_video]:pointer-events-none"
+            : isMobile && mobileCompact ? "max-h-[35vh] overflow-hidden" : ""
+        }`}
+        onClick={showPip ? scrollToPlayer : undefined}
+        onTouchStart={!showPip ? (e) => { touchStartY.current = e.touches[0].clientY; } : undefined}
+        onTouchEnd={!showPip ? (e) => {
           if (touchStartY.current === null) return;
           const diff = e.changedTouches[0].clientY - touchStartY.current;
           if (Math.abs(diff) > 50) {
-            setMobileCompact(diff < 0); // swipe up = expand (false), swipe down = compact (true)
+            setMobileCompact(diff < 0);
           }
           touchStartY.current = null;
-        }}
+        } : undefined}
       >
         {renderPlayer()}
-        {isMobile && (
+        {/* Mini player close + info bar */}
+        {showPip && (
+          <div className="flex items-center justify-between px-2 py-1 bg-card/95 border-t border-border">
+            <span className="text-[10px] text-muted-foreground truncate">
+              Ep {currentEp?.number} · {category === "dub" ? "🇮🇳 Hindi" : (engLabel || category.toUpperCase())}
+            </span>
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowPip(false); }}
+              className="w-5 h-5 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground text-xs flex-shrink-0"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+        {!showPip && isMobile && (
           <div className="flex justify-center py-1">
             <button
               onClick={() => setMobileCompact(!mobileCompact)}
@@ -486,51 +505,8 @@ export default function WatchPage() {
           </div>
         )}
       </div>
-
-      {/* Floating PiP mini player when scrolled past */}
-      <AnimatePresence>
-        {showPip && (hindiHlsSrc || hindiIframeSrc || streamResult) && (
-          <motion.div
-            initial={{ opacity: 0, y: 20, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.9 }}
-            transition={{ duration: 0.2 }}
-            className="fixed bottom-4 right-4 z-50 w-64 sm:w-80 rounded-xl overflow-hidden shadow-2xl border border-border bg-black group"
-          >
-            <div className="aspect-video relative overflow-hidden">
-              {/* Render actual mini player */}
-              {category === "dub" && hindiHlsSrc ? (
-                <HindiVideoPlayer src={hindiHlsSrc} />
-              ) : category === "dub" && hindiIframeSrc ? (
-                <HindiVideoPlayer iframeSrc={hindiIframeSrc} />
-              ) : streamResult?.type === "hls" ? (
-                <VideoPlayer src={streamResult.url} tracks={streamResult.tracks} />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center bg-black/90">
-                  {animePoster && <img src={animePoster} alt="" className="absolute inset-0 w-full h-full object-cover opacity-30 blur-sm" />}
-                  <span className="text-xs text-muted-foreground relative">Playing...</span>
-                </div>
-              )}
-            </div>
-            {/* Bottom bar with info + controls */}
-            <div className="flex items-center justify-between px-2 py-1.5 bg-card/95">
-              <button
-                onClick={scrollToPlayer}
-                className="flex items-center gap-1.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <ArrowUp className="w-3 h-3 text-primary" />
-                <span className="truncate max-w-[120px]">Ep {currentEp?.number} · {category === "dub" ? "🇮🇳" : (engLabel || category.toUpperCase())}</span>
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); setShowPip(false); }}
-                className="w-5 h-5 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground text-xs"
-              >
-                ✕
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Spacer when PiP is active so content doesn't jump */}
+      {showPip && <div className="mb-2" style={{ aspectRatio: "16/9" }} />}
 
 
       {/* Stream info */}
