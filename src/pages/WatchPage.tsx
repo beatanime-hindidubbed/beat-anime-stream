@@ -493,6 +493,8 @@ export default function WatchPage() {
     <div className="container py-4 max-w-6xl">
       <BackButton />
 
+      <div ref={playerAnchorRef} className="h-px w-full" aria-hidden="true" />
+
       {/* Player — DOM style mutated directly for PiP (no React re-render) */}
       <div
         ref={playerWrapperRef}
@@ -507,17 +509,6 @@ export default function WatchPage() {
         } : undefined}
       >
         {renderPlayer()}
-        {/* PiP close button overlay */}
-        {showPip && (
-          <div className="absolute top-1 right-1 z-[60]">
-            <button
-              onClick={(e) => { e.stopPropagation(); setShowPip(false); }}
-              className="w-6 h-6 rounded-full bg-black/70 flex items-center justify-center text-white text-xs hover:bg-black/90"
-            >
-              ✕
-            </button>
-          </div>
-        )}
         {!showPip && isMobile && (
           <div className="flex justify-center py-1">
             <button onClick={() => setMobileCompact(!mobileCompact)} className="flex items-center gap-1 text-[10px] text-muted-foreground">
