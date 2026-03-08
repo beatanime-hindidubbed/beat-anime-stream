@@ -474,6 +474,31 @@ function applyTheme(theme: ThemeType, customColors?: CustomThemeColors) {
     },
   };
 
+  // Anime wallpaper backgrounds mapped to themes
+  const themeWallpapers: Record<string, string> = {
+    "anime-dark": "url('https://images.unsplash.com/photo-1578632767115-351597cf2477?w=1920&q=60')",
+    "anime-pastel": "url('https://images.unsplash.com/photo-1613376023733-0a73315d9b06?w=1920&q=60')",
+    "anime-retro": "url('https://images.unsplash.com/photo-1541562232579-512a21360020?w=1920&q=60')",
+    dragon: "url('https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=1920&q=60')",
+    galaxy: "url('https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=1920&q=60')",
+    bloodmoon: "url('https://images.unsplash.com/photo-1532693322450-2cb5c511067d?w=1920&q=60')",
+    phantom: "url('https://images.unsplash.com/photo-1534796636912-3b95b3ab5986?w=1920&q=60')",
+    sakura: "url('https://images.unsplash.com/photo-1522383225653-ed111181a951?w=1920&q=60')",
+    "cherry-blossom": "url('https://images.unsplash.com/photo-1522383225653-ed111181a951?w=1920&q=60')",
+    matsuri: "url('https://images.unsplash.com/photo-1545569341-9eb8b30979d9?w=1920&q=60')",
+    torii: "url('https://images.unsplash.com/photo-1478436127897-769e1b3f0f36?w=1920&q=60')",
+    zen: "url('https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=1920&q=60')",
+    midnight: "url('https://images.unsplash.com/photo-1519681393784-d120267933ba?w=1920&q=60')",
+    ocean: "url('https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1920&q=60')",
+    forest: "url('https://images.unsplash.com/photo-1448375240586-882707db888b?w=1920&q=60')",
+    arctic: "url('https://images.unsplash.com/photo-1477601263568-180e2c6d046e?w=1920&q=60')",
+    sunset: "url('https://images.unsplash.com/photo-1495616811223-4d98c6e9c869?w=1920&q=60')",
+    diwali: "url('https://images.unsplash.com/photo-1605810230434-7631ac76ec81?w=1920&q=60')",
+    holi: "url('https://images.unsplash.com/photo-1576769267412-2d5ecb761db4?w=1920&q=60')",
+    cyberpunk: "url('https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=1920&q=60')",
+    neon: "url('https://images.unsplash.com/photo-1557683316-973673baf926?w=1920&q=60')",
+  };
+
   try {
     if (theme === "custom" && customColors) {
       const c = customColors;
@@ -486,17 +511,21 @@ function applyTheme(theme: ThemeType, customColors?: CustomThemeColors) {
         "--gradient-primary": `linear-gradient(135deg, hsl(${c.primary || "175 80% 50%"}), hsl(${c.accent || "330 70% 55%"}))`,
         "--gradient-accent": `linear-gradient(135deg, hsl(${c.accent || "330 70% 55%"}), hsl(${c.primary || "175 80% 50%"}))`,
         "--theme-pattern": "none",
+        "--theme-bg-image": "none",
       };
       Object.entries(vars).forEach(([k, v]) => root.setProperty(k, v));
     } else {
       const vars = themes[theme] || themes.classic;
       Object.entries(vars).forEach(([k, v]) => root.setProperty(k, v));
+      // Apply wallpaper background
+      root.setProperty("--theme-bg-image", themeWallpapers[theme] || "none");
     }
     document.documentElement.setAttribute("data-theme", theme || "classic");
   } catch (e) {
     console.warn("Theme application failed, falling back to classic:", e);
     const vars = themes.classic;
     Object.entries(vars).forEach(([k, v]) => root.setProperty(k, v));
+    root.setProperty("--theme-bg-image", "none");
     document.documentElement.setAttribute("data-theme", "classic");
   }
 }
