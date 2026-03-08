@@ -125,6 +125,8 @@ const DEFAULTS: SiteSettings = {
   apiEndpoints: ["https://beat-anime-api.onrender.com/api/v1"],
   chatEnabled: true,
   chatPermissions: DEFAULT_CHAT_PERMISSIONS,
+  verificationEnabled: true,
+  verificationMode: "code" as const,
 };
 
 interface SiteSettingsCtx {
