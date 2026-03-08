@@ -66,7 +66,7 @@ const THEMES: { key: ThemeType; label: string; colors: string[]; tag?: string }[
   { key: "golden-hour", label: "Golden Hour", colors: ["#ca8a04", "#ea580c"], tag: "☀️" },
 ];
 
-type TabKey = "stats" | "branding" | "ads" | "api" | "users" | "policy" | "premium";
+type TabKey = "stats" | "branding" | "ads" | "api" | "users" | "policy" | "premium" | "chat";
 
 export default function AdminDashboard() {
   const { user, isAdmin, loading: authLoading, logout } = useSupabaseAuth();
