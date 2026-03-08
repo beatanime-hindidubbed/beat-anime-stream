@@ -606,7 +606,7 @@ export default function VideoPlayer({
     v.addEventListener("loadedmetadata", onTrackLoad);
     return () => v.removeEventListener("loadedmetadata", onTrackLoad);
   }, [isMobile, src, tracks]);
-
+  const fmt = (s: number) => {
     if (!s || isNaN(s)) return "0:00";
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = Math.floor(s % 60);
     if (h > 0) return `${h}:${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`;
