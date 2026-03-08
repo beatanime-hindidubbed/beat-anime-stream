@@ -558,6 +558,7 @@ function applyTheme(theme: ThemeType, customColors?: CustomThemeColors) {
     holi: "url('https://images.unsplash.com/photo-1576769267412-2d5ecb761db4?w=1920&q=60')",
     cyberpunk: "url('https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=1920&q=60')",
     neon: "url('https://images.unsplash.com/photo-1557683316-973673baf926?w=1920&q=60')",
+    "mecha-gaming": "url('https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=1920&q=60')",
   };
 
   try {
