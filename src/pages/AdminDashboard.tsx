@@ -156,6 +156,19 @@ export default function AdminDashboard() {
   const [newSandboxLabel, setNewSandboxLabel] = useState("");
   const [newSandboxCountdown, setNewSandboxCountdown] = useState("5");
 
+  // Comment controls
+  const [commentsDisabledAnimes, setCommentsDisabledAnimes] = useState<string[]>(settings.commentsDisabledAnimes || []);
+  const [newDisableCommentId, setNewDisableCommentId] = useState("");
+  const [commentStats, setCommentStats] = useState<{ total: number; today: number; censored: number }>({ total: 0, today: 0, censored: 0 });
+
+  // Stats data
+  const [statsData, setStatsData] = useState<{
+    dailyComments: { date: string; count: number }[];
+    roleDistribution: { name: string; value: number }[];
+    apiResponseTimes: { name: string; ms: number }[];
+    chatActivity: { date: string; messages: number }[];
+  }>({ dailyComments: [], roleDistribution: [], apiResponseTimes: [], chatActivity: [] });
+
   useEffect(() => {
     setBrandName(settings.siteName); setBrandIcon(settings.siteIcon);
     setTgChannel(settings.telegramChannel); setTgGroup(settings.telegramGroup);
