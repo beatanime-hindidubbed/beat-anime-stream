@@ -67,6 +67,9 @@ const THEMES: { key: ThemeType; label: string; colors: string[]; tag?: string }[
   { key: "violet-storm", label: "Violet Storm", colors: ["#a855f7", "#06b6d4"], tag: "⚡" },
   { key: "golden-hour", label: "Golden Hour", colors: ["#ca8a04", "#ea580c"], tag: "☀️" },
   { key: "custom", label: "Custom", colors: ["#888", "#ccc"], tag: "🎨 Builder" },
+  { key: "diwali", label: "Diwali", colors: ["#ff9500", "#ffd700"], tag: "🪔 Festival" },
+  { key: "holi", label: "Holi", colors: ["#ff0080", "#00ff80"], tag: "🎨 Festival" },
+  { key: "independence-day", label: "Independence", colors: ["#ff9933", "#138808"], tag: "🇮🇳 Festival" },
 ];
 
 const PLAYER_THEMES: { key: PlayerTheme; label: string; desc: string }[] = [
