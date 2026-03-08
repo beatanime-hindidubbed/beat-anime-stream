@@ -130,6 +130,24 @@ const DEFAULTS: SiteSettings = {
   verificationMode: "code" as const,
 };
 
+const SETTINGS_CACHE_KEY = "beat_site_settings_cache_v1";
+
+function getCachedSettings(): SiteSettings {
+  try {
+    const raw = localStorage.getItem(SETTINGS_CACHE_KEY);
+    if (!raw) return DEFAULTS;
+    return { ...DEFAULTS, ...JSON.parse(raw) };
+  } catch {
+    return DEFAULTS;
+  }
+}
+
+function cacheSettings(next: SiteSettings) {
+  try {
+    localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(next));
+  } catch {}
+}
+
 interface SiteSettingsCtx {
   settings: SiteSettings;
   updateSettings: (partial: Partial<SiteSettings>) => Promise<void>;
