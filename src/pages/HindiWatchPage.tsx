@@ -29,34 +29,42 @@ async function fetchHindiSourcesFromAllApis(anilistId: string | undefined, malId
   const paramValue = anilistId || malId;
   const apis = getApiPool();
 
-  // Race all APIs in parallel for fastest response
-  const results = await Promise.allSettled(
-    apis.map(async (base) => {
-      const url = `${base}/hindiapi/episode?${paramName}=${paramValue}&season=1&episode=${episodeNumber}&type=series`;
-      const res = await fetch(url);
-      const data = await res.json();
-      if (!res.ok || data.status !== 200) return [];
-      const sources = data.data?.streams || data.data?.sources || data.data?.servers || [];
-      return sources
-        .map((src: any) => {
-          const provider = src.provider || src.serverName || src.name || "Unknown";
-          const friendlyName = ALLOWED_PROVIDERS[provider];
-          if (!friendlyName) return null; // Filter out non-allowed providers
-          return {
-            name: provider,
-            displayName: friendlyName,
-            isHLS: !!(src.isM3U8 || src.dhls || (src.url && src.url.includes(".m3u8")) || (src.streamUrl && src.streamUrl.includes(".m3u8"))),
-            url: src.dhls || src.streamUrl || src.url || "",
-          };
-        })
-        .filter((s: HindiSource | null): s is HindiSource => s !== null && s.url !== "");
-    })
-  );
+  // Race ALL APIs simultaneously for fastest response
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
 
-  for (const r of results) {
-    if (r.status === "fulfilled" && r.value.length > 0) return r.value;
+  const promises = apis.map(async (base) => {
+    const url = `${base}/hindiapi/episode?${paramName}=${paramValue}&season=1&episode=${episodeNumber}&type=series`;
+    const res = await fetch(url, { signal: controller.signal });
+    const data = await res.json();
+    if (!res.ok || data.status !== 200) throw new Error("Bad response");
+    const sources = data.data?.streams || data.data?.sources || data.data?.servers || [];
+    const mapped = sources
+      .map((src: any) => {
+        const provider = src.provider || src.serverName || src.name || "Unknown";
+        const friendlyName = ALLOWED_PROVIDERS[provider];
+        if (!friendlyName) return null;
+        return {
+          name: provider,
+          displayName: friendlyName,
+          isHLS: !!(src.isM3U8 || src.dhls || (src.url && src.url.includes(".m3u8")) || (src.streamUrl && src.streamUrl.includes(".m3u8"))),
+          url: src.dhls || src.streamUrl || src.url || "",
+        };
+      })
+      .filter((s: HindiSource | null): s is HindiSource => s !== null && s.url !== "");
+    if (mapped.length === 0) throw new Error("No sources");
+    return mapped;
+  });
+
+  // Use Promise.any to get the FIRST successful result (truly parallel racing)
+  try {
+    const result = await Promise.any(promises);
+    clearTimeout(timeout);
+    return result;
+  } catch {
+    clearTimeout(timeout);
+    throw new Error("No Hindi sources found");
   }
-  throw new Error("No Hindi sources found");
 }
 
 export default function HindiWatchPage() {
