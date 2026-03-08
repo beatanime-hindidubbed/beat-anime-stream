@@ -31,6 +31,7 @@ interface Props {
   onAutoPlayToggle?: (enabled: boolean) => void;
   /** HiAnime episode ID for English preview thumbnails */
   episodeId?: string;
+  disableInternalMiniPlayer?: boolean;
 }
 
 const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];

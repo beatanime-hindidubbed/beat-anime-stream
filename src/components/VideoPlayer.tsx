@@ -27,6 +27,7 @@ interface Props {
   ambientMode?: boolean;
   autoPlayNext?: boolean;
   onAutoPlayToggle?: (enabled: boolean) => void;
+  disableInternalMiniPlayer?: boolean;
 }
 
 const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
