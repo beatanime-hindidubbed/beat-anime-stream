@@ -8,7 +8,7 @@ import {
   BarChart3, Image, Activity, LogOut, Plus, Trash2,
   ToggleLeft, ToggleRight, Save, Loader2, CheckCircle, XCircle, Globe,
   Users, Shield, UserPlus, UserMinus, Palette, Type, FileText,
-  Crown, Copy, Clock, Zap, Server, RefreshCw
+  Crown, Copy, Clock, Zap, Server, RefreshCw, MessageCircle, Ban, VolumeX, Trash2 as Trash2Icon, AlertTriangle
 } from "lucide-react";
 
 interface Ad {
@@ -66,7 +66,7 @@ const THEMES: { key: ThemeType; label: string; colors: string[]; tag?: string }[
   { key: "golden-hour", label: "Golden Hour", colors: ["#ca8a04", "#ea580c"], tag: "☀️" },
 ];
 
-type TabKey = "stats" | "branding" | "ads" | "api" | "users" | "policy" | "premium";
+type TabKey = "stats" | "branding" | "ads" | "api" | "users" | "policy" | "premium" | "chat";
 
 export default function AdminDashboard() {
   const { user, isAdmin, loading: authLoading, logout } = useSupabaseAuth();
@@ -104,6 +104,11 @@ export default function AdminDashboard() {
   const [apiEndpoints, setApiEndpoints] = useState<string[]>(settings.apiEndpoints || []);
   const [newApiUrl, setNewApiUrl] = useState("");
 
+  // Chat admin state
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [chatBans, setChatBans] = useState<any[]>([]);
+  const [chatReports, setChatReports] = useState<any[]>([]);
+
   useEffect(() => {
     setBrandName(settings.siteName); setBrandIcon(settings.siteIcon);
     setTgChannel(settings.telegramChannel); setTgGroup(settings.telegramGroup);
@@ -123,6 +128,16 @@ export default function AdminDashboard() {
 
   useEffect(() => { if (tab === "users") loadUserRoles(); }, [tab]);
   useEffect(() => { if (tab === "premium") loadPremiumCodes(); }, [tab]);
+  useEffect(() => {
+    if (tab === "chat") {
+      supabase.from("chat_messages").select("*").eq("type", "report").order("created_at", { ascending: false }).limit(50)
+        .then(({ data }) => { if (data) setChatReports(data); });
+      supabase.from("chat_messages").select("*").eq("type", "group").order("created_at", { ascending: false }).limit(50)
+        .then(({ data }) => { if (data) setChatMessages(data); });
+      supabase.from("chat_bans").select("*").order("created_at", { ascending: false })
+        .then(({ data }) => { if (data) setChatBans(data); });
+    }
+  }, [tab]);
 
   const loadUserRoles = async () => {
     const { data: roles } = await supabase.from("user_roles").select("*");
@@ -269,11 +284,33 @@ export default function AdminDashboard() {
     { key: "stats" as const, label: "Stats", icon: BarChart3 },
     { key: "branding" as const, label: "Branding", icon: Palette },
     { key: "premium" as const, label: "Premium", icon: Crown },
+    { key: "chat" as const, label: "Chat", icon: MessageCircle },
     { key: "policy" as const, label: "Policies", icon: FileText },
     { key: "ads" as const, label: "Ads", icon: Image },
     { key: "users" as const, label: "Users", icon: Users },
     { key: "api" as const, label: "API", icon: Activity },
   ];
+
+
+
+
+  const adminDeleteMsg = async (id: string) => {
+    await supabase.from("chat_messages").update({ is_deleted: true, content: "[deleted by admin]" }).eq("id", id);
+    setChatMessages(prev => prev.map(m => m.id === id ? { ...m, is_deleted: true } : m));
+    setChatReports(prev => prev.map(m => m.id === id ? { ...m, is_deleted: true } : m));
+  };
+
+  const adminBanUser = async (userId: string, type: "mute" | "ban") => {
+    if (!user) return;
+    const expires = new Date(); expires.setDate(expires.getDate() + 7);
+    await supabase.from("chat_bans").insert({ user_id: userId, banned_by: user.id, ban_type: type, reason: "Admin action", expires_at: expires.toISOString() });
+    supabase.from("chat_bans").select("*").order("created_at", { ascending: false }).then(({ data }) => { if (data) setChatBans(data); });
+  };
+
+  const removeBan = async (id: string) => {
+    await supabase.from("chat_bans").delete().eq("id", id);
+    setChatBans(prev => prev.filter(b => b.id !== id));
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -458,6 +495,100 @@ export default function AdminDashboard() {
                   </div>
                 );
               })}
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── Chat Moderation ── */}
+        {tab === "chat" && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+            {/* Bug Reports */}
+            <div className="p-5 rounded-xl bg-card border border-border">
+              <h2 className="font-display text-base font-bold text-foreground mb-3 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-destructive" /> Bug Reports ({chatReports.length})
+              </h2>
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {chatReports.length === 0 && <p className="text-sm text-muted-foreground">No reports yet.</p>}
+                {chatReports.map((msg: any) => (
+                  <div key={msg.id} className={`flex items-start gap-3 p-3 rounded-lg ${msg.is_deleted ? "bg-destructive/5 opacity-50" : "bg-secondary"}`}>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-xs font-medium text-foreground">{msg.username || "Anonymous"}</span>
+                        <span className="text-[10px] text-muted-foreground">{new Date(msg.created_at).toLocaleString()}</span>
+                      </div>
+                      <p className="text-sm text-foreground break-words">{msg.content}</p>
+                    </div>
+                    {!msg.is_deleted && (
+                      <button onClick={() => adminDeleteMsg(msg.id)} className="p-1 rounded hover:bg-destructive/20 flex-shrink-0">
+                        <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Recent Chat Messages */}
+            <div className="p-5 rounded-xl bg-card border border-border">
+              <h2 className="font-display text-base font-bold text-foreground mb-3 flex items-center gap-2">
+                <MessageCircle className="w-4 h-4 text-primary" /> Recent Chat ({chatMessages.length})
+              </h2>
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {chatMessages.length === 0 && <p className="text-sm text-muted-foreground">No messages yet.</p>}
+                {chatMessages.map((msg: any) => (
+                  <div key={msg.id} className={`flex items-start gap-3 p-2 rounded-lg ${msg.is_deleted ? "opacity-40" : "hover:bg-secondary/50"}`}>
+                    <div className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center text-[10px] font-bold text-secondary-foreground flex-shrink-0">
+                      {(msg.username || "?")[0]?.toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium text-foreground">{msg.username}</span>
+                        <span className="text-[10px] text-muted-foreground">{new Date(msg.created_at).toLocaleTimeString()}</span>
+                      </div>
+                      <p className="text-sm text-foreground/80 break-words">{msg.content}</p>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {!msg.is_deleted && (
+                        <button onClick={() => adminDeleteMsg(msg.id)} className="p-1 rounded hover:bg-destructive/20">
+                          <Trash2 className="w-3 h-3 text-muted-foreground hover:text-destructive" />
+                        </button>
+                      )}
+                      <button onClick={() => adminBanUser(msg.user_id, "mute")} title="Mute 7d" className="p-1 rounded hover:bg-destructive/20">
+                        <VolumeX className="w-3 h-3 text-muted-foreground hover:text-destructive" />
+                      </button>
+                      <button onClick={() => adminBanUser(msg.user_id, "ban")} title="Ban 7d" className="p-1 rounded hover:bg-destructive/20">
+                        <Ban className="w-3 h-3 text-muted-foreground hover:text-destructive" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Active Bans */}
+            <div className="p-5 rounded-xl bg-card border border-border">
+              <h2 className="font-display text-base font-bold text-foreground mb-3 flex items-center gap-2">
+                <Ban className="w-4 h-4 text-destructive" /> Active Bans ({chatBans.length})
+              </h2>
+              <div className="space-y-2">
+                {chatBans.length === 0 && <p className="text-sm text-muted-foreground">No bans.</p>}
+                {chatBans.map((ban: any) => (
+                  <div key={ban.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary">
+                    <div>
+                      <span className="text-xs font-mono text-foreground">{ban.user_id.slice(0, 8)}...</span>
+                      <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] font-medium ${ban.ban_type === "ban" ? "bg-destructive/20 text-destructive" : "bg-primary/20 text-primary"}`}>
+                        {ban.ban_type}
+                      </span>
+                      {ban.expires_at && (
+                        <span className="ml-2 text-[10px] text-muted-foreground">until {new Date(ban.expires_at).toLocaleDateString()}</span>
+                      )}
+                    </div>
+                    <button onClick={() => removeBan(ban.id)} className="px-2 py-1 rounded text-xs bg-accent text-accent-foreground hover:opacity-80">
+                      Unban
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           </motion.div>
         )}

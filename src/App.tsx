@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { SupabaseAuthProvider } from "@/hooks/useSupabaseAuth";
 import { SiteSettingsProvider } from "@/hooks/useSiteSettings";
 import CookieConsent from "@/components/CookieConsent";
+import ChatWidget from "@/components/ChatWidget";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import ScrollToTop from "@/components/ScrollToTop";
@@ -86,6 +87,7 @@ const App = () => (
                       </main>
                       <Footer />
                       <CookieConsent />
+                      <ChatWidget />
                     </>
                   </VerifyGate>
                 }

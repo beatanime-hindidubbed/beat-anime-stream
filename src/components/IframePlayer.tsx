@@ -1,3 +1,5 @@
+import PlayerWatermark from "./PlayerWatermark";
+
 interface Props {
   src: string;
 }
@@ -13,6 +15,7 @@ export default function IframePlayer({ src }: Props) {
         referrerPolicy="no-referrer-when-downgrade"
         sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation"
       />
+      <PlayerWatermark showIcon />
     </div>
   );
 }
