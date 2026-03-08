@@ -192,9 +192,9 @@ export default function WatchPage() {
     if (!el) return;
     if (showPip) {
       el.style.position = "fixed";
-      el.style.bottom = "16px";
-      el.style.right = "16px";
-      el.style.width = isMobile ? "200px" : "320px";
+      el.style.bottom = "12px";
+      el.style.right = "12px";
+      el.style.width = isMobile ? "160px" : "320px";
       el.style.zIndex = "50";
       el.style.borderRadius = "12px";
       el.style.overflow = "hidden";
