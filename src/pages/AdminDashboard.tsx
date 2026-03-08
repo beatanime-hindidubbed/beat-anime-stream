@@ -155,6 +155,12 @@ export default function AdminDashboard() {
         .then(({ data }) => { if (data) setChatBans(data); });
     }
   }, [tab]);
+  useEffect(() => {
+    if (tab === "logs") {
+      supabase.from("admin_logs").select("*").order("created_at", { ascending: false }).limit(100)
+        .then(({ data }) => { if (data) setAdminLogs(data); });
+    }
+  }, [tab]);
 
   const loadUserRoles = async () => {
     const { data: roles } = await supabase.from("user_roles").select("*");
