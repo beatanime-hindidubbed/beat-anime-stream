@@ -459,54 +459,52 @@ export default function WatchPage() {
     <div className="container py-4 max-w-6xl">
       <BackButton />
 
-      {/* Player — becomes fixed mini player when scrolled past */}
+      {/* Player */}
       <div
         ref={playerWrapperRef}
-        className={`mb-2 transition-all duration-300 ${
-          showPip
-            ? "fixed bottom-4 right-4 z-50 w-60 sm:w-72 rounded-xl overflow-hidden shadow-2xl border border-border cursor-pointer [&_video]:pointer-events-none"
-            : isMobile && mobileCompact ? "max-h-[35vh] overflow-hidden" : ""
-        }`}
-        onClick={showPip ? scrollToPlayer : undefined}
-        onTouchStart={!showPip ? (e) => { touchStartY.current = e.touches[0].clientY; } : undefined}
-        onTouchEnd={!showPip ? (e) => {
+        className={`mb-2 ${isMobile && mobileCompact ? "max-h-[35vh] overflow-hidden" : ""}`}
+        onTouchStart={(e) => { touchStartY.current = e.touches[0].clientY; }}
+        onTouchEnd={(e) => {
           if (touchStartY.current === null) return;
           const diff = e.changedTouches[0].clientY - touchStartY.current;
-          if (Math.abs(diff) > 50) {
-            setMobileCompact(diff < 0);
-          }
+          if (Math.abs(diff) > 50) setMobileCompact(diff < 0);
           touchStartY.current = null;
-        } : undefined}
+        }}
       >
         {renderPlayer()}
-        {/* Mini player close + info bar */}
-        {showPip && (
-          <div className="flex items-center justify-between px-2 py-1 bg-card/95 border-t border-border">
-            <span className="text-[10px] text-muted-foreground truncate">
-              Ep {currentEp?.number} · {category === "dub" ? "🇮🇳 Hindi" : (engLabel || category.toUpperCase())}
-            </span>
-            <button
-              onClick={(e) => { e.stopPropagation(); setShowPip(false); }}
-              className="w-5 h-5 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground text-xs flex-shrink-0"
-            >
-              ✕
-            </button>
-          </div>
-        )}
-        {!showPip && isMobile && (
+        {isMobile && (
           <div className="flex justify-center py-1">
-            <button
-              onClick={() => setMobileCompact(!mobileCompact)}
-              className="flex items-center gap-1 text-[10px] text-muted-foreground"
-            >
+            <button onClick={() => setMobileCompact(!mobileCompact)} className="flex items-center gap-1 text-[10px] text-muted-foreground">
               <ChevronDown className={`w-3 h-3 transition-transform ${mobileCompact ? "" : "rotate-180"}`} />
               {mobileCompact ? "Swipe up to expand" : "Swipe down to minimize"}
             </button>
           </div>
         )}
       </div>
-      {/* Spacer when PiP is active so content doesn't jump */}
-      {showPip && <div className="mb-2" style={{ aspectRatio: "16/9" }} />}
+
+      {/* Floating scroll-back PiP indicator */}
+      <AnimatePresence>
+        {showPip && (
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 16 }}
+            className="fixed bottom-4 right-4 z-50 flex items-center gap-2 pl-3 pr-2 py-2 rounded-full bg-card/95 backdrop-blur border border-border shadow-lg cursor-pointer"
+            onClick={scrollToPlayer}
+          >
+            <ArrowUp className="w-4 h-4 text-primary" />
+            <span className="text-xs font-medium text-foreground">
+              Ep {currentEp?.number} · {category === "dub" ? "🇮🇳" : (engLabel || category.toUpperCase())}
+            </span>
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowPip(false); }}
+              className="w-5 h-5 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground text-[10px] ml-1"
+            >
+              ✕
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
 
       {/* Stream info */}
