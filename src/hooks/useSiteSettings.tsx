@@ -94,6 +94,7 @@ interface SiteSettingsCtx {
   updateSettings: (partial: Partial<SiteSettings>) => Promise<void>;
   reportAnimeFail: (animeId: string) => void;
   isHidden: (animeId: string) => boolean;
+  currentFestival: DetectedFestival | null;
 }
 
 const Ctx = createContext<SiteSettingsCtx>({
