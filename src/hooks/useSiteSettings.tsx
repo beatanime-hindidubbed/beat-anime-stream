@@ -87,6 +87,8 @@ const DEFAULTS: SiteSettings = {
   telegramGroup: "https://t.me/beat_discussion_group",
   hiddenAnimes: [],
   bannedAnimes: [],
+  commentsEnabled: true,
+  commentsDisabledAnimes: [],
   failCountThreshold: 5,
   apiEndpoints: ["https://beat-anime-api.onrender.com/api/v1"],
 };
