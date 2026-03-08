@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
-import { useSiteSettings, ThemeType, PlayerTheme, FontStyle, CustomThemeColors } from "@/hooks/useSiteSettings";
+import { useSiteSettings, ThemeType, PlayerTheme, FontStyle, CustomThemeColors, TextEffect, ParticleEffect, SandboxLink } from "@/hooks/useSiteSettings";
 import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
 import {
@@ -9,7 +9,7 @@ import {
   ToggleLeft, ToggleRight, Save, Loader2, CheckCircle, XCircle, Globe,
   Users, Shield, UserPlus, UserMinus, Palette, Type, FileText,
   Crown, Copy, Clock, Zap, Server, RefreshCw, MessageCircle, Ban, VolumeX,
-  AlertTriangle, MonitorPlay, Link2, ScrollText, EyeOff
+  AlertTriangle, MonitorPlay, Link2, ScrollText, EyeOff, Sparkles, ExternalLink
 } from "lucide-react";
 
 interface Ad {
@@ -67,6 +67,9 @@ const THEMES: { key: ThemeType; label: string; colors: string[]; tag?: string }[
   { key: "violet-storm", label: "Violet Storm", colors: ["#a855f7", "#06b6d4"], tag: "⚡" },
   { key: "golden-hour", label: "Golden Hour", colors: ["#ca8a04", "#ea580c"], tag: "☀️" },
   { key: "custom", label: "Custom", colors: ["#888", "#ccc"], tag: "🎨 Builder" },
+  { key: "diwali", label: "Diwali", colors: ["#ff9500", "#ffd700"], tag: "🪔 Festival" },
+  { key: "holi", label: "Holi", colors: ["#ff0080", "#00ff80"], tag: "🎨 Festival" },
+  { key: "independence-day", label: "Independence", colors: ["#ff9933", "#138808"], tag: "🇮🇳 Festival" },
 ];
 
 const PLAYER_THEMES: { key: PlayerTheme; label: string; desc: string }[] = [
@@ -85,7 +88,7 @@ const FONT_STYLES: { key: FontStyle; label: string; desc: string; preview: strin
   { key: "cinematic", label: "Cinematic", desc: "Bebas Neue + Inter", preview: "Aa" },
 ];
 
-type TabKey = "stats" | "branding" | "ads" | "api" | "users" | "policy" | "premium" | "chat" | "player" | "banlist" | "logs";
+type TabKey = "stats" | "branding" | "effects" | "sandbox" | "ads" | "api" | "users" | "policy" | "premium" | "chat" | "player" | "banlist" | "logs";
 
 export default function AdminDashboard() {
   const { user, isAdmin, loading: authLoading, logout } = useSupabaseAuth();
@@ -140,6 +143,12 @@ export default function AdminDashboard() {
   const [customBg, setCustomBg] = useState(settings.customThemeColors?.background || "220 20% 7%");
   const [customCard, setCustomCard] = useState(settings.customThemeColors?.card || "220 18% 10%");
   const [customBorder, setCustomBorder] = useState(settings.customThemeColors?.border || "220 15% 18%");
+
+  // Sandbox links
+  const [sandboxLinks, setSandboxLinks] = useState<SandboxLink[]>(settings.sandboxLinks || []);
+  const [newSandboxUrl, setNewSandboxUrl] = useState("");
+  const [newSandboxLabel, setNewSandboxLabel] = useState("");
+  const [newSandboxCountdown, setNewSandboxCountdown] = useState("5");
 
   useEffect(() => {
     setBrandName(settings.siteName); setBrandIcon(settings.siteIcon);
@@ -323,6 +332,8 @@ export default function AdminDashboard() {
   const tabs = [
     { key: "stats" as const, label: "Stats", icon: BarChart3 },
     { key: "branding" as const, label: "Branding", icon: Palette },
+    { key: "effects" as const, label: "Effects", icon: Sparkles },
+    { key: "sandbox" as const, label: "Sandbox", icon: ExternalLink },
     { key: "player" as const, label: "Player", icon: MonitorPlay },
     { key: "premium" as const, label: "Premium", icon: Crown },
     { key: "chat" as const, label: "Chat", icon: MessageCircle },
@@ -548,6 +559,158 @@ export default function AdminDashboard() {
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : brandingSaved ? <CheckCircle className="w-4 h-4" /> : <Save className="w-4 h-4" />}
                 {brandingSaved ? "Saved!" : "Save Branding"}
               </button>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── Effects ── */}
+        {tab === "effects" && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+            {/* Text Effects */}
+            <div className="p-6 rounded-xl bg-card border border-border">
+              <h2 className="font-display text-lg font-bold text-foreground mb-4 flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-primary" /> Text Effects
+              </h2>
+              <p className="text-sm text-muted-foreground mb-4">Applied to section titles across the site</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                {([
+                  { key: "none" as TextEffect, label: "None", preview: "Normal Text" },
+                  { key: "neon-glow" as TextEffect, label: "Neon Glow", preview: "Glowing" },
+                  { key: "typewriter" as TextEffect, label: "Typewriter", preview: "Typing..." },
+                  { key: "gradient-wave" as TextEffect, label: "Gradient Wave", preview: "Rainbow" },
+                  { key: "neon-pulse" as TextEffect, label: "Neon Pulse", preview: "Pulse" },
+                ] as const).map(e => (
+                  <button key={e.key} onClick={async () => { await updateSettings({ textEffect: e.key }); await logAction("text_effect", e.key); }}
+                    className={`p-4 rounded-xl border-2 text-left transition-all ${
+                      settings.textEffect === e.key ? "border-primary shadow-[0_0_15px_hsl(var(--primary)/0.2)]" : "border-border hover:border-primary/40"
+                    }`}>
+                    <p className={`text-base font-bold text-foreground mb-1 ${e.key !== "none" ? `text-effect-${e.key}` : ""}`}>{e.preview}</p>
+                    <p className="text-xs text-muted-foreground">{e.label}</p>
+                    {settings.textEffect === e.key && <p className="text-[10px] text-primary mt-0.5">Active</p>}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Particle Effects */}
+            <div className="p-6 rounded-xl bg-card border border-border">
+              <h2 className="font-display text-lg font-bold text-foreground mb-4 flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-accent" /> Particle Effects
+              </h2>
+              <p className="text-sm text-muted-foreground mb-4">Background particle animations — perfect for festivals!</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                {([
+                  { key: "none" as ParticleEffect, label: "None", emoji: "⛔", desc: "No particles" },
+                  { key: "stars" as ParticleEffect, label: "Stars", emoji: "⭐", desc: "Twinkling stars" },
+                  { key: "sakura" as ParticleEffect, label: "Sakura", emoji: "🌸", desc: "Cherry blossom petals" },
+                  { key: "snow" as ParticleEffect, label: "Snow", emoji: "❄️", desc: "Falling snowflakes" },
+                  { key: "diyas" as ParticleEffect, label: "Diyas", emoji: "🪔", desc: "Diwali oil lamps" },
+                  { key: "colors" as ParticleEffect, label: "Colors", emoji: "🎨", desc: "Holi color splash" },
+                  { key: "tricolor" as ParticleEffect, label: "Tricolor", emoji: "🇮🇳", desc: "Independence Day" },
+                ] as const).map(p => (
+                  <button key={p.key} onClick={async () => { await updateSettings({ particleEffect: p.key }); await logAction("particle_effect", p.key); }}
+                    className={`p-4 rounded-xl border-2 text-left transition-all ${
+                      settings.particleEffect === p.key ? "border-primary shadow-[0_0_15px_hsl(var(--primary)/0.2)]" : "border-border hover:border-primary/40"
+                    }`}>
+                    <span className="text-2xl mb-2 block">{p.emoji}</span>
+                    <p className="text-xs font-bold text-foreground">{p.label}</p>
+                    <p className="text-[10px] text-muted-foreground">{p.desc}</p>
+                    {settings.particleEffect === p.key && <p className="text-[10px] text-primary mt-0.5">Active</p>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── Sandbox Links ── */}
+        {tab === "sandbox" && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+            <div className="p-6 rounded-xl bg-card border border-border">
+              <h2 className="font-display text-lg font-bold text-foreground mb-4 flex items-center gap-2">
+                <ExternalLink className="w-5 h-5 text-primary" /> Sandbox Redirect Links
+              </h2>
+              <p className="text-xs text-muted-foreground mb-4">
+                Create redirect links with countdown timer + ad overlay. Users go through /go?url=...&label=...&t=5 before reaching the external URL.
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 mb-4">
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">Target URL</label>
+                  <input value={newSandboxUrl} onChange={e => setNewSandboxUrl(e.target.value)} placeholder="https://example.com"
+                    className="w-full h-9 px-3 rounded-lg bg-secondary text-foreground text-sm border border-border focus:ring-1 focus:ring-primary focus:outline-none font-mono text-xs" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">Label</label>
+                  <input value={newSandboxLabel} onChange={e => setNewSandboxLabel(e.target.value)} placeholder="Download Server 1"
+                    className="w-full h-9 px-3 rounded-lg bg-secondary text-foreground text-sm border border-border focus:ring-1 focus:ring-primary focus:outline-none" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">Countdown (sec)</label>
+                  <input type="number" value={newSandboxCountdown} onChange={e => setNewSandboxCountdown(e.target.value)} min="1" max="30"
+                    className="w-full h-9 px-3 rounded-lg bg-secondary text-foreground text-sm border border-border focus:ring-1 focus:ring-primary focus:outline-none" />
+                </div>
+              </div>
+              <button onClick={async () => {
+                if (!newSandboxUrl.trim() || !newSandboxLabel.trim()) return;
+                const link: SandboxLink = { id: Date.now().toString(), url: newSandboxUrl, label: newSandboxLabel, countdown: parseInt(newSandboxCountdown) || 5, isActive: true };
+                const next = [...sandboxLinks, link];
+                setSandboxLinks(next);
+                await updateSettings({ sandboxLinks: next });
+                await logAction("add_sandbox", newSandboxLabel, newSandboxUrl);
+                setNewSandboxUrl(""); setNewSandboxLabel(""); setNewSandboxCountdown("5");
+              }} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium">
+                <Plus className="w-4 h-4" /> Add Link
+              </button>
+            </div>
+
+            {/* Existing links */}
+            <div className="space-y-3">
+              {sandboxLinks.length === 0 && <p className="text-center text-muted-foreground py-12">No sandbox links yet.</p>}
+              {sandboxLinks.map(link => {
+                const redirectUrl = `/go?url=${encodeURIComponent(link.url)}&label=${encodeURIComponent(link.label)}&t=${link.countdown}`;
+                return (
+                  <div key={link.id} className="p-4 rounded-xl bg-card border border-border">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground">{link.label}</p>
+                        <p className="text-xs text-muted-foreground font-mono truncate mt-0.5">{link.url}</p>
+                        <div className="flex items-center gap-3 mt-2">
+                          <span className="text-[10px] text-muted-foreground">⏱ {link.countdown}s countdown</span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${link.isActive ? "bg-accent/20 text-accent" : "bg-muted text-muted-foreground"}`}>
+                            {link.isActive ? "Active" : "Inactive"}
+                          </span>
+                        </div>
+                        <div className="mt-2 flex items-center gap-2">
+                          <code className="text-[10px] px-2 py-1 bg-secondary rounded font-mono text-foreground/70 truncate max-w-[300px]">
+                            {window.location.origin}{redirectUrl}
+                          </code>
+                          <button onClick={() => navigator.clipboard.writeText(`${window.location.origin}${redirectUrl}`)}
+                            className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground">
+                            <Copy className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button onClick={async () => {
+                          const next = sandboxLinks.map(l => l.id === link.id ? { ...l, isActive: !l.isActive } : l);
+                          setSandboxLinks(next);
+                          await updateSettings({ sandboxLinks: next });
+                        }}>
+                          {link.isActive ? <ToggleRight className="w-5 h-5 text-primary" /> : <ToggleLeft className="w-5 h-5 text-muted-foreground" />}
+                        </button>
+                        <button onClick={async () => {
+                          const next = sandboxLinks.filter(l => l.id !== link.id);
+                          setSandboxLinks(next);
+                          await updateSettings({ sandboxLinks: next });
+                          await logAction("remove_sandbox", link.label);
+                        }} className="p-1.5 rounded-lg hover:bg-destructive/20 text-muted-foreground hover:text-destructive">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </motion.div>
         )}
