@@ -253,6 +253,16 @@ export default function AdminDashboard() {
         data?.forEach(r => { counts[r.role] = (counts[r.role] || 0) + 1; });
         setStatsData(prev => ({ ...prev, roleDistribution: Object.entries(counts).map(([name, value]) => ({ name, value })) }));
       });
+
+      // Fetch censor alert from site_settings
+      supabase.from("site_settings").select("value").eq("key", "last_censor_alert").single().then(({ data }) => {
+        if (data?.value && typeof data.value === "object") {
+          setCensorAlert(data.value as any);
+        }
+      });
+
+      // Trigger censor check via edge function
+      supabase.functions.invoke("comment-notify", { body: { type: "censored_check" } }).catch(() => {});
     }
   }, [tab]);
 
