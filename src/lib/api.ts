@@ -17,14 +17,24 @@ async function fetchApi<T>(path: string): Promise<T> {
   const timeout = setTimeout(() => controller.abort(), 12000);
 
   try {
-    const result = await Promise.any(
-      selected.map(async (base) => {
-        const res = await fetch(`${base}${path}`, { signal: controller.signal });
-        if (!res.ok) throw new Error(`API error: ${res.status}`);
-        const json = await res.json();
-        return (json.data ?? json) as T;
-      })
-    );
+    // Race selected APIs - first successful response wins
+    const promises = selected.map(async (base) => {
+      const res = await fetch(`${base}${path}`, { signal: controller.signal });
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      const json = await res.json();
+      return (json.data ?? json) as T;
+    });
+
+    // Use Promise.race with filtered settled promises
+    const result = await new Promise<T>((resolve, reject) => {
+      let rejected = 0;
+      promises.forEach(p => {
+        p.then(resolve).catch(() => {
+          rejected++;
+          if (rejected === promises.length) reject(new Error("All APIs failed"));
+        });
+      });
+    });
     clearTimeout(timeout);
     return result;
   } catch (firstErr) {
