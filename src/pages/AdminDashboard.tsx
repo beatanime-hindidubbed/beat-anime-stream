@@ -118,6 +118,12 @@ export default function AdminDashboard() {
   const [chatBans, setChatBans] = useState<any[]>([]);
   const [chatReports, setChatReports] = useState<any[]>([]);
 
+  // Extra features
+  const [faviconUrl, setFaviconUrl] = useState(settings.faviconUrl || "");
+  const [bannedAnimes, setBannedAnimes] = useState<string[]>(settings.bannedAnimes || []);
+  const [newBanId, setNewBanId] = useState("");
+  const [adminLogs, setAdminLogs] = useState<any[]>([]);
+
   useEffect(() => {
     setBrandName(settings.siteName); setBrandIcon(settings.siteIcon);
     setTgChannel(settings.telegramChannel); setTgGroup(settings.telegramGroup);
