@@ -55,10 +55,16 @@ const LANGUAGES = [
 
 interface HindiSource {
   name: string;
+  displayName: string;
   isHLS: boolean;
   url: string;
   headers: Record<string, string>;
 }
+
+const ALLOWED_HINDI_PROVIDERS: Record<string, string> = {
+  "StreamHG": "Server 1",
+  "EarnVids": "Server 2 Embedded",
+};
 
 async function fetchHindiSources(animeInfo: any, episodeNumber: number): Promise<HindiSource[]> {
   const moreInfo = animeInfo?.anime?.moreInfo || animeInfo?.moreInfo || {};
@@ -78,17 +84,24 @@ async function fetchHindiSources(animeInfo: any, episodeNumber: number): Promise
   const sources = data.data?.streams || data.data?.sources || data.data?.servers || [];
   if (!sources.length) throw new Error("No Hindi sources found");
 
-  return sources.map((src: any) => ({
-    name: src.provider || src.serverName || src.name || "Unknown",
-    isHLS: !!(
-      src.isM3U8 ||
-      src.dhls ||
-      (src.url && src.url.includes(".m3u8")) ||
-      (src.streamUrl && src.streamUrl.includes(".m3u8"))
-    ),
-    url: src.dhls || src.streamUrl || src.url || "",
-    headers: src.headers || {},
-  }));
+  return sources
+    .map((src: any) => {
+      const provider = src.provider || src.serverName || src.name || "Unknown";
+      const displayName = ALLOWED_HINDI_PROVIDERS[provider];
+      if (!displayName) return null;
+      return {
+        name: provider,
+        displayName,
+        isHLS: !!(
+          src.isM3U8 || src.dhls ||
+          (src.url && src.url.includes(".m3u8")) ||
+          (src.streamUrl && src.streamUrl.includes(".m3u8"))
+        ),
+        url: src.dhls || src.streamUrl || src.url || "",
+        headers: src.headers || {},
+      };
+    })
+    .filter((s: HindiSource | null): s is HindiSource => s !== null && s.url !== "");
 }
 
 export default function WatchPage() {
@@ -184,6 +197,36 @@ export default function WatchPage() {
   const scrollToPlayer = () => {
     playerWrapperRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+
+  // PiP: directly mutate DOM style to avoid React re-renders/flickering
+  useEffect(() => {
+    const el = playerWrapperRef.current;
+    if (!el) return;
+    if (showPip) {
+      el.style.position = "fixed";
+      el.style.bottom = "16px";
+      el.style.right = "16px";
+      el.style.width = isMobile ? "200px" : "320px";
+      el.style.zIndex = "50";
+      el.style.borderRadius = "12px";
+      el.style.overflow = "hidden";
+      el.style.boxShadow = "0 8px 30px rgba(0,0,0,0.6)";
+      el.style.border = "1px solid hsl(var(--border))";
+      el.style.cursor = "pointer";
+      el.style.maxHeight = "";
+    } else {
+      el.style.position = "";
+      el.style.bottom = "";
+      el.style.right = "";
+      el.style.width = "";
+      el.style.zIndex = "";
+      el.style.borderRadius = "";
+      el.style.overflow = "";
+      el.style.boxShadow = "";
+      el.style.border = "";
+      el.style.cursor = "";
+    }
+  }, [showPip, isMobile]);
 
   const { data: epData } = useQuery({
     queryKey: ["episodes", animeId],
@@ -459,20 +502,32 @@ export default function WatchPage() {
     <div className="container py-4 max-w-6xl">
       <BackButton />
 
-      {/* Player */}
+      {/* Player — DOM style mutated directly for PiP (no React re-render) */}
       <div
         ref={playerWrapperRef}
-        className={`mb-2 ${isMobile && mobileCompact ? "max-h-[35vh] overflow-hidden" : ""}`}
-        onTouchStart={(e) => { touchStartY.current = e.touches[0].clientY; }}
-        onTouchEnd={(e) => {
+        className={`mb-2 ${isMobile && mobileCompact && !showPip ? "max-h-[35vh] overflow-hidden" : ""}`}
+        onClick={showPip ? scrollToPlayer : undefined}
+        onTouchStart={!showPip ? (e) => { touchStartY.current = e.touches[0].clientY; } : undefined}
+        onTouchEnd={!showPip ? (e) => {
           if (touchStartY.current === null) return;
           const diff = e.changedTouches[0].clientY - touchStartY.current;
           if (Math.abs(diff) > 50) setMobileCompact(diff < 0);
           touchStartY.current = null;
-        }}
+        } : undefined}
       >
         {renderPlayer()}
-        {isMobile && (
+        {/* PiP close button overlay */}
+        {showPip && (
+          <div className="absolute top-1 right-1 z-[60]">
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowPip(false); }}
+              className="w-6 h-6 rounded-full bg-black/70 flex items-center justify-center text-white text-xs hover:bg-black/90"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+        {!showPip && isMobile && (
           <div className="flex justify-center py-1">
             <button onClick={() => setMobileCompact(!mobileCompact)} className="flex items-center gap-1 text-[10px] text-muted-foreground">
               <ChevronDown className={`w-3 h-3 transition-transform ${mobileCompact ? "" : "rotate-180"}`} />
@@ -481,30 +536,8 @@ export default function WatchPage() {
           </div>
         )}
       </div>
-
-      {/* Floating scroll-back PiP indicator */}
-      <AnimatePresence>
-        {showPip && (
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 16 }}
-            className="fixed bottom-4 right-4 z-50 flex items-center gap-2 pl-3 pr-2 py-2 rounded-full bg-card/95 backdrop-blur border border-border shadow-lg cursor-pointer"
-            onClick={scrollToPlayer}
-          >
-            <ArrowUp className="w-4 h-4 text-primary" />
-            <span className="text-xs font-medium text-foreground">
-              Ep {currentEp?.number} · {category === "dub" ? "🇮🇳" : (engLabel || category.toUpperCase())}
-            </span>
-            <button
-              onClick={(e) => { e.stopPropagation(); setShowPip(false); }}
-              className="w-5 h-5 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground text-[10px] ml-1"
-            >
-              ✕
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Spacer so content doesn't jump when player is fixed */}
+      {showPip && <div className="mb-2" style={{ aspectRatio: "16/9" }} />}
 
 
       {/* Stream info */}
@@ -514,7 +547,7 @@ export default function WatchPage() {
           <span>
             Streaming via{" "}
             <span className="text-primary font-medium">
-              {category === "dub" ? (selectedHindiSource?.name || "Hindi Server") : streamResult?.server}
+            {category === "dub" ? (selectedHindiSource?.displayName || "Hindi Server") : streamResult?.server}
             </span>
             {" · "}
             <span className={category === "dub" ? "text-orange-400 font-medium" : ""}>
@@ -593,7 +626,7 @@ export default function WatchPage() {
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {src.name}
+                {src.displayName}
                 {!src.isHLS && <span className="ml-1 text-[9px] opacity-60">EMBED</span>}
               </button>
             ))}
