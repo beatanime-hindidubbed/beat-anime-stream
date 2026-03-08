@@ -17,6 +17,7 @@ interface UserPrefs {
   cloudSync: boolean;
   pipOnScroll: boolean;
   bufferSize: "normal" | "high" | "max";
+  personalization: boolean;
 }
 
 const DEFAULTS: UserPrefs = {
@@ -31,6 +32,7 @@ const DEFAULTS: UserPrefs = {
   cloudSync: true,
   pipOnScroll: true,
   bufferSize: "max",
+  personalization: true,
 };
 
 function getPrefs(): UserPrefs {
@@ -225,6 +227,17 @@ export default function UserSettingsPanel() {
                   >
                     <Trash2 className="w-3.5 h-3.5" /> Clear Watch History
                   </button>
+
+                  <Toggle
+                    label="Personalized recommendations"
+                    checked={prefs.personalization}
+                    onChange={(v) => update({ personalization: v })}
+                  />
+                  <p className="text-[11px] text-muted-foreground -mt-1">
+                    {prefs.personalization
+                      ? "Recommends anime based on genres you watch."
+                      : "Shows default trending recommendations."}
+                  </p>
                 </Section>
 
                 {/* Interface */}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { store, ContinueWatchingItem, mergeCloudWatchHistory } from "@/lib/store";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
@@ -7,8 +7,8 @@ import AnimeSection from "@/components/AnimeSection";
 import SkeletonCard from "@/components/SkeletonCard";
 import SwipeableBanner from "@/components/SwipeableBanner";
 import { useQuery } from "@tanstack/react-query";
-import { api, HomeData } from "@/lib/api";
-import { X, Trash2 } from "lucide-react";
+import { api, HomeData, AnimeItem } from "@/lib/api";
+import { X, Trash2, Sparkles } from "lucide-react";
 
 function dedup(arr?: any[]) {
   if (!arr) return [];
@@ -41,6 +41,33 @@ export default function Index() {
     store.clearAllContinueWatching();
     setContinueWatching([]);
   };
+
+  // Personalization: track watched genres
+  const personalizationEnabled = useMemo(() => {
+    try {
+      const d = localStorage.getItem("beat_user_prefs");
+      if (!d) return true;
+      return JSON.parse(d).personalization !== false;
+    } catch { return true; }
+  }, []);
+
+  // Pick a genre from watched anime for personalized recs
+  const watchedGenre = useMemo(() => {
+    if (!personalizationEnabled || !user) return null;
+    const genres = JSON.parse(localStorage.getItem("beat_watched_genres") || "[]") as string[];
+    if (!genres.length) return null;
+    // Pick random genre from recent ones
+    return genres[Math.floor(Math.random() * Math.min(genres.length, 5))];
+  }, [personalizationEnabled, user]);
+
+  const { data: forYouData } = useQuery({
+    queryKey: ["forYou", watchedGenre],
+    queryFn: () => api.getGenre(watchedGenre!, 1),
+    enabled: !!watchedGenre,
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const forYouAnimes = dedup(forYouData?.animes)?.slice(0, 6) || [];
 
   const spotlight = data?.spotlightAnimes || [];
   const grid = "grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4";
@@ -82,6 +109,18 @@ export default function Index() {
                   </Link>
                 </div>
               ))}
+            </div>
+          </AnimeSection>
+        )}
+
+        {/* Personalized For You */}
+        {forYouAnimes.length > 0 && (
+          <AnimeSection
+            title={`For You — ${watchedGenre}`}
+            linkTo={`/genre/${watchedGenre}`}
+          >
+            <div className={grid}>
+              {forYouAnimes.map((a, i) => <AnimeCard key={a.id} anime={a} index={i} />)}
             </div>
           </AnimeSection>
         )}
