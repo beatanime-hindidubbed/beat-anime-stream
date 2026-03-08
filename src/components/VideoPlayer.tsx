@@ -784,6 +784,7 @@ export default function VideoPlayer({
           onClick={togglePlay}
           crossOrigin="anonymous"
           playsInline
+          disablePictureInPicture
           controlsList="nodownload noremoteplayback"
           // FIX: prevent mobile browser from auto-pausing on fullscreen
           x-webkit-airplay="allow"
