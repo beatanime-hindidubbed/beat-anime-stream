@@ -206,6 +206,10 @@ export default function HindiVideoPlayer({
 
   // ── Mini player on scroll ────────────────────────────────────────────
   useEffect(() => {
+    if (disableInternalMiniPlayer) {
+      setMiniPlayer(false);
+      return;
+    }
     if (!wrapperRef.current) return;
     const observer = new IntersectionObserver(
       ([entry]) => { setMiniPlayer(!entry.isIntersecting && playing); },
@@ -213,7 +217,7 @@ export default function HindiVideoPlayer({
     );
     observer.observe(wrapperRef.current);
     return () => observer.disconnect();
-  }, [playing]);
+  }, [playing, disableInternalMiniPlayer]);
 
   useEffect(() => {
     if (!wrapperRef.current) return;
