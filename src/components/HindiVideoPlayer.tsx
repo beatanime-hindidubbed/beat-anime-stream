@@ -530,9 +530,9 @@ export default function HindiVideoPlayer({
     e.stopPropagation();
   };
 
-  // ── Preview thumbnail hover (desktop only, feature parity) ────────────
+  // ── Preview thumbnail hover (desktop/laptop hover devices) ────────────
   const handleProgressHover = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!duration || isMobile) return;
+    if (!duration || !canHover) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const pct  = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     const t    = pct * duration;
