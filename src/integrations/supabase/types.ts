@@ -53,11 +53,45 @@ export type Database = {
         }
         Relationships: []
       }
+      premium_codes: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string
+          current_uses: number
+          expires_at: string
+          id: string
+          is_active: boolean
+          max_uses: number
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          created_by: string
+          current_uses?: number
+          expires_at: string
+          id?: string
+          is_active?: boolean
+          max_uses?: number
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string
+          current_uses?: number
+          expires_at?: string
+          id?: string
+          is_active?: boolean
+          max_uses?: number
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
           created_at: string
           id: string
+          premium_until: string | null
           user_id: string
           username: string | null
         }
@@ -65,6 +99,7 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           id?: string
+          premium_until?: string | null
           user_id: string
           username?: string | null
         }
@@ -72,6 +107,7 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           id?: string
+          premium_until?: string | null
           user_id?: string
           username?: string | null
         }
