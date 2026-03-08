@@ -257,6 +257,7 @@ function applyTheme(theme: ThemeType, customColors?: CustomThemeColors) {
       "--gradient-primary": "linear-gradient(135deg, hsl(0 90% 45%), hsl(0 85% 35%))",
       "--gradient-accent": "linear-gradient(135deg, hsl(0 0% 95%), hsl(0 0% 80%))",
       "--theme-pattern": "none",
+      "--theme-bg-image": "none",
     },
     cyberpunk: {
       "--primary": "60 100% 50%", "--accent": "300 100% 60%",
