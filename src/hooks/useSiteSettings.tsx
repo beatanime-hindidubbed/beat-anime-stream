@@ -102,6 +102,7 @@ const Ctx = createContext<SiteSettingsCtx>({
   updateSettings: async () => {},
   reportAnimeFail: () => {},
   isHidden: () => false,
+  currentFestival: null,
 });
 
 export function SiteSettingsProvider({ children }: { children: ReactNode }) {
