@@ -648,12 +648,12 @@ export default function WatchPage() {
             <span className="text-xs text-orange-400 font-medium">🇮🇳 Hindi Dubbed</span>
           )}
         </div>
-        {currentEp?.episodeId && (
+        {currentEp?.episodeId && category !== "dub" && (
           <DownloadButton
             episodeId={currentEp.episodeId}
             episodeNumber={currentEp.number}
             animeName={animeName}
-            streamUrl={category === "dub" ? (hindiHlsSrc || undefined) : streamResult?.url}
+            streamUrl={streamResult?.url}
           />
         )}
       </div>
