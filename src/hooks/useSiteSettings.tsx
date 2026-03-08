@@ -69,6 +69,7 @@ const DEFAULTS: SiteSettings = {
   fontStyle: "default",
   textEffect: "none",
   particleEffect: "none",
+  autoFestival: true,
   customThemeColors: { primary: "175 80% 50%", accent: "330 70% 55%", background: "220 20% 7%", card: "220 18% 10%", border: "220 15% 18%" },
   sandboxLinks: [],
   faviconUrl: "",
