@@ -255,7 +255,8 @@ export default function UserSettingsPanel() {
               </Section>
             </div>
           </div>
-        </>
+        </>,
+        document.body
       )}
     </>
   );
