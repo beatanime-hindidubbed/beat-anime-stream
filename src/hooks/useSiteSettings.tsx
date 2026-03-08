@@ -107,6 +107,7 @@ const Ctx = createContext<SiteSettingsCtx>({
 
 export function SiteSettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<SiteSettings>(DEFAULTS);
+  const [currentFestival, setCurrentFestival] = useState<DetectedFestival | null>(null);
 
   useEffect(() => {
     supabase
@@ -119,6 +120,23 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
         setSettings((prev) => ({ ...prev, ...map }));
       });
   }, []);
+
+  // Auto-festival detection
+  useEffect(() => {
+    const festival = detectCurrentFestival();
+    setCurrentFestival(festival);
+    if (festival && settings.autoFestival) {
+      // Only auto-apply if user hasn't manually set a festival/custom theme
+      const manualThemes: ThemeType[] = ["custom"];
+      if (!manualThemes.includes(settings.theme)) {
+        setSettings(prev => ({
+          ...prev,
+          theme: festival.theme,
+          particleEffect: festival.particle,
+        }));
+      }
+    }
+  }, [settings.autoFestival]);
 
   useEffect(() => {
     applyTheme(settings.theme, settings.customThemeColors);
