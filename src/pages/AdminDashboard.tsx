@@ -541,7 +541,34 @@ export default function AdminDashboard() {
               ))}
             </div>
 
-            {/* Charts row */}
+            {/* Censor Alert Banner */}
+            {censorAlert && (
+              <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/30 flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-sm font-bold text-destructive">⚠️ Censor Spike Detected</h3>
+                  <p className="text-xs text-destructive/80 mt-1">
+                    {censorAlert.count} censored comments ({censorAlert.rate}% rate) out of {censorAlert.total} total in last hour
+                  </p>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Last alert: {new Date(censorAlert.timestamp).toLocaleString()}
+                  </p>
+                  {censorAlert.samples?.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      <p className="text-[10px] font-medium text-destructive/70">Recent samples:</p>
+                      {censorAlert.samples.map((s: any, i: number) => (
+                        <div key={i} className="text-[10px] px-2 py-1 rounded bg-destructive/5 text-muted-foreground truncate">
+                          "{s.content}" — {s.anime_id} / {s.episode_id}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button onClick={() => setCensorAlert(null)} className="p-1 rounded hover:bg-destructive/20 flex-shrink-0">
+                  <XCircle className="w-4 h-4 text-destructive/60" />
+                </button>
+              </div>
+            )}
             <div className="grid gap-4 md:grid-cols-2">
               {/* Comments over 7 days */}
               <div className="p-4 sm:p-5 rounded-xl bg-card border border-border">
