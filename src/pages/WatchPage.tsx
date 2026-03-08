@@ -198,6 +198,36 @@ export default function WatchPage() {
     playerWrapperRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  // PiP: directly mutate DOM style to avoid React re-renders/flickering
+  useEffect(() => {
+    const el = playerWrapperRef.current;
+    if (!el) return;
+    if (showPip) {
+      el.style.position = "fixed";
+      el.style.bottom = "16px";
+      el.style.right = "16px";
+      el.style.width = isMobile ? "200px" : "320px";
+      el.style.zIndex = "50";
+      el.style.borderRadius = "12px";
+      el.style.overflow = "hidden";
+      el.style.boxShadow = "0 8px 30px rgba(0,0,0,0.6)";
+      el.style.border = "1px solid hsl(var(--border))";
+      el.style.cursor = "pointer";
+      el.style.maxHeight = "";
+    } else {
+      el.style.position = "";
+      el.style.bottom = "";
+      el.style.right = "";
+      el.style.width = "";
+      el.style.zIndex = "";
+      el.style.borderRadius = "";
+      el.style.overflow = "";
+      el.style.boxShadow = "";
+      el.style.border = "";
+      el.style.cursor = "";
+    }
+  }, [showPip, isMobile]);
+
   const { data: epData } = useQuery({
     queryKey: ["episodes", animeId],
     queryFn: () => api.getEpisodes(animeId),
