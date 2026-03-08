@@ -143,6 +143,7 @@ export default function WatchPage() {
   const [showPip, setShowPip] = useState(false);
   const [mobileCompact, setMobileCompact] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
+  const touchStartY = useRef<number | null>(null);
   const { settings } = useSiteSettings();
 
   const animeId = fullEpisodeId.split("?")[0];
