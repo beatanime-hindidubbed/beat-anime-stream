@@ -299,7 +299,7 @@ export default function VideoPlayer({
 
   // ── Preview HLS (desktop only) ────────────────────────────────────────
   useEffect(() => {
-    if (isMobile) return;
+    if (!canHover) return;
     const preview = previewVideoRef.current;
     let realSrc: string;
     try { realSrc = getUrl.current(); } catch { return; }
