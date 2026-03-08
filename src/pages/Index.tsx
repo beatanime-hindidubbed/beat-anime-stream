@@ -36,27 +36,27 @@ export default function Index() {
   };
 
   const spotlight = data?.spotlightAnimes || [];
-  const grid = "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4";
+  const grid = "grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4";
   const skeletons = Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />);
 
   return (
     <div>
       {spotlight.length > 0 && <SwipeableBanner items={spotlight} />}
 
-      <div className="container">
+      <div className="container space-y-2">
         {/* Continue Watching */}
         {continueWatching.length > 0 && (
           <AnimeSection
             title="Continue Watching"
             extra={
               <button onClick={clearAllCW} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors">
-                <Trash2 className="w-3 h-3" /> Clear All
+                <Trash2 className="w-3 h-3" /> Clear
               </button>
             }
           >
-            <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-2">
+            <div className="flex gap-3 sm:gap-4 overflow-x-auto scrollbar-hide pb-2 -mx-1 px-1">
               {continueWatching.map((item) => (
-                <div key={item.id} className="shrink-0 w-40 group relative">
+                <div key={item.id} className="shrink-0 w-32 sm:w-40 group relative">
                   <button
                     onClick={(e) => { e.preventDefault(); removeCW(item.id); }}
                     className="absolute top-1 right-1 z-10 w-6 h-6 rounded-full bg-background/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive hover:text-destructive-foreground"
@@ -70,7 +70,7 @@ export default function Index() {
                         <div className="h-full bg-primary" style={{ width: `${(item.progress / item.duration) * 100}%` }} />
                       </div>
                     </div>
-                    <p className="text-xs text-foreground mt-1.5 line-clamp-1">{item.name}</p>
+                    <p className="text-[11px] sm:text-xs text-foreground mt-1.5 line-clamp-1">{item.name}</p>
                     <p className="text-[10px] text-muted-foreground">EP {item.episodeNumber}</p>
                   </Link>
                 </div>

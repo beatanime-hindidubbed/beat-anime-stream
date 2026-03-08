@@ -70,6 +70,10 @@ const THEMES: { key: ThemeType; label: string; colors: string[]; tag?: string }[
   { key: "diwali", label: "Diwali", colors: ["#ff9500", "#ffd700"], tag: "🪔 Festival" },
   { key: "holi", label: "Holi", colors: ["#ff0080", "#00ff80"], tag: "🎨 Festival" },
   { key: "independence-day", label: "Independence", colors: ["#ff9933", "#138808"], tag: "🇮🇳 Festival" },
+  { key: "cherry-blossom", label: "Cherry Blossom", colors: ["#f0a0c0", "#f8c8d8"], tag: "🌸 Japan" },
+  { key: "matsuri", label: "Matsuri", colors: ["#e53e3e", "#ecc94b"], tag: "🏮 Japan" },
+  { key: "torii", label: "Torii Gate", colors: ["#c53030", "#c69749"], tag: "⛩️ Japan" },
+  { key: "zen", label: "Zen Garden", colors: ["#5a9a6e", "#a0815a"], tag: "🍃 Japan" },
 ];
 
 const PLAYER_THEMES: { key: PlayerTheme; label: string; desc: string }[] = [
@@ -607,6 +611,8 @@ export default function AdminDashboard() {
                   { key: "diyas" as ParticleEffect, label: "Diyas", emoji: "🪔", desc: "Diwali oil lamps" },
                   { key: "colors" as ParticleEffect, label: "Colors", emoji: "🎨", desc: "Holi color splash" },
                   { key: "tricolor" as ParticleEffect, label: "Tricolor", emoji: "🇮🇳", desc: "Independence Day" },
+                  { key: "lanterns" as ParticleEffect, label: "Lanterns", emoji: "🏮", desc: "Japanese festival lanterns" },
+                  { key: "fireflies" as ParticleEffect, label: "Fireflies", emoji: "✨", desc: "Zen garden fireflies" },
                 ] as const).map(p => (
                   <button key={p.key} onClick={async () => { await updateSettings({ particleEffect: p.key }); await logAction("particle_effect", p.key); }}
                     className={`p-4 rounded-xl border-2 text-left transition-all ${

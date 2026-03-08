@@ -8,7 +8,8 @@ export type ThemeType =
   | "anime-dark" | "anime-pastel" | "anime-retro" | "dragon" | "galaxy"
   | "bloodmoon" | "phantom" | "jade" | "violet-storm" | "golden-hour"
   | "netflix" | "custom"
-  | "diwali" | "holi" | "independence-day";
+  | "diwali" | "holi" | "independence-day"
+  | "cherry-blossom" | "matsuri" | "torii" | "zen";
 
 export type PlayerTheme = "default" | "minimal" | "cinema" | "retro" | "glassmorphism";
 
@@ -16,7 +17,7 @@ export type FontStyle = "default" | "elegant" | "playful" | "monospace" | "cinem
 
 export type TextEffect = "none" | "neon-glow" | "typewriter" | "gradient-wave" | "neon-pulse";
 
-export type ParticleEffect = "none" | "stars" | "sakura" | "snow" | "diyas" | "colors" | "tricolor";
+export type ParticleEffect = "none" | "stars" | "sakura" | "snow" | "diyas" | "colors" | "tricolor" | "lanterns" | "fireflies";
 
 export interface SandboxLink {
   id: string;
@@ -192,7 +193,6 @@ export function useSiteSettings() {
   return useContext(Ctx);
 }
 
-// Font style application
 function applyFont(fontStyle: FontStyle) {
   const root = document.documentElement;
   const fonts: Record<FontStyle, { display: string; body: string }> = {
@@ -402,6 +402,43 @@ function applyTheme(theme: ThemeType, customColors?: CustomThemeColors) {
       "--gradient-primary": "linear-gradient(180deg, hsl(25 90% 55%), hsl(0 0% 98%), hsl(140 70% 45%))",
       "--gradient-accent": "linear-gradient(135deg, hsl(220 80% 50%), hsl(220 70% 40%))",
       "--theme-pattern": "linear-gradient(180deg, hsl(25 90% 55% / 0.04) 0%, hsl(25 90% 55% / 0.02) 33%, transparent 33%, transparent 66%, hsl(140 70% 45% / 0.02) 66%, hsl(140 70% 45% / 0.04) 100%)",
+    },
+    // ── Japanese Festival Themes ──
+    "cherry-blossom": {
+      "--primary": "340 75% 70%", "--accent": "350 65% 80%",
+      "--background": "340 20% 6%", "--card": "340 15% 9%", "--border": "340 12% 18%",
+      "--foreground": "340 10% 92%", "--muted-foreground": "340 10% 55%",
+      "--secondary": "340 12% 13%", "--secondary-foreground": "340 10% 85%",
+      "--gradient-primary": "linear-gradient(135deg, hsl(340 75% 70%), hsl(330 60% 75%), hsl(350 70% 80%))",
+      "--gradient-accent": "linear-gradient(135deg, hsl(350 65% 80%), hsl(20 50% 70%))",
+      "--theme-pattern": "radial-gradient(4px 4px at 8% 12%, hsl(340 75% 70% / 0.2), transparent), radial-gradient(3px 3px at 25% 45%, hsl(350 65% 80% / 0.15), transparent), radial-gradient(5px 5px at 65% 18%, hsl(340 75% 70% / 0.12), transparent), radial-gradient(3px 3px at 80% 65%, hsl(350 65% 80% / 0.18), transparent), radial-gradient(4px 4px at 45% 80%, hsl(340 75% 70% / 0.1), transparent), radial-gradient(2px 2px at 92% 35%, hsl(350 65% 80% / 0.2), transparent)",
+    },
+    matsuri: {
+      "--primary": "0 85% 55%", "--accent": "45 100% 55%",
+      "--background": "220 25% 5%", "--card": "220 20% 8%", "--border": "220 15% 16%",
+      "--foreground": "0 0% 95%", "--muted-foreground": "0 0% 55%",
+      "--secondary": "220 15% 12%", "--secondary-foreground": "0 0% 88%",
+      "--gradient-primary": "linear-gradient(135deg, hsl(0 85% 55%), hsl(350 80% 50%), hsl(15 90% 55%))",
+      "--gradient-accent": "linear-gradient(135deg, hsl(45 100% 55%), hsl(30 95% 50%))",
+      "--theme-pattern": "repeating-linear-gradient(135deg, transparent, transparent 40px, hsl(0 85% 55% / 0.03) 40px, hsl(0 85% 55% / 0.03) 42px), repeating-linear-gradient(-135deg, transparent, transparent 40px, hsl(45 100% 55% / 0.02) 40px, hsl(45 100% 55% / 0.02) 42px)",
+    },
+    torii: {
+      "--primary": "0 75% 50%", "--accent": "40 60% 45%",
+      "--background": "30 15% 5%", "--card": "30 12% 8%", "--border": "30 10% 16%",
+      "--foreground": "30 10% 90%", "--muted-foreground": "30 8% 50%",
+      "--secondary": "30 10% 12%", "--secondary-foreground": "30 8% 85%",
+      "--gradient-primary": "linear-gradient(135deg, hsl(0 75% 50%), hsl(355 70% 42%))",
+      "--gradient-accent": "linear-gradient(135deg, hsl(40 60% 45%), hsl(35 55% 38%))",
+      "--theme-pattern": "linear-gradient(180deg, hsl(0 75% 50% / 0.04) 0%, transparent 15%, transparent 85%, hsl(40 60% 45% / 0.03) 100%)",
+    },
+    zen: {
+      "--primary": "150 30% 50%", "--accent": "30 25% 55%",
+      "--background": "160 10% 5%", "--card": "160 8% 8%", "--border": "160 6% 16%",
+      "--foreground": "160 5% 88%", "--muted-foreground": "160 5% 50%",
+      "--secondary": "160 8% 11%", "--secondary-foreground": "160 5% 80%",
+      "--gradient-primary": "linear-gradient(135deg, hsl(150 30% 50%), hsl(160 25% 42%))",
+      "--gradient-accent": "linear-gradient(135deg, hsl(30 25% 55%), hsl(25 20% 48%))",
+      "--theme-pattern": "radial-gradient(ellipse at 50% 50%, hsl(150 30% 50% / 0.03) 0%, transparent 60%)",
     },
   };
 

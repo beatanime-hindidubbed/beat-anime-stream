@@ -24,36 +24,36 @@ export default function AnimeCard({ anime, index = 0 }: Props) {
             loading="lazy"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-            <div className="w-12 h-12 rounded-full bg-primary/90 flex items-center justify-center">
-              <Play className="w-5 h-5 text-primary-foreground ml-0.5" />
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-primary/90 flex items-center justify-center">
+              <Play className="w-4 h-4 sm:w-5 sm:h-5 text-primary-foreground ml-0.5" />
             </div>
           </div>
           {anime.episodes && (
-            <div className="absolute top-2 left-2 flex gap-1">
+            <div className="absolute top-1.5 left-1.5 sm:top-2 sm:left-2 flex gap-1">
               {anime.episodes.sub != null && (
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-primary text-primary-foreground">
+                <span className="px-1 sm:px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-medium bg-primary text-primary-foreground">
                   SUB {anime.episodes.sub}
                 </span>
               )}
               {anime.episodes.dub != null && (
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-accent text-accent-foreground">
+                <span className="px-1 sm:px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-medium bg-accent text-accent-foreground">
                   DUB {anime.episodes.dub}
                 </span>
               )}
             </div>
           )}
           {anime.rating && (
-            <span className="absolute top-2 right-2 px-1.5 py-0.5 rounded text-[10px] font-medium bg-secondary text-secondary-foreground">
+            <span className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 px-1 sm:px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-medium bg-secondary text-secondary-foreground">
               {anime.rating}
             </span>
           )}
         </div>
-        <div className="mt-2">
-          <h3 className="text-sm font-medium text-foreground line-clamp-2 group-hover:text-primary transition-colors">
+        <div className="mt-1.5 sm:mt-2">
+          <h3 className="text-xs sm:text-sm font-medium text-foreground line-clamp-2 group-hover:text-primary transition-colors leading-tight">
             {anime.name}
           </h3>
           {anime.type && (
-            <p className="text-xs text-muted-foreground mt-0.5">{anime.type}{anime.duration ? ` · ${anime.duration}` : ""}</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">{anime.type}{anime.duration ? ` · ${anime.duration}` : ""}</p>
           )}
         </div>
       </Link>
