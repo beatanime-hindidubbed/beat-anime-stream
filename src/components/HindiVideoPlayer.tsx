@@ -3,7 +3,8 @@ import Hls from "hls.js";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   Settings, Subtitles, Gauge, Sun, ChevronRight,
-  SkipForward, SkipBack, Loader2, Layers, Zap
+  SkipForward, SkipBack, Loader2, Layers, Zap,
+  Camera, Repeat, Volume1, SlidersHorizontal
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import PlayerWatermark from "./PlayerWatermark";  // ← added watermark import

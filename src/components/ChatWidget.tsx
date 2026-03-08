@@ -8,7 +8,7 @@ import {
   MessageCircle, X, Send, AlertTriangle, Users, Lock,
   Reply, Trash2, Ban, VolumeX,
   ChevronDown, Pin, Smile, Forward, Heart, ThumbsUp, ThumbsDown,
-  Flame, Star, Laugh, Check, CheckCheck
+  Flame, Star, Laugh, Check, CheckCheck, Eraser, Shield, Image as ImageIcon
 } from "lucide-react";
 
 type ChatMode = "group" | "report" | "whisper";
@@ -45,6 +45,20 @@ const REACTIONS = [
 
 const PINNED_MSG = "⚠️ Chat auto-clears every 7 days. Be respectful. No personal info sharing.";
 
+// Curated GIF stickers
+const GIF_STICKERS = [
+  { name: "👋 Hi", url: "https://media.tenor.com/images/66a0f8a3ed251d7989de0e3929f5e8ce/tenor.gif" },
+  { name: "😂 LOL", url: "https://media.tenor.com/images/73c9e7d6a1cf79f0e3c4be7f6c79e899/tenor.gif" },
+  { name: "👏 Clap", url: "https://media.tenor.com/images/2a03d98b8f9b8fe8e7e4bc6e8f8dd4f0/tenor.gif" },
+  { name: "🔥 Fire", url: "https://media.tenor.com/images/42a43ee3c02c1d1b35b0c88ec1e79e71/tenor.gif" },
+  { name: "💀 Dead", url: "https://media.tenor.com/images/e9f60ae9c2c5e2d9a6e66bee6e8cf5a5/tenor.gif" },
+  { name: "🥺 Please", url: "https://media.tenor.com/images/4e95d7d7f5f0a62f55e1dbf1aab0a8a0/tenor.gif" },
+  { name: "🤯 Mind", url: "https://media.tenor.com/images/87c71ad01c6868a86b20f9b9e5e76b5d/tenor.gif" },
+  { name: "🎉 Party", url: "https://media.tenor.com/images/4a6c0f1c44b8f9d9ad1f0f6a0aa7ae12/tenor.gif" },
+];
+
+const QUICK_EMOJIS = ["😀", "😂", "😍", "🤔", "😭", "😎", "🔥", "👀", "💀", "🎉", "❤️", "👍", "🙏", "💯", "✨", "🤡"];
+
 export default function ChatWidget() {
   const { user, isAdmin } = useSupabaseAuth();
   const { settings } = useSiteSettings();
@@ -68,11 +82,11 @@ export default function ChatWidget() {
   const [isTyping, setIsTyping] = useState(false);
   const [forwardMsg, setForwardMsg] = useState<ChatMsg | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showStickerPicker, setShowStickerPicker] = useState(false);
+  const [pickerTab, setPickerTab] = useState<"emoji" | "sticker">("emoji");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
-
-  const QUICK_EMOJIS = ["😀", "😂", "😍", "🤔", "😭", "😎", "🔥", "👀", "💀", "🎉", "❤️", "👍", "🙏", "💯", "✨", "🤡"];
 
   const loadMessages = useCallback(async () => {
     if (!user) return;
@@ -120,19 +134,27 @@ export default function ChatWidget() {
     if (!open || !user) return;
     const channel = supabase
       .channel("chat-realtime")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages" }, (payload) => {
-        const msg = payload.new as unknown as ChatMsg;
-        if (mode === "group" && msg.type === "group") {
-          setMessages(prev => [...prev, msg]);
-        } else if (mode === "report" && msg.type === "report") {
-          setMessages(prev => [...prev, msg]);
-        } else if (mode === "whisper" && msg.type === "whisper") {
-          if ((msg.user_id === user.id && msg.recipient_id === whisperTo) ||
-              (msg.user_id === whisperTo && msg.recipient_id === user.id)) {
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_messages" }, (payload) => {
+        if (payload.eventType === "INSERT") {
+          const msg = payload.new as unknown as ChatMsg;
+          if (mode === "group" && msg.type === "group") {
             setMessages(prev => [...prev, msg]);
+          } else if (mode === "report" && msg.type === "report") {
+            setMessages(prev => [...prev, msg]);
+          } else if (mode === "whisper" && msg.type === "whisper") {
+            if ((msg.user_id === user.id && msg.recipient_id === whisperTo) ||
+                (msg.user_id === whisperTo && msg.recipient_id === user.id)) {
+              setMessages(prev => [...prev, msg]);
+            }
           }
+          if (!open) setUnread(prev => prev + 1);
+        } else if (payload.eventType === "UPDATE") {
+          const updated = payload.new as unknown as ChatMsg;
+          setMessages(prev => prev.map(m => m.id === updated.id ? updated : m));
+        } else if (payload.eventType === "DELETE") {
+          const deleted = payload.old as unknown as { id: string };
+          setMessages(prev => prev.filter(m => m.id !== deleted.id));
         }
-        if (!open) setUnread(prev => prev + 1);
       })
       .subscribe();
 
@@ -179,11 +201,11 @@ export default function ChatWidget() {
     }, 2000);
   };
 
-  const sendMessage = async () => {
-    if (!user || !input.trim() || sending || isBanned || isMuted) return;
+  const sendMessage = async (overrideContent?: string) => {
+    const content = overrideContent || input.trim();
+    if (!user || !content || sending || isBanned || isMuted) return;
     if (!isAdmin && !perms.sendMessages) return;
 
-    // Slow mode check
     if (!isAdmin && perms.slowMode > 0) {
       const now = Date.now();
       if (now - lastSentAt < perms.slowMode * 1000) return;
@@ -191,12 +213,10 @@ export default function ChatWidget() {
 
     setSending(true);
 
-    const clean = sanitizeMessage(input.trim());
+    const clean = overrideContent ? content : sanitizeMessage(content);
 
-    // Link check
     const urlPattern = /https?:\/\/\S+/gi;
     if (!isAdmin && !perms.sendLinks && urlPattern.test(clean)) { setSending(false); return; }
-    // Block http links always (non-https)
     if (/http:\/\/\S+/gi.test(clean)) { setSending(false); return; }
 
     const { data: profile } = await supabase
@@ -221,8 +241,14 @@ export default function ChatWidget() {
     setForwardMsg(null);
     setSending(false);
     setShowEmojiPicker(false);
+    setShowStickerPicker(false);
     setLastSentAt(Date.now());
     inputRef.current?.focus();
+  };
+
+  const sendSticker = (stickerUrl: string, name: string) => {
+    sendMessage(`[sticker:${name}] ${stickerUrl}`);
+    setShowStickerPicker(false);
   };
 
   const addReaction = (msgId: string, emoji: string) => {
@@ -246,9 +272,48 @@ export default function ChatWidget() {
     inputRef.current?.focus();
   };
 
+  // Admin delete — marks as deleted with indicator
   const deleteMessage = async (id: string) => {
-    await supabase.from("chat_messages").update({ is_deleted: true, content: "[deleted by admin]" } as any).eq("id", id);
-    setMessages(prev => prev.map(m => m.id === id ? { ...m, is_deleted: true, content: "[deleted by admin]" } : m));
+    await supabase.from("chat_messages").update({ is_deleted: true, content: "🚫 This message was deleted by admin" } as any).eq("id", id);
+    setMessages(prev => prev.map(m => m.id === id ? { ...m, is_deleted: true, content: "🚫 This message was deleted by admin" } : m));
+  };
+
+  // User delete own message
+  const deleteOwnMessage = async (id: string) => {
+    await supabase.from("chat_messages").update({ is_deleted: true, content: "🚫 This message was deleted" } as any).eq("id", id);
+    setMessages(prev => prev.map(m => m.id === id ? { ...m, is_deleted: true, content: "🚫 This message was deleted" } : m));
+  };
+
+  // Clear chat (admin: all messages in current mode, user: own messages)
+  const clearChat = async () => {
+    if (!user) return;
+    if (isAdmin) {
+      // Admin clears all visible messages in current mode
+      const ids = messages.filter(m => !m.is_deleted).map(m => m.id);
+      if (ids.length === 0) return;
+      for (const id of ids) {
+        await supabase.from("chat_messages").update({ is_deleted: true, content: "🚫 Chat cleared by admin" } as any).eq("id", id);
+      }
+      setMessages(prev => prev.map(m => ids.includes(m.id) ? { ...m, is_deleted: true, content: "🚫 Chat cleared by admin" } : m));
+    } else {
+      // User clears own messages
+      const ids = messages.filter(m => m.user_id === user.id && !m.is_deleted).map(m => m.id);
+      for (const id of ids) {
+        await supabase.from("chat_messages").update({ is_deleted: true, content: "🚫 This message was deleted" } as any).eq("id", id);
+      }
+      setMessages(prev => prev.map(m => ids.includes(m.id) ? { ...m, is_deleted: true, content: "🚫 This message was deleted" } : m));
+    }
+  };
+
+  // Whisper to admin shortcut
+  const whisperToAdmin = async () => {
+    // Find any admin from user_roles
+    const { data } = await supabase.from("user_roles").select("user_id").eq("role", "admin").limit(1);
+    if (data && data.length > 0) {
+      const adminId = data[0].user_id;
+      const { data: profile } = await supabase.from("profiles").select("username").eq("user_id", adminId).single();
+      startWhisper(adminId, profile?.username || "Admin");
+    }
   };
 
   const banUser = async (userId: string, type: "mute" | "ban") => {
@@ -263,6 +328,13 @@ export default function ChatWidget() {
 
   const startWhisper = (userId: string, username: string) => {
     setMode("whisper"); setWhisperTo(userId); setWhisperUsername(username);
+  };
+
+  // Check if content is a sticker
+  const isSticker = (content: string) => content.startsWith("[sticker:");
+  const getStickerUrl = (content: string) => {
+    const match = content.match(/\]\s*(https?:\/\/\S+)/);
+    return match ? match[1] : null;
   };
 
   if (!user) return null;
@@ -304,9 +376,21 @@ export default function ChatWidget() {
                 </span>
                 <span className="w-2 h-2 rounded-full bg-accent animate-pulse shrink-0" />
               </div>
-              <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg hover:bg-secondary transition-colors shrink-0">
-                <X className="w-4 h-4 text-muted-foreground" />
-              </button>
+              <div className="flex items-center gap-1 shrink-0">
+                {/* Whisper to admin */}
+                {!isAdmin && (
+                  <button onClick={whisperToAdmin} className="p-1.5 rounded-lg hover:bg-secondary transition-colors" title="Whisper to Admin">
+                    <Shield className="w-3.5 h-3.5 text-muted-foreground" />
+                  </button>
+                )}
+                {/* Clear chat */}
+                <button onClick={clearChat} className="p-1.5 rounded-lg hover:bg-secondary transition-colors" title={isAdmin ? "Clear all messages" : "Clear my messages"}>
+                  <Eraser className="w-3.5 h-3.5 text-muted-foreground" />
+                </button>
+                <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg hover:bg-secondary transition-colors">
+                  <X className="w-4 h-4 text-muted-foreground" />
+                </button>
+              </div>
             </div>
 
             {/* Mode tabs */}
@@ -357,6 +441,7 @@ export default function ChatWidget() {
                 const msgReactions = reactions[msg.id] || {};
                 const prevMsg = messages[i - 1];
                 const sameUser = prevMsg?.user_id === msg.user_id;
+                const stickerUrl = isSticker(msg.content) ? getStickerUrl(msg.content) : null;
                 
                 return (
                   <div key={msg.id} className={`group flex gap-2 ${isOwn ? "flex-row-reverse" : ""} ${sameUser ? "mt-0.5" : "mt-3"}`}>
@@ -388,20 +473,27 @@ export default function ChatWidget() {
                         </div>
                       )}
 
-                      <div className={`relative px-3 py-1.5 rounded-2xl text-sm break-words ${
-                        msg.is_deleted
-                          ? "bg-destructive/10 text-destructive/60 italic"
-                          : isOwn
-                          ? "bg-primary text-primary-foreground rounded-tr-sm"
-                          : "bg-secondary text-secondary-foreground rounded-tl-sm"
-                      }`}>
-                        {msg.content}
-                        {isOwn && !msg.is_deleted && (
-                          <span className="inline-flex ml-1.5 align-bottom">
-                            <CheckCheck className="w-3 h-3 text-primary-foreground/60" />
-                          </span>
-                        )}
-                      </div>
+                      {/* Sticker message */}
+                      {stickerUrl && !msg.is_deleted ? (
+                        <div className={`${isOwn ? "ml-auto" : ""}`}>
+                          <img src={stickerUrl} alt="sticker" className="w-24 h-24 object-contain rounded-lg" loading="lazy" />
+                        </div>
+                      ) : (
+                        <div className={`relative px-3 py-1.5 rounded-2xl text-sm break-words ${
+                          msg.is_deleted
+                            ? "bg-secondary/40 text-muted-foreground/60 italic text-xs"
+                            : isOwn
+                            ? "bg-primary text-primary-foreground rounded-tr-sm"
+                            : "bg-secondary text-secondary-foreground rounded-tl-sm"
+                        }`}>
+                          {msg.content}
+                          {isOwn && !msg.is_deleted && (
+                            <span className="inline-flex ml-1.5 align-bottom">
+                              <CheckCheck className="w-3 h-3 text-primary-foreground/60" />
+                            </span>
+                          )}
+                        </div>
+                      )}
 
                       {msg.image_url && !msg.is_deleted && (
                         <img src={msg.image_url} alt="" className="mt-1 rounded-lg max-h-40 object-cover" />
@@ -421,7 +513,7 @@ export default function ChatWidget() {
                         </div>
                       )}
 
-                      {/* Actions - visible on hover (desktop) or tap (mobile via group-focus-within) */}
+                      {/* Actions */}
                       <div className={`flex items-center gap-0.5 mt-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity ${isOwn ? "justify-end" : ""}`}>
                         {!msg.is_deleted && (
                           <>
@@ -437,26 +529,28 @@ export default function ChatWidget() {
                             </button>
                           </>
                         )}
+                        {/* User delete own message */}
+                        {isOwn && !msg.is_deleted && (
+                          <button onClick={() => deleteOwnMessage(msg.id)} className="p-1 rounded hover:bg-destructive/20" title="Delete">
+                            <Trash2 className="w-3 h-3 text-destructive/70" />
+                          </button>
+                        )}
                         {!isOwn && (
                           <button onClick={() => startWhisper(msg.user_id, msg.username || "User")} className="p-1 rounded hover:bg-secondary" title="Whisper">
                             <Lock className="w-3 h-3 text-muted-foreground" />
                           </button>
                         )}
-                        {isAdmin && !msg.is_deleted && (
+                        {isAdmin && !msg.is_deleted && !isOwn && (
                           <>
-                            <button onClick={() => deleteMessage(msg.id)} className="p-1 rounded hover:bg-destructive/20" title="Delete">
+                            <button onClick={() => deleteMessage(msg.id)} className="p-1 rounded hover:bg-destructive/20" title="Delete (Admin)">
                               <Trash2 className="w-3 h-3 text-destructive" />
                             </button>
-                            {!isOwn && (
-                              <>
-                                <button onClick={() => banUser(msg.user_id, "mute")} title="Mute 7d" className="p-1 rounded hover:bg-destructive/20">
-                                  <VolumeX className="w-3 h-3 text-destructive" />
-                                </button>
-                                <button onClick={() => banUser(msg.user_id, "ban")} title="Ban 7d" className="p-1 rounded hover:bg-destructive/20">
-                                  <Ban className="w-3 h-3 text-destructive" />
-                                </button>
-                              </>
-                            )}
+                            <button onClick={() => banUser(msg.user_id, "mute")} title="Mute 7d" className="p-1 rounded hover:bg-destructive/20">
+                              <VolumeX className="w-3 h-3 text-destructive" />
+                            </button>
+                            <button onClick={() => banUser(msg.user_id, "ban")} title="Ban 7d" className="p-1 rounded hover:bg-destructive/20">
+                              <Ban className="w-3 h-3 text-destructive" />
+                            </button>
                           </>
                         )}
                       </div>
@@ -500,26 +594,62 @@ export default function ChatWidget() {
               </div>
             )}
 
-            {/* Emoji picker */}
+            {/* Emoji + Sticker picker */}
             <AnimatePresence>
-              {showEmojiPicker && (
+              {(showEmojiPicker || showStickerPicker) && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}
-                  className="border-t border-border p-2 bg-card grid grid-cols-8 gap-1 shrink-0">
-                  {QUICK_EMOJIS.map(e => (
-                    <button key={e} onClick={() => { setInput(prev => prev + e); inputRef.current?.focus(); }}
-                      className="w-8 h-8 rounded-lg hover:bg-secondary flex items-center justify-center text-lg transition-transform hover:scale-110 active:scale-95">
-                      {e}
+                  className="border-t border-border bg-card shrink-0">
+                  {/* Tab switcher */}
+                  <div className="flex border-b border-border">
+                    <button onClick={() => { setPickerTab("emoji"); setShowEmojiPicker(true); setShowStickerPicker(false); }}
+                      className={`flex-1 py-1.5 text-xs font-medium transition-colors ${pickerTab === "emoji" ? "text-primary border-b-2 border-primary" : "text-muted-foreground"}`}>
+                      😀 Emoji
                     </button>
-                  ))}
+                    <button onClick={() => { setPickerTab("sticker"); setShowStickerPicker(true); setShowEmojiPicker(false); }}
+                      className={`flex-1 py-1.5 text-xs font-medium transition-colors ${pickerTab === "sticker" ? "text-primary border-b-2 border-primary" : "text-muted-foreground"}`}>
+                      🎭 Stickers
+                    </button>
+                  </div>
+
+                  {pickerTab === "emoji" ? (
+                    <div className="p-2 grid grid-cols-8 gap-1">
+                      {QUICK_EMOJIS.map(e => (
+                        <button key={e} onClick={() => { setInput(prev => prev + e); inputRef.current?.focus(); }}
+                          className="w-8 h-8 rounded-lg hover:bg-secondary flex items-center justify-center text-lg transition-transform hover:scale-110 active:scale-95">
+                          {e}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-2 grid grid-cols-4 gap-2 max-h-40 overflow-y-auto">
+                      {GIF_STICKERS.map((sticker) => (
+                        <button key={sticker.name} onClick={() => sendSticker(sticker.url, sticker.name)}
+                          className="flex flex-col items-center gap-1 p-1.5 rounded-lg hover:bg-secondary transition-colors">
+                          <img src={sticker.url} alt={sticker.name} className="w-14 h-14 object-cover rounded" loading="lazy" />
+                          <span className="text-[9px] text-muted-foreground truncate w-full text-center">{sticker.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
 
             {/* Input */}
             <div className="border-t border-border p-2 sm:p-3 flex items-center gap-2 bg-card shrink-0 safe-area-bottom">
-              <button onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                className={`p-2 rounded-lg transition-colors shrink-0 ${showEmojiPicker ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-secondary"}`}>
+              <button onClick={() => {
+                const wasOpen = showEmojiPicker || showStickerPicker;
+                setShowEmojiPicker(!wasOpen); setShowStickerPicker(false); setPickerTab("emoji");
+              }}
+                className={`p-2 rounded-lg transition-colors shrink-0 ${showEmojiPicker || showStickerPicker ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-secondary"}`}>
                 <Smile className="w-4 h-4" />
+              </button>
+              <button onClick={() => {
+                const wasOpen = showStickerPicker;
+                setShowStickerPicker(!wasOpen); setShowEmojiPicker(false); setPickerTab("sticker");
+              }}
+                className={`p-2 rounded-lg transition-colors shrink-0 ${showStickerPicker ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-secondary"}`}>
+                <ImageIcon className="w-4 h-4" />
               </button>
               <input
                 ref={inputRef}
@@ -532,7 +662,7 @@ export default function ChatWidget() {
                 maxLength={500}
               />
               <button
-                onClick={sendMessage}
+                onClick={() => sendMessage()}
                 disabled={!input.trim() || sending || isBanned || isMuted || (!isAdmin && !perms.sendMessages)}
                 className="w-9 h-9 rounded-lg bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-40 hover:opacity-90 active:scale-95 transition-all shrink-0"
               >
