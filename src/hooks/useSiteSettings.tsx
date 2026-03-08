@@ -235,6 +235,7 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
     async (partial: Partial<SiteSettings>) => {
       const next = { ...settings, ...partial };
       setSettings(next);
+      cacheSettings(next);
       for (const [key, value] of Object.entries(partial)) {
         await supabase
           .from("site_settings")
