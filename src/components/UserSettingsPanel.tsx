@@ -17,6 +17,7 @@ interface UserPrefs {
   cloudSync: boolean;
   pipOnScroll: boolean;
   bufferSize: "normal" | "high" | "max";
+  personalization: boolean;
 }
 
 const DEFAULTS: UserPrefs = {
@@ -31,6 +32,7 @@ const DEFAULTS: UserPrefs = {
   cloudSync: true,
   pipOnScroll: true,
   bufferSize: "max",
+  personalization: true,
 };
 
 function getPrefs(): UserPrefs {
