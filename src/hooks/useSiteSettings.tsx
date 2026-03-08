@@ -170,10 +170,9 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
   const [dbLoaded, setDbLoaded] = useState(false);
 
   useEffect(() => {
-    supabase
-      .from("site_settings")
-      .select("*")
-      .then(({ data, error }) => {
+    const loadSettings = async () => {
+      try {
+        const { data, error } = await supabase.from("site_settings").select("*");
         if (!error && data?.length) {
           const map: Record<string, any> = {};
           data.forEach((row) => { map[row.key] = row.value; });
@@ -183,11 +182,12 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
             return next;
           });
         }
+      } finally {
         setDbLoaded(true);
-      })
-      .catch(() => {
-        setDbLoaded(true);
-      });
+      }
+    };
+
+    loadSettings();
   }, []);
 
   // Auto-festival detection — only after DB settings are loaded
