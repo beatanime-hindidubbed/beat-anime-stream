@@ -448,6 +448,7 @@ export default function WatchPage() {
       return (
         <HindiVideoPlayer
           src={hindiHlsSrc}
+          disableInternalMiniPlayer
           onTimeUpdate={handleTimeUpdate}
           onEnded={() => { if (nextEp) navigate(buildEpLink(nextEp)); }}
         />
@@ -458,6 +459,7 @@ export default function WatchPage() {
       return (
         <HindiVideoPlayer
           iframeSrc={hindiIframeSrc}
+          disableInternalMiniPlayer
           onTimeUpdate={handleTimeUpdate}
           onEnded={() => { if (nextEp) navigate(buildEpLink(nextEp)); }}
         />
@@ -468,6 +470,7 @@ export default function WatchPage() {
       return (
         <VideoPlayer
           src={streamResult.url}
+          disableInternalMiniPlayer
           tracks={streamResult.tracks}
           intro={streamResult.intro}
           outro={streamResult.outro}
