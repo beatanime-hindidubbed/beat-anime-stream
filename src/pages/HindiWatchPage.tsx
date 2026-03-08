@@ -179,10 +179,8 @@ export default function HindiWatchPage() {
   const hindiHlsSrc = selectedSource?.isHLS ? selectedSource.url : null;
   const hindiIframeSrc = selectedSource && !selectedSource.isHLS ? selectedSource.url : null;
 
-  // Build proxied URL for download (Hindi streams need proxy WITHOUT megacloud referer)
-  const hindiDownloadUrl = hindiHlsSrc
-    ? `${getApiPool()[0]}/hindiapi/proxy?url=${encodeURIComponent(hindiHlsSrc)}`
-    : undefined;
+  // Download URL: pass raw HLS, downloader will race multiple APIs itself
+  const hindiDownloadUrl = hindiHlsSrc || undefined;
 
   const renderPlayer = () => {
     if (loading) {
