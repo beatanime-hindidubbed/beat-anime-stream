@@ -22,7 +22,14 @@ export default function Index() {
   const [continueWatching, setContinueWatching] = useState<ContinueWatchingItem[]>([]);
 
   useEffect(() => {
-    if (user) setContinueWatching(store.getContinueWatching());
+    if (user) {
+      // Merge cloud history then load
+      mergeCloudWatchHistory().finally(() => {
+        setContinueWatching(store.getContinueWatching());
+      });
+    } else {
+      setContinueWatching([]);
+    }
   }, [user]);
 
   const removeCW = (id: string) => {
