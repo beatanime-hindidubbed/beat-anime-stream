@@ -195,7 +195,9 @@ export default function DownloadButton({
       let proxyUrl = "", apiBase = API_POOL[0], apiNum = 1;
 
       if (streamUrl) {
-        proxyUrl = proxyify(API_POOL[0], streamUrl);
+        // If streamUrl is already proxied, use it directly; otherwise proxy it
+        const isAlreadyProxied = streamUrl.includes("/hindiapi/proxy");
+        proxyUrl = isAlreadyProxied ? streamUrl : proxyify(API_POOL[0], streamUrl);
       } else {
         const found = await findSource(controller.signal);
         if (!found) { setErrorMsg("No source found"); setDlState("error"); setTimeout(() => { setDlState("idle"); setErrorMsg(""); }, 3500); return; }
