@@ -230,7 +230,7 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            disabled={loading || attempts >= 8}
+            disabled={loading || attempts >= 15}
             className="w-full h-11 sm:h-12 rounded-xl bg-gradient-primary text-sm font-semibold text-primary-foreground hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg shadow-primary/20"
           >
             {loading && <Loader2 className="w-4 h-4 animate-spin" />}
