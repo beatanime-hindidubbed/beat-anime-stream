@@ -210,7 +210,7 @@ export default function Navbar() {
             <div className="relative">
               <button
                 onClick={() => setUserMenu(!userMenu)}
-                className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 rounded-lg bg-secondary text-sm text-foreground hover:bg-secondary/80 transition-colors font-body"
+                className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 rounded-lg bg-secondary text-sm text-foreground hover:bg-primary/10 hover:text-primary border border-transparent hover:border-primary/20 transition-all duration-200 font-body"
               >
                 <User className="w-4 h-4" />
                 <span className="hidden sm:inline max-w-[80px] truncate">{displayName}</span>
