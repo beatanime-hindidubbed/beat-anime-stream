@@ -77,6 +77,14 @@ const PLAYER_THEMES: { key: PlayerTheme; label: string; desc: string }[] = [
   { key: "glassmorphism", label: "Glass", desc: "Frosted glass controls" },
 ];
 
+const FONT_STYLES: { key: FontStyle; label: string; desc: string; preview: string }[] = [
+  { key: "default", label: "Default", desc: "Outfit + Space Grotesk", preview: "Aa" },
+  { key: "elegant", label: "Elegant", desc: "Georgia + Palatino (Serif)", preview: "Aa" },
+  { key: "playful", label: "Playful", desc: "Comic Neue (Fun)", preview: "Aa" },
+  { key: "monospace", label: "Monospace", desc: "JetBrains Mono (Code)", preview: "Aa" },
+  { key: "cinematic", label: "Cinematic", desc: "Bebas Neue + Inter", preview: "Aa" },
+];
+
 type TabKey = "stats" | "branding" | "ads" | "api" | "users" | "policy" | "premium" | "chat" | "player" | "banlist" | "logs";
 
 export default function AdminDashboard() {
