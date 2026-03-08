@@ -120,7 +120,7 @@ export default function Navbar() {
         {/* Search */}
         <div ref={searchRef} className="relative hidden sm:block flex-1 max-w-sm">
           <form onSubmit={submitSearch}>
-            <div className="relative">
+            <div className="relative flex items-center">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
                 type="text"
@@ -128,8 +128,19 @@ export default function Navbar() {
                 value={query}
                 onChange={(e) => handleSearch(e.target.value)}
                 onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-                className="w-full h-9 pl-9 pr-4 rounded-lg bg-secondary text-sm text-foreground placeholder:text-muted-foreground border border-border focus:outline-none focus:ring-1 focus:ring-primary font-body"
+                className="w-full h-9 pl-9 pr-10 rounded-lg bg-secondary text-sm text-foreground placeholder:text-muted-foreground border border-border focus:outline-none focus:ring-1 focus:ring-primary font-body"
               />
+              <button
+                type="button"
+                onClick={listening ? stopVoice : startVoice}
+                className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md transition-colors ${
+                  listening ? "text-destructive animate-pulse" : "text-muted-foreground hover:text-primary"
+                }`}
+                title={listening ? "Stop listening" : "Voice search"}
+              >
+                {listening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              </button>
+            </div>
             </div>
           </form>
           <AnimatePresence>
