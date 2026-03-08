@@ -48,6 +48,7 @@ const App = () => (
           <Toaster />
           <Sonner />
           <BrowserRouter>
+            <ParticleCanvas />
             <ScrollToTop />
             <Routes>
               {/* Public routes */}
