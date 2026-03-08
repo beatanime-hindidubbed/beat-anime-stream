@@ -84,6 +84,19 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
     applyTheme(settings.theme);
   }, [settings.theme]);
 
+  // Apply favicon dynamically
+  useEffect(() => {
+    if (settings.faviconUrl) {
+      let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
+      if (!link) {
+        link = document.createElement("link");
+        link.rel = "icon";
+        document.head.appendChild(link);
+      }
+      link.href = settings.faviconUrl;
+    }
+  }, [settings.faviconUrl]);
+
   const updateSettings = useCallback(
     async (partial: Partial<SiteSettings>) => {
       const next = { ...settings, ...partial };
