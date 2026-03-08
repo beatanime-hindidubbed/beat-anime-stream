@@ -138,6 +138,22 @@ export default function WatchPage() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // PiP: show floating mini-player when user scrolls past the main player
+  useEffect(() => {
+    const el = playerWrapperRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setShowPip(!entry.isIntersecting),
+      { threshold: 0.15 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const scrollToPlayer = () => {
+    playerWrapperRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   const { data: epData } = useQuery({
     queryKey: ["episodes", animeId],
     queryFn: () => api.getEpisodes(animeId),
