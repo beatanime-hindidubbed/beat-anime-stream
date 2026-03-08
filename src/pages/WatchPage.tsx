@@ -202,6 +202,9 @@ export default function WatchPage() {
       el.style.border = "1px solid hsl(var(--border))";
       el.style.cursor = "pointer";
       el.style.maxHeight = "";
+      // Disable all interactions inside the mini player (no controls)
+      const inner = el.querySelector("div, video, iframe");
+      if (inner) (inner as HTMLElement).style.pointerEvents = "none";
     } else {
       el.style.position = "";
       el.style.bottom = "";
@@ -213,6 +216,9 @@ export default function WatchPage() {
       el.style.boxShadow = "";
       el.style.border = "";
       el.style.cursor = "";
+      // Re-enable interactions
+      const inner = el.querySelector("div, video, iframe");
+      if (inner) (inner as HTMLElement).style.pointerEvents = "";
     }
   }, [showPip, isMobile]);
 
