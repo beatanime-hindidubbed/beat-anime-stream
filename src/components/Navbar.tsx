@@ -141,7 +141,6 @@ export default function Navbar() {
                 {listening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
               </button>
             </div>
-            </div>
           </form>
           <AnimatePresence>
             {showSuggestions && suggestions.length > 0 && (
