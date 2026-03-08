@@ -102,6 +102,7 @@ export default function VideoPlayer({
   const [previewHasFrame, setPreviewHasFrame] = useState(false);
   const [previewReady, setPreviewReady] = useState(false);
   const [isMobile, setIsMobile]     = useState(false);
+  const [canHover, setCanHover]     = useState(false);
   // Advanced features
   const [audioBoost, setAudioBoost] = useState(1); // 1x = normal, up to 3x
   const [abLoop, setAbLoop] = useState<{ a: number | null; b: number | null }>({ a: null, b: null });

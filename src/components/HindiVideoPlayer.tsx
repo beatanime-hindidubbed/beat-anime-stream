@@ -121,6 +121,7 @@ export default function HindiVideoPlayer({
   const [previewHasFrame, setPreviewHasFrame] = useState(false);
   const [previewReady, setPreviewReady] = useState(false);
   const [isMobile, setIsMobile]     = useState(false);
+  const [canHover, setCanHover]     = useState(false);
   const [miniPlayer, setMiniPlayer] = useState(false);
   // Advanced features (ported from English player)
   const [audioBoost, setAudioBoost] = useState(1);
