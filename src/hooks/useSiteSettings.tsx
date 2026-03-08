@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { detectCurrentFestival, DetectedFestival } from "@/lib/festivalDetector";
 
 export type ThemeType =
   | "classic" | "cyberpunk" | "neon" | "sakura" | "minimal"
