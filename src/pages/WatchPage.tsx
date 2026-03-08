@@ -267,7 +267,8 @@ export default function WatchPage() {
   // ── Build episode navigation links preserving lang param ──────────────
   const buildEpLink = (ep: { episodeId?: string }) => {
     if (!ep.episodeId) return "#";
-    return category === "dub" ? `/watch/${ep.episodeId}?lang=dub` : `/watch/${ep.episodeId}`;
+    if (category !== "sub") return `/watch/${ep.episodeId}?lang=${category}`;
+    return `/watch/${ep.episodeId}`;
   };
 
   const renderPlayer = () => {
