@@ -284,6 +284,13 @@ export default function AnimeDetail() {
           </div>
         )}
 
+        {/* Reviews */}
+        {id && (
+          <div className="mt-10">
+            <AnimeReviews animeId={id} />
+          </div>
+        )}
+
         {/* Recommended */}
         {recommended.length > 0 && (
           <div className="mt-10">
