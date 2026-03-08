@@ -49,22 +49,12 @@ export default function ManhwaPage() {
     fetchDonghua(1, 0, true);
   }, []);
 
-  useEffect(() => {
-    if (!loaderRef.current) return;
-    const obs = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && !loading && hasMore) {
-          const nextIdx = searchIdx + 1;
-          setSearchIdx(nextIdx);
-          setPage((p) => p + 1);
-          fetchDonghua(1, nextIdx);
-        }
-      },
-      { threshold: 0.1 }
-    );
-    obs.observe(loaderRef.current);
-    return () => obs.disconnect();
-  }, [loading, hasMore, searchIdx, fetchDonghua]);
+  const loadMore = () => {
+    const nextIdx = searchIdx + 1;
+    setSearchIdx(nextIdx);
+    setPage((p) => p + 1);
+    fetchDonghua(1, nextIdx);
+  };
 
   return (
     <div className="container py-6">
@@ -120,7 +110,15 @@ export default function ManhwaPage() {
         </div>
       )}
 
-      <div ref={loaderRef} className="flex justify-center py-4">
+      <div className="flex justify-center py-4">
+        {hasMore && !loading && animes.length > 0 && (
+          <button
+            onClick={loadMore}
+            className="px-6 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+          >
+            Load More
+          </button>
+        )}
         {!hasMore && animes.length > 0 && (
           <p className="text-muted-foreground text-sm">That's all for now 🐉</p>
         )}

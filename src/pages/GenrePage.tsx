@@ -1,18 +1,26 @@
-import { useParams, useSearchParams } from "react-router-dom";
+import { useState } from "react";
+import { useParams } from "react-router-dom";
 import BackButton from "@/components/BackButton";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { api, AnimeItem } from "@/lib/api";
 import AnimeCard from "@/components/AnimeCard";
 import SkeletonCard from "@/components/SkeletonCard";
 
 export default function GenrePage() {
   const { name } = useParams<{ name: string }>();
-  const [params] = useSearchParams();
-  const page = parseInt(params.get("page") || "1");
+  const [page, setPage] = useState(1);
+  const [allAnimes, setAllAnimes] = useState<AnimeItem[]>([]);
+  const [hasMore, setHasMore] = useState(true);
 
-  const { data, isLoading } = useQuery({
+  const { isLoading } = useQuery({
     queryKey: ["genre", name, page],
-    queryFn: () => api.getGenre(name!, page),
+    queryFn: async () => {
+      const data = await api.getGenre(name!, page);
+      const items = data?.animes || [];
+      setAllAnimes(prev => page === 1 ? items : [...prev, ...items]);
+      setHasMore(items.length >= 20);
+      return data;
+    },
     enabled: !!name,
   });
 
@@ -21,11 +29,22 @@ export default function GenrePage() {
       <BackButton />
       <h1 className="font-display text-2xl font-bold text-foreground mb-6 capitalize">{name} Anime</h1>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-        {isLoading
-          ? Array.from({ length: 12 }).map((_, i) => <SkeletonCard key={i} />)
-          : data?.animes?.map((a, i) => <AnimeCard key={a.id} anime={a} index={i} />)
-        }
+        {allAnimes.map((a, i) => <AnimeCard key={`${a.id}-${i}`} anime={a} index={i} />)}
+        {isLoading && Array.from({ length: 12 }).map((_, i) => <SkeletonCard key={i} />)}
       </div>
+      {!isLoading && allAnimes.length === 0 && (
+        <p className="text-muted-foreground">No anime found.</p>
+      )}
+      {hasMore && !isLoading && allAnimes.length > 0 && (
+        <div className="flex justify-center py-8">
+          <button
+            onClick={() => setPage(p => p + 1)}
+            className="px-6 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+          >
+            Load More
+          </button>
+        </div>
+      )}
     </div>
   );
 }

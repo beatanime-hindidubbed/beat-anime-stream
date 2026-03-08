@@ -9,7 +9,7 @@ import AnimeCard from "@/components/AnimeCard";
 import SkeletonCard from "@/components/SkeletonCard";
 import BackButton from "@/components/BackButton";
 import DownloadButton from "@/components/DownloadButton";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Play, Bookmark, BookmarkCheck, Star, Clock, Tv, Calendar,
   ChevronDown, ChevronUp, Loader2, Globe, Mic
@@ -256,23 +256,7 @@ export default function AnimeDetail() {
           ) : episodes.length === 0 ? (
             <p className="text-muted-foreground text-sm">No episodes available yet.</p>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
-              {episodes.map((ep) => (
-                <Link
-                  key={ep.episodeId}
-                  to={`/watch/${ep.episodeId}`}
-                  className={`flex flex-col items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors hover:bg-primary hover:text-primary-foreground ${
-                    ep.isFiller
-                      ? "bg-accent/10 text-accent border border-accent/20"
-                      : "bg-secondary text-secondary-foreground"
-                  }`}
-                >
-                  <span className="text-base font-bold">{ep.number}</span>
-                  {ep.title && <span className="text-[10px] text-muted-foreground truncate max-w-full mt-0.5">{ep.title}</span>}
-                  {ep.isFiller && <span className="text-[9px] text-accent">Filler</span>}
-                </Link>
-              ))}
-            </div>
+            <EpisodeGrid episodes={episodes} animeId={id!} />
           )}
         </div>
 
@@ -307,6 +291,45 @@ export default function AnimeDetail() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+const EP_PAGE_SIZE = 50;
+
+function EpisodeGrid({ episodes, animeId }: { episodes: any[]; animeId: string }) {
+  const [visibleCount, setVisibleCount] = useState(EP_PAGE_SIZE);
+  const visible = episodes.slice(0, visibleCount);
+  const hasMore = visibleCount < episodes.length;
+
+  return (
+    <div>
+      <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-1.5">
+        {visible.map((ep) => (
+          <Link
+            key={ep.episodeId}
+            to={`/watch/${ep.episodeId}`}
+            className={`flex flex-col items-center px-2 py-2 rounded-lg text-xs font-medium transition-colors hover:bg-primary hover:text-primary-foreground ${
+              ep.isFiller
+                ? "bg-accent/10 text-accent border border-accent/20"
+                : "bg-secondary text-secondary-foreground"
+            }`}
+          >
+            <span className="text-sm font-bold">{ep.number}</span>
+            {ep.isFiller && <span className="text-[8px] text-accent">F</span>}
+          </Link>
+        ))}
+      </div>
+      {hasMore && (
+        <div className="flex justify-center mt-3">
+          <button
+            onClick={() => setVisibleCount(c => c + EP_PAGE_SIZE)}
+            className="px-5 py-2 rounded-lg bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition-colors"
+          >
+            Show More ({episodes.length - visibleCount} remaining)
+          </button>
+        </div>
+      )}
     </div>
   );
 }
