@@ -6,6 +6,7 @@ import { useSiteSettings } from "@/hooks/useSiteSettings";
 // ─── Only these paths are accessible without verification ───────────────────
 const PUBLIC_PATHS = [
   "/verify",
+  "/login",
   "/admin",
   "/admin/dashboard",
 ];

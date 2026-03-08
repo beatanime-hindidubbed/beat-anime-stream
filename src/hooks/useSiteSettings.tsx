@@ -165,7 +165,7 @@ const Ctx = createContext<SiteSettingsCtx>({
 });
 
 export function SiteSettingsProvider({ children }: { children: ReactNode }) {
-  const [settings, setSettings] = useState<SiteSettings>(DEFAULTS);
+  const [settings, setSettings] = useState<SiteSettings>(getCachedSettings);
   const [currentFestival, setCurrentFestival] = useState<DetectedFestival | null>(null);
   const [dbLoaded, setDbLoaded] = useState(false);
 
@@ -177,8 +177,15 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
         if (!error && data?.length) {
           const map: Record<string, any> = {};
           data.forEach((row) => { map[row.key] = row.value; });
-          setSettings((prev) => ({ ...prev, ...map }));
+          setSettings((prev) => {
+            const next = { ...prev, ...map };
+            cacheSettings(next);
+            return next;
+          });
         }
+        setDbLoaded(true);
+      })
+      .catch(() => {
         setDbLoaded(true);
       });
   }, []);

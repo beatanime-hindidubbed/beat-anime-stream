@@ -204,7 +204,7 @@ export default function Navbar() {
           )}
 
           {/* User Settings */}
-          {user && <UserSettingsPanel />}
+          <UserSettingsPanel />
 
           {user ? (
             <div className="relative">
