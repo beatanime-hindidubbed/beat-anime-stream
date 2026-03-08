@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
-import { Search, Menu, X, User, LogOut, BookmarkPlus, Send } from "lucide-react";
+import { Search, Menu, X, User, LogOut, BookmarkPlus, Send, Mic, MicOff } from "lucide-react";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { api, AnimeItem } from "@/lib/api";
