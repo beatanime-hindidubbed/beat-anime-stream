@@ -10,6 +10,7 @@ import DownloadButton from "@/components/DownloadButton";
 import BackButton from "@/components/BackButton";
 import CommentSection from "@/components/CommentSection";
 import AnimeCard from "@/components/AnimeCard";
+import AnimeReportButton from "@/components/AnimeReportButton";
 import { getWorkingStream, StreamResult, HIANIME_SERVERS } from "@/lib/streaming";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { ChevronLeft, ChevronRight, List, Loader2, Server, RefreshCw, Globe, ChevronDown } from "lucide-react";
