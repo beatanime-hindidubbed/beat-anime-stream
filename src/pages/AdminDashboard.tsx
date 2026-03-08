@@ -650,15 +650,39 @@ export default function AdminDashboard() {
                 <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
                   <Users className="w-4 h-4 text-primary" /> Role Distribution
                 </h3>
-                <div className="h-48 sm:h-56">
+                <div className="h-48 sm:h-56 flex items-center justify-center">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={statsData.roleDistribution} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} innerRadius={35} label={({ name, value }) => `${name}: ${value}`}>
+                      <Pie
+                        data={statsData.roleDistribution}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={65}
+                        innerRadius={30}
+                        paddingAngle={3}
+                        label={({ name, value, x, y }) => (
+                          <text x={x} y={y} fill="hsl(var(--foreground))" fontSize={11} fontWeight={600} textAnchor="middle" dominantBaseline="central">
+                            {`${name}: ${value}`}
+                          </text>
+                        )}
+                        labelLine={{ stroke: "hsl(var(--muted-foreground))", strokeWidth: 1 }}
+                      >
                         {statsData.roleDistribution.map((_, i) => (
                           <Cell key={i} fill={["hsl(var(--accent))", "hsl(var(--primary))", "hsl(var(--muted-foreground))"][i % 3]} />
                         ))}
                       </Pie>
-                      <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
+                      <Tooltip
+                        contentStyle={{
+                          background: "hsl(var(--card))",
+                          border: "1px solid hsl(var(--border))",
+                          borderRadius: 8,
+                          fontSize: 12,
+                          color: "hsl(var(--foreground))",
+                        }}
+                        itemStyle={{ color: "hsl(var(--foreground))" }}
+                      />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
