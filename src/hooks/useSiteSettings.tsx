@@ -122,7 +122,7 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
       for (const [key, value] of Object.entries(partial)) {
         await supabase
           .from("site_settings")
-          .upsert({ key, value }, { onConflict: "key" });
+          .upsert({ key, value: value as any } as any, { onConflict: "key" });
       }
     },
     [settings]
