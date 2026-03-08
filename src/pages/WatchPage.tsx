@@ -55,10 +55,16 @@ const LANGUAGES = [
 
 interface HindiSource {
   name: string;
+  displayName: string;
   isHLS: boolean;
   url: string;
   headers: Record<string, string>;
 }
+
+const ALLOWED_HINDI_PROVIDERS: Record<string, string> = {
+  "StreamHG": "Server 1",
+  "EarnVids": "Server 2 Embedded",
+};
 
 async function fetchHindiSources(animeInfo: any, episodeNumber: number): Promise<HindiSource[]> {
   const moreInfo = animeInfo?.anime?.moreInfo || animeInfo?.moreInfo || {};
@@ -78,17 +84,24 @@ async function fetchHindiSources(animeInfo: any, episodeNumber: number): Promise
   const sources = data.data?.streams || data.data?.sources || data.data?.servers || [];
   if (!sources.length) throw new Error("No Hindi sources found");
 
-  return sources.map((src: any) => ({
-    name: src.provider || src.serverName || src.name || "Unknown",
-    isHLS: !!(
-      src.isM3U8 ||
-      src.dhls ||
-      (src.url && src.url.includes(".m3u8")) ||
-      (src.streamUrl && src.streamUrl.includes(".m3u8"))
-    ),
-    url: src.dhls || src.streamUrl || src.url || "",
-    headers: src.headers || {},
-  }));
+  return sources
+    .map((src: any) => {
+      const provider = src.provider || src.serverName || src.name || "Unknown";
+      const displayName = ALLOWED_HINDI_PROVIDERS[provider];
+      if (!displayName) return null;
+      return {
+        name: provider,
+        displayName,
+        isHLS: !!(
+          src.isM3U8 || src.dhls ||
+          (src.url && src.url.includes(".m3u8")) ||
+          (src.streamUrl && src.streamUrl.includes(".m3u8"))
+        ),
+        url: src.dhls || src.streamUrl || src.url || "",
+        headers: src.headers || {},
+      };
+    })
+    .filter((s: HindiSource | null): s is HindiSource => s !== null && s.url !== "");
 }
 
 export default function WatchPage() {
