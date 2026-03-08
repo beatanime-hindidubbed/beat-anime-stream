@@ -5,7 +5,7 @@ import { useSiteSettings } from "@/hooks/useSiteSettings";
 import HindiVideoPlayer from "@/components/HindiVideoPlayer";
 import DownloadButton from "@/components/DownloadButton";
 import BackButton from "@/components/BackButton";
-import { getApiPool } from "@/lib/streaming";
+import { getApiPool, getNextApi, proxyUrl as makeProxyUrl } from "@/lib/streaming";
 import { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight, List, Loader2, Server, RefreshCw } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
