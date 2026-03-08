@@ -5,6 +5,7 @@ import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { api, AnimeItem } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
+import UserSettingsPanel from "@/components/UserSettingsPanel";
 
 export default function Navbar() {
   const { user, logout } = useSupabaseAuth();
