@@ -627,7 +627,7 @@ export default function AdminDashboard() {
               </div>
 
               {/* Chat activity 7 days */}
-              <div className="p-4 sm:p-5 rounded-xl bg-card border border-border">
+              <div className="glass-card rounded-xl p-4 sm:p-5">
                 <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
                   <MessageCircle className="w-4 h-4 text-accent" /> Chat Activity (7 days)
                 </h3>
