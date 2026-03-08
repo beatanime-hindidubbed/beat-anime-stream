@@ -1140,6 +1140,15 @@ export default function VideoPlayer({
                   </span>
                 )}
 
+                {/* Mobile subtitle toggle */}
+                <button
+                  onClick={() => { setCaptionsOn(!captionsOn); const v = videoRef.current; if (v) for (let i = 0; i < v.textTracks.length; i++) v.textTracks[i].mode = !captionsOn ? (i === activeTrackIdx ? "showing" : "hidden") : "hidden"; }}
+                  className={`sm:hidden relative w-7 h-7 flex items-center justify-center active:scale-90 transition-all rounded-full group/btn overflow-hidden ${captionsOn ? "text-primary" : "text-white/70 hover:text-white"}`}
+                >
+                  <span className="absolute inset-0 rounded-full bg-white/0 group-hover/btn:bg-white/10 transition-colors" />
+                  <Subtitles className="relative w-3.5 h-3.5" />
+                </button>
+
                 {/* Mobile volume toggle */}
                 <button
                   onClick={toggleMute}
