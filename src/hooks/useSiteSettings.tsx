@@ -247,6 +247,7 @@ function applyTheme(theme: ThemeType, customColors?: CustomThemeColors) {
       "--gradient-primary": "linear-gradient(135deg, hsl(175 80% 50%), hsl(200 80% 55%))",
       "--gradient-accent": "linear-gradient(135deg, hsl(330 70% 55%), hsl(280 60% 55%))",
       "--theme-pattern": "none",
+      "--theme-bg-image": "none",
     },
     netflix: {
       "--primary": "0 90% 45%", "--accent": "0 0% 95%",

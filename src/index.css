@@ -84,6 +84,20 @@
     opacity: 1;
   }
 
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -2;
+    pointer-events: none;
+    background-image: var(--theme-bg-image, none);
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    opacity: 0.06;
+    filter: saturate(0.3) brightness(0.8);
+  }
+
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
   }
