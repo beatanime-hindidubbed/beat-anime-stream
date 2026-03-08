@@ -466,9 +466,61 @@ export default function AdminDashboard() {
                   </button>
                 ))}
               </div>
+
+              {/* Custom Theme Builder */}
+              {settings.theme === "custom" && (
+                <div className="mt-6 p-4 rounded-xl bg-secondary/30 border border-border space-y-3">
+                  <h3 className="text-sm font-bold text-foreground">🎨 Custom Theme Builder</h3>
+                  <p className="text-xs text-muted-foreground">Enter HSL values (e.g. "175 80% 50%")</p>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {[
+                      { label: "Primary Color", val: customPrimary, set: setCustomPrimary },
+                      { label: "Accent Color", val: customAccent, set: setCustomAccent },
+                      { label: "Background", val: customBg, set: setCustomBg },
+                      { label: "Card", val: customCard, set: setCustomCard },
+                      { label: "Border", val: customBorder, set: setCustomBorder },
+                    ].map(f => (
+                      <div key={f.label}>
+                        <label className="text-[10px] text-muted-foreground block mb-1">{f.label}</label>
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-full border border-border flex-shrink-0" style={{ background: `hsl(${f.val})` }} />
+                          <input value={f.val} onChange={e => f.set(e.target.value)}
+                            className="flex-1 h-8 px-2 rounded-lg bg-secondary text-foreground text-xs border border-border focus:ring-1 focus:ring-primary focus:outline-none font-mono" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={async () => {
+                    const colors: CustomThemeColors = { primary: customPrimary, accent: customAccent, background: customBg, card: customCard, border: customBorder };
+                    await updateSettings({ theme: "custom", customThemeColors: colors });
+                    await logAction("custom_theme", JSON.stringify(colors));
+                  }} disabled={saving}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50">
+                    <Save className="w-4 h-4" /> Apply Custom Theme
+                  </button>
+                </div>
+              )}
             </div>
 
+            {/* Font Style */}
             <div className="p-6 rounded-xl bg-card border border-border">
+              <h2 className="font-display text-lg font-bold text-foreground mb-4 flex items-center gap-2">
+                <Type className="w-5 h-5" /> Text Style
+              </h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                {FONT_STYLES.map(fs => (
+                  <button key={fs.key} onClick={() => updateSettings({ fontStyle: fs.key })}
+                    className={`p-4 rounded-xl border-2 text-left transition-all ${
+                      settings.fontStyle === fs.key ? "border-primary shadow-[0_0_15px_hsl(var(--primary)/0.2)]" : "border-border hover:border-primary/40"
+                    }`}>
+                    <p className="text-lg font-bold text-foreground mb-1">{fs.preview}</p>
+                    <p className="text-xs font-bold text-foreground">{fs.label}</p>
+                    <p className="text-[10px] text-muted-foreground">{fs.desc}</p>
+                    {settings.fontStyle === fs.key && <p className="text-[10px] text-primary mt-0.5">Active</p>}
+                  </button>
+                ))}
+              </div>
+            </div>
               <h2 className="font-display text-lg font-bold text-foreground mb-4 flex items-center gap-2">
                 <Type className="w-5 h-5" /> Site Identity
               </h2>
