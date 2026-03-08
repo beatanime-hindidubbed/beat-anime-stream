@@ -225,9 +225,29 @@ export default function DownloadButton({
       let proxyUrl = "", apiBase = API_POOL[0], apiNum = 1;
 
       if (streamUrl) {
-        // If streamUrl is already proxied, use it directly; otherwise proxy it
-        const isAlreadyProxied = streamUrl.includes("/hindiapi/proxy");
-        proxyUrl = isAlreadyProxied ? streamUrl : proxyify(API_POOL[0], streamUrl);
+        // Race all API proxies in parallel and pick first healthy one for this stream
+        const candidates = buildProxyCandidatesFromStreamUrl(streamUrl);
+        const checks = await Promise.allSettled(
+          candidates.map(async (candidate) => {
+            const r = await fetch(candidate.proxyUrl, { signal: controller.signal });
+            if (!r.ok) throw new Error(String(r.status));
+            const text = await r.text();
+            if (!text || (!text.includes("#EXTM3U") && !text.includes("#EXT-X"))) throw new Error("invalid_playlist");
+            return candidate;
+          })
+        );
+
+        const firstOk = checks.find((c): c is PromiseFulfilledResult<{ proxyUrl: string; apiBase: string; apiNum: number }> => c.status === "fulfilled");
+        if (!firstOk) {
+          setErrorMsg("All download APIs failed for this stream");
+          setDlState("error");
+          setTimeout(() => { setDlState("idle"); setErrorMsg(""); }, 3500);
+          return;
+        }
+
+        proxyUrl = firstOk.value.proxyUrl;
+        apiBase = firstOk.value.apiBase;
+        apiNum = firstOk.value.apiNum;
       } else {
         const found = await findSource(controller.signal);
         if (!found) { setErrorMsg("No source found"); setDlState("error"); setTimeout(() => { setDlState("idle"); setErrorMsg(""); }, 3500); return; }
