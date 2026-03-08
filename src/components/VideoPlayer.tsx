@@ -831,7 +831,8 @@ export default function VideoPlayer({
               initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
               className="absolute top-3 inset-x-0 flex justify-center z-30 pointer-events-none">
               <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-black/70 backdrop-blur border border-primary/40 text-primary text-sm font-bold shadow-lg">
-              <Zap className="w-4 h-4" /> 2× Speed
+                <Zap className="w-4 h-4" /> 2× Speed
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
