@@ -141,6 +141,12 @@ export default function AdminDashboard() {
   const [customCard, setCustomCard] = useState(settings.customThemeColors?.card || "220 18% 10%");
   const [customBorder, setCustomBorder] = useState(settings.customThemeColors?.border || "220 15% 18%");
 
+  // Sandbox links
+  const [sandboxLinks, setSandboxLinks] = useState<SandboxLink[]>(settings.sandboxLinks || []);
+  const [newSandboxUrl, setNewSandboxUrl] = useState("");
+  const [newSandboxLabel, setNewSandboxLabel] = useState("");
+  const [newSandboxCountdown, setNewSandboxCountdown] = useState("5");
+
   useEffect(() => {
     setBrandName(settings.siteName); setBrandIcon(settings.siteIcon);
     setTgChannel(settings.telegramChannel); setTgGroup(settings.telegramGroup);
