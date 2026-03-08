@@ -220,11 +220,15 @@ export default function HindiVideoPlayer({
   }, [playing, disableInternalMiniPlayer]);
 
   useEffect(() => {
+    if (disableInternalMiniPlayer) {
+      setMiniPlayer(false);
+      return;
+    }
     if (!wrapperRef.current) return;
     const rect = wrapperRef.current.getBoundingClientRect();
     const isVisible = rect.top > -rect.height * 0.8 && rect.bottom < window.innerHeight + rect.height * 0.8;
     setMiniPlayer(!isVisible && playing);
-  }, [playing]);
+  }, [playing, disableInternalMiniPlayer]);
 
   useEffect(() => {
     if (!src) return;
