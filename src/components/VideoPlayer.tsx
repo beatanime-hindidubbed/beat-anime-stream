@@ -623,7 +623,7 @@ export default function VideoPlayer({
   const resetHideTimer = () => {
     setShowControls(true);
     if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => { if (playing) setShowControls(false); }, 3500);
+    hideTimer.current = setTimeout(() => { if (playing && !settingsOpen) setShowControls(false); }, 3500);
   };
 
   // ── Touch: double-tap to seek, long-press for 2x ─────────────────────
