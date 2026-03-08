@@ -33,7 +33,19 @@ interface Props {
 
 const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
-const HINDI_PROXY = "https://beat-anime-api.onrender.com/api/v1/hindiapi/proxy";
+const HINDI_PROXY_POOL = [
+  "https://beat-anime-api.onrender.com/api/v1/hindiapi/proxy",
+  "https://beat-anime-api-2.onrender.com/api/v1/hindiapi/proxy",
+  "https://beat-anime-api-3.onrender.com/api/v1/hindiapi/proxy",
+  "https://beat-anime-api-4.onrender.com/api/v1/hindiapi/proxy",
+];
+let hindiProxyIdx = 0;
+function getHindiProxy(): string {
+  const p = HINDI_PROXY_POOL[hindiProxyIdx % HINDI_PROXY_POOL.length];
+  hindiProxyIdx++;
+  return p;
+}
+const HINDI_PROXY = HINDI_PROXY_POOL[0]; // fallback for static references
 
 // ─── Obfuscation helpers (identical to VideoPlayer) ────────────────────────
 const XOR_KEYS = [0x5A, 0x3F, 0x71, 0xA2, 0x1D, 0xE8, 0x4C, 0x93];
