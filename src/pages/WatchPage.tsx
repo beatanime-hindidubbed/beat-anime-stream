@@ -272,6 +272,7 @@ export default function WatchPage() {
 
   const recommended = info?.recommendedAnimes || info?.relatedAnimes || [];
   const currentLang = LANGUAGES.find((l) => l.code === category) || LANGUAGES[0];
+  const engLabel = category === "eng" ? (engMode === "dub" ? "ENG DUB" : "ENG SUB") : "";
 
   // ── Build episode navigation links preserving lang param ──────────────
   const buildEpLink = (ep: { episodeId?: string }) => {
