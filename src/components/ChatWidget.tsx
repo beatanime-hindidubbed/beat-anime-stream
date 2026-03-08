@@ -47,8 +47,11 @@ const PINNED_MSG = "⚠️ Chat auto-clears every 7 days. Be respectful. No pers
 
 export default function ChatWidget() {
   const { user, isAdmin } = useSupabaseAuth();
+  const { settings } = useSiteSettings();
+  const perms = settings.chatPermissions;
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<ChatMode>("group");
+  const [lastSentAt, setLastSentAt] = useState(0);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
