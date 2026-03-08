@@ -766,7 +766,7 @@ export default function HindiVideoPlayer({
               referrerPolicy="no-referrer-when-downgrade"
             />
             {/* Watermark overlay on iframe */}
-            <PlayerWatermark showIcon={false} />
+            <PlayerWatermark showIcon />
           </>
         ) : (
           <>
