@@ -1530,10 +1530,10 @@ export default function AdminDashboard() {
               <h2 className="font-display text-lg font-bold text-foreground mb-4 flex items-center gap-2">
                 <EyeOff className="w-5 h-5 text-destructive" /> Anime Ban List
               </h2>
-              <p className="text-xs text-muted-foreground mb-4">Banned anime IDs will be hidden from all pages and search results.</p>
+              <p className="text-xs text-muted-foreground mb-4">Enter anime name to ban. It will be matched against titles and slugs automatically.</p>
               <div className="flex gap-2 mb-4">
-                <input value={newBanId} onChange={e => setNewBanId(e.target.value)} placeholder="anime-slug-id (e.g. one-piece-100)"
-                  className="flex-1 h-9 px-3 rounded-lg bg-secondary text-foreground text-sm border border-border focus:ring-1 focus:ring-primary focus:outline-none font-mono text-xs" />
+                <input value={newBanId} onChange={e => setNewBanId(e.target.value)} placeholder="Anime name (e.g. One Piece)"
+                  className="flex-1 h-9 px-3 rounded-lg bg-secondary text-foreground text-sm border border-border focus:ring-1 focus:ring-primary focus:outline-none text-xs" />
                 <button onClick={addBannedAnime}
                   className="flex items-center gap-2 px-4 py-2 rounded-lg bg-destructive text-destructive-foreground text-sm font-medium">
                   <Plus className="w-4 h-4" /> Ban
@@ -1543,7 +1543,7 @@ export default function AdminDashboard() {
                 {bannedAnimes.length === 0 && <p className="text-sm text-muted-foreground">No banned anime.</p>}
                 {bannedAnimes.map(id => (
                   <div key={id} className="flex items-center justify-between p-3 rounded-lg bg-secondary">
-                    <span className="text-sm font-mono text-foreground">{id}</span>
+                    <span className="text-sm text-foreground">{id}</span>
                     <button onClick={() => removeBannedAnime(id)} className="px-2 py-1 rounded text-xs bg-accent text-accent-foreground hover:opacity-80">Unban</button>
                   </div>
                 ))}
