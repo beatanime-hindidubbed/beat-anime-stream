@@ -46,6 +46,34 @@ const fmtBytes = (b: number) => {
   return `${(b / 1073741824).toFixed(2)}GB`;
 };
 
+const inferRefererFromRaw = (raw: string): string | undefined => {
+  const lowered = raw.toLowerCase();
+  if (lowered.includes("megacloud") || lowered.includes("vizcloud") || lowered.includes("vidplay")) {
+    return "https://megacloud.blog/";
+  }
+  return undefined;
+};
+
+const buildProxyCandidatesFromStreamUrl = (rawOrProxy: string) => {
+  if (rawOrProxy.includes("/hindiapi/proxy")) {
+    const original = extractParam(rawOrProxy, "url");
+    const referer = extractParam(rawOrProxy, "referer") || undefined;
+    if (!original) return [] as { proxyUrl: string; apiBase: string; apiNum: number }[];
+    return API_POOL.map((apiBase, idx) => ({
+      proxyUrl: proxyify(apiBase, original, referer),
+      apiBase,
+      apiNum: idx + 1,
+    }));
+  }
+
+  const referer = inferRefererFromRaw(rawOrProxy);
+  return API_POOL.map((apiBase, idx) => ({
+    proxyUrl: proxyify(apiBase, rawOrProxy, referer),
+    apiBase,
+    apiNum: idx + 1,
+  }));
+};
+
 const fmtTime = (s: number) => {
   if (!isFinite(s) || s <= 0) return "--";
   if (s < 60) return `${Math.ceil(s)}s`;
