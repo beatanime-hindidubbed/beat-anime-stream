@@ -840,7 +840,7 @@ export default function HindiVideoPlayer({
             {/* Settings panel */}
             {settingsOpen && (
                 <div
-                  className={`${settingsPositionClass} left-2 right-2 sm:left-auto sm:right-3 w-auto sm:w-56 max-w-[calc(100vw-1rem)] max-h-[min(60vh,calc(100vh-8.5rem))] sm:max-h-[70vh] overflow-y-auto overscroll-contain touch-pan-y bg-black/95 border border-white/10 rounded-xl sm:rounded-2xl shadow-2xl`}
+                  className={`${settingsPositionClass} left-2 right-2 sm:left-auto sm:right-3 w-auto sm:w-52 max-w-[calc(100vw-1rem)] max-h-[40vh] sm:max-h-[60vh] overflow-y-auto overscroll-contain touch-pan-y bg-black/95 border border-white/10 rounded-lg sm:rounded-xl shadow-2xl text-[11px] sm:text-sm scrollbar-thin`}
                   onClick={(e) => e.stopPropagation()}
                   onTouchMove={(e) => e.stopPropagation()}>
                   {settingsPanel === "main" && (
@@ -850,31 +850,31 @@ export default function HindiVideoPlayer({
                         { label: "Captions", icon: Subtitles, value: captionsOn ? subtitleTracks[activeTrackIdx]?.label || "On" : "Off", action: () => setSettingsPanel("caption") },
                       ].map(item => (
                         <button key={item.label} onClick={item.action}
-                          className="flex items-center justify-between w-full px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
-                          <span className="flex items-center gap-2"><item.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white/50" /> {item.label}</span>
+                          className="flex items-center justify-between w-full px-2.5 sm:px-4 py-1.5 sm:py-2.5 text-[11px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
+                          <span className="flex items-center gap-2"><item.icon className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> {item.label}</span>
                           <span className="flex items-center gap-1 text-white/40 text-[10px] sm:text-xs">{item.value} <ChevronRight className="w-3 h-3" /></span>
                         </button>
                       ))}
                       {qualityLevels.length > 0 && (
                         <button onClick={() => setSettingsPanel("quality")}
-                          className="flex items-center justify-between w-full px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
-                          <span className="flex items-center gap-2"><Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white/50" /> Quality</span>
+                          className="flex items-center justify-between w-full px-2.5 sm:px-4 py-1.5 sm:py-2.5 text-[11px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
+                          <span className="flex items-center gap-2"><Layers className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> Quality</span>
                           <span className="flex items-center gap-1 text-white/40 text-[10px] sm:text-xs">{qualityLabel(currentQuality)} <ChevronRight className="w-3 h-3" /></span>
                         </button>
                       )}
                       <button onClick={() => setSettingsPanel("boost")}
-                        className="flex items-center justify-between w-full px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
-                        <span className="flex items-center gap-2"><Volume1 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white/50" /> Audio Boost</span>
+                        className="flex items-center justify-between w-full px-2.5 sm:px-4 py-1.5 sm:py-2.5 text-[11px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
+                        <span className="flex items-center gap-2"><Volume1 className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> Audio Boost</span>
                         <span className="flex items-center gap-1 text-white/40 text-[10px] sm:text-xs">{audioBoost > 1 ? `${audioBoost}x` : "Off"} <ChevronRight className="w-3 h-3" /></span>
                       </button>
                       <button onClick={takeScreenshot}
-                        className="flex items-center justify-between w-full px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
-                        <span className="flex items-center gap-2"><Camera className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white/50" /> Screenshot</span>
+                        className="flex items-center justify-between w-full px-2.5 sm:px-4 py-1.5 sm:py-2.5 text-[11px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
+                        <span className="flex items-center gap-2"><Camera className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> Screenshot</span>
                         <span className="text-white/40 text-[10px] sm:text-xs">Save</span>
                       </button>
                       <button onClick={() => { const v = videoRef.current; if (!v) return; if (abLoop.a === null) setAbLoop({ a: v.currentTime, b: null }); else if (abLoop.b === null) setAbLoop(prev => ({ ...prev, b: v.currentTime })); else setAbLoop({ a: null, b: null }); }}
-                        className="flex items-center justify-between w-full px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
-                        <span className="flex items-center gap-2"><Repeat className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white/50" /> A-B Loop</span>
+                        className="flex items-center justify-between w-full px-2.5 sm:px-4 py-1.5 sm:py-2.5 text-[11px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
+                        <span className="flex items-center gap-2"><Repeat className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> A-B Loop</span>
                         <span className={`text-[10px] sm:text-xs ${abLoop.a !== null ? "text-primary font-medium" : "text-white/40"}`}>{abLoop.a !== null && abLoop.b !== null ? "Active ✓" : abLoop.a !== null ? "Set B →" : "Set A"}</span>
                       </button>
                       {[
@@ -883,65 +883,65 @@ export default function HindiVideoPlayer({
                         { label: "Autoplay", icon: SkipForward, value: autoPlayNext,   toggle: () => onAutoPlayToggle?.(!autoPlayNext) },
                       ].map(item => (
                         <button key={item.label} onClick={item.toggle}
-                          className="flex items-center justify-between w-full px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
-                          <span className="flex items-center gap-2"><item.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white/50" /> {item.label}</span>
-                          <span className={`w-8 h-4 sm:w-9 sm:h-5 rounded-full transition-colors flex items-center ${item.value ? "bg-primary justify-end" : "bg-white/20 justify-start"}`}>
-                            <span className="w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-full bg-white mx-0.5 shadow" />
+                          className="flex items-center justify-between w-full px-2.5 sm:px-4 py-1.5 sm:py-2.5 text-[11px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
+                          <span className="flex items-center gap-2"><item.icon className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> {item.label}</span>
+                          <span className={`w-7 h-3.5 sm:w-9 sm:h-5 rounded-full transition-colors flex items-center ${item.value ? "bg-primary justify-end" : "bg-white/20 justify-start"}`}>
+                            <span className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 rounded-full bg-white mx-0.5 shadow" />
                           </span>
                         </button>
                       ))}
                     </div>
                   )}
                   {settingsPanel === "speed" && (
-                    <div className="py-1.5">
-                      <button onClick={() => setSettingsPanel("main")} className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-white/50 hover:bg-white/10">
+                    <div className="py-1">
+                      <button onClick={() => setSettingsPanel("main")} className="flex items-center gap-2 w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-white/50 hover:bg-white/10">
                         <ChevronRight className="w-3 h-3 rotate-180" /> Speed
                       </button>
-                      <div className="border-t border-white/10 mt-1" />
+                      <div className="border-t border-white/10 mt-0.5" />
                       {SPEEDS.map(s => (
                         <button key={s} onClick={() => changeSpeed(s)}
-                          className={`w-full px-4 py-2.5 text-sm text-left hover:bg-white/10 transition-colors ${speed === s ? "text-primary font-semibold" : "text-white/80"}`}>
+                          className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 transition-colors ${speed === s ? "text-primary font-semibold" : "text-white/80"}`}>
                           {s === 1 ? "Normal" : `${s}×`}
                         </button>
                       ))}
                     </div>
                   )}
                   {settingsPanel === "caption" && (
-                    <div className="py-1.5">
-                      <button onClick={() => setSettingsPanel("main")} className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-white/50 hover:bg-white/10">
+                    <div className="py-1">
+                      <button onClick={() => setSettingsPanel("main")} className="flex items-center gap-2 w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-white/50 hover:bg-white/10">
                         <ChevronRight className="w-3 h-3 rotate-180" /> Captions
                       </button>
-                      <div className="border-t border-white/10 mt-1" />
+                      <div className="border-t border-white/10 mt-0.5" />
                       <button onClick={() => {
                         setCaptionsOn(false);
                         const v = videoRef.current;
                         if (v) for (let i = 0; i < v.textTracks.length; i++) v.textTracks[i].mode = "hidden";
                         setSettingsPanel("main");
-                      }} className={`w-full px-4 py-2.5 text-sm text-left hover:bg-white/10 ${!captionsOn ? "text-primary font-semibold" : "text-white/80"}`}>
+                      }} className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 ${!captionsOn ? "text-primary font-semibold" : "text-white/80"}`}>
                         Off
                       </button>
                       {subtitleTracks.map((t, i) => (
                         <button key={i} onClick={() => { setCaptionsOn(true); selectTrack(i); }}
-                          className={`w-full px-4 py-2.5 text-sm text-left hover:bg-white/10 ${captionsOn && activeTrackIdx === i ? "text-primary font-semibold" : "text-white/80"}`}>
+                          className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 ${captionsOn && activeTrackIdx === i ? "text-primary font-semibold" : "text-white/80"}`}>
                           {t.label || "Unknown"}
                         </button>
                       ))}
-                      {subtitleTracks.length === 0 && <p className="px-4 py-2 text-xs text-white/30">No captions available</p>}
+                      {subtitleTracks.length === 0 && <p className="px-3 py-1.5 text-[10px] text-white/30">No captions available</p>}
                     </div>
                   )}
                   {settingsPanel === "quality" && (
-                    <div className="py-1.5">
-                      <button onClick={() => setSettingsPanel("main")} className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-white/50 hover:bg-white/10">
+                    <div className="py-1">
+                      <button onClick={() => setSettingsPanel("main")} className="flex items-center gap-2 w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-white/50 hover:bg-white/10">
                         <ChevronRight className="w-3 h-3 rotate-180" /> Quality
                       </button>
-                      <div className="border-t border-white/10 mt-1" />
+                      <div className="border-t border-white/10 mt-0.5" />
                       <button onClick={() => changeQuality(-1)}
-                        className={`w-full px-4 py-2.5 text-sm text-left hover:bg-white/10 ${currentQuality === -1 ? "text-primary font-semibold" : "text-white/80"}`}>
+                        className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 ${currentQuality === -1 ? "text-primary font-semibold" : "text-white/80"}`}>
                         Auto
                       </button>
                       {qualityLevels.map((lvl, i) => (
                         <button key={i} onClick={() => changeQuality(i)}
-                          className={`w-full px-4 py-2.5 text-sm text-left hover:bg-white/10 ${currentQuality === i ? "text-primary font-semibold" : "text-white/80"}`}>
+                          className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 ${currentQuality === i ? "text-primary font-semibold" : "text-white/80"}`}>
                           {lvl.height ? `${lvl.height}p` : `${Math.round(lvl.bitrate / 1000)}k`}
                           {lvl.height >= 1080 && <span className="ml-2 text-[10px] text-accent font-bold">HD</span>}
                         </button>
@@ -949,15 +949,15 @@ export default function HindiVideoPlayer({
                     </div>
                   )}
                   {settingsPanel === "boost" && (
-                    <div className="py-1.5">
+                    <div className="py-1">
                       <button onClick={() => setSettingsPanel("main")}
-                        className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-white/50 hover:bg-white/10">
+                        className="flex items-center gap-2 w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-white/50 hover:bg-white/10">
                         <ChevronRight className="w-3 h-3 rotate-180" /> Audio Boost
                       </button>
-                      <div className="border-t border-white/10 mt-1" />
+                      <div className="border-t border-white/10 mt-0.5" />
                       {[1, 1.5, 2, 2.5, 3].map(b => (
                         <button key={b} onClick={() => { setAudioBoost(b); setSettingsPanel("main"); }}
-                          className={`w-full px-4 py-2.5 text-sm text-left hover:bg-white/10 transition-colors ${audioBoost === b ? "text-primary font-semibold" : "text-white/80"}`}>
+                          className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 transition-colors ${audioBoost === b ? "text-primary font-semibold" : "text-white/80"}`}>
                           {b === 1 ? "Normal" : `${b}× Boost`}
                         </button>
                       ))}
