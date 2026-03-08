@@ -131,6 +131,8 @@ export default function AdminDashboard() {
     setDmca(settings.dmcaContent); setPrivacy(settings.privacyContent);
     setTerms(settings.termsContent);
     setApiEndpoints(settings.apiEndpoints || ["https://beat-anime-api.onrender.com/api/v1"]);
+    setFaviconUrl(settings.faviconUrl || "");
+    setBannedAnimes(settings.bannedAnimes || []);
   }, [settings]);
 
   useEffect(() => {
