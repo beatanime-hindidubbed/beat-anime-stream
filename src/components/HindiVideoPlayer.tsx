@@ -107,7 +107,7 @@ export default function HindiVideoPlayer({
   const [settingsOpen, setSettingsOpen]   = useState(false);
   const [settingsPanel, setSettingsPanel] = useState<"main"|"speed"|"caption"|"quality"|"boost">("main");
   const [speed, setSpeed]           = useState(1);
-  const [captionsOn, setCaptionsOn] = useState(true);
+  const [captionsOn, setCaptionsOn] = useState(false);
   const [activeTrackIdx, setActiveTrackIdx] = useState(0);
   const [ambientEnabled, setAmbientEnabled] = useState(ambientMode);
   const [isBuffering, setIsBuffering] = useState(false);
