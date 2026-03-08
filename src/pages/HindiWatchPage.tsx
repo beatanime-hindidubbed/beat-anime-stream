@@ -273,15 +273,6 @@ export default function HindiWatchPage() {
           </div>
         )}
 
-        {/* Download — Hindi stream only */}
-        {hindiDownloadUrl && (
-          <DownloadButton
-            episodeId={currentEp?.episodeId || `hindi-${animeId}-${epNum}`}
-            episodeNumber={epNum}
-            animeName={`${animeName}-Hindi`}
-            streamUrl={hindiDownloadUrl}
-          />
-        )}
 
         <button onClick={() => setShowEpList(!showEpList)}
           className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-secondary text-sm text-secondary-foreground hover:bg-secondary/80">
