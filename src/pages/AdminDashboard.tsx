@@ -549,24 +549,27 @@ export default function AdminDashboard() {
         {/* ── Stats ── */}
         {tab === "stats" && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-            {/* Quick stat cards */}
-            <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+            {/* Quick stat cards — glass style */}
+            <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
               {[
-                { label: "Total Comments", value: commentStats.total, color: "text-primary", icon: MessageSquare },
-                { label: "Comments Today", value: commentStats.today, color: "text-accent", icon: TrendingUp },
-                { label: "Censored Comments", value: commentStats.censored, color: "text-destructive", icon: Shield },
-                { label: "Active Ads", value: ads.filter(a => a.is_active).length, color: "text-primary", icon: Eye },
-                { label: "Team Members", value: userRoles.length, color: "text-foreground", icon: Users },
-                { label: "Current Theme", value: settings.theme, color: "text-accent", icon: Palette },
-                { label: "API Endpoints", value: apiEndpoints.length, color: "text-primary", icon: Server },
-                { label: "Themes Available", value: THEMES.length, color: "text-muted-foreground", icon: Sparkles },
+                { label: "Total Comments", value: commentStats.total, icon: MessageSquare, gradient: "from-primary/20 to-primary/5" },
+                { label: "Today", value: commentStats.today, icon: TrendingUp, gradient: "from-accent/20 to-accent/5" },
+                { label: "Censored", value: commentStats.censored, icon: Shield, gradient: "from-destructive/20 to-destructive/5" },
+                { label: "Active Ads", value: ads.filter(a => a.is_active).length, icon: Eye, gradient: "from-primary/20 to-primary/5" },
+                { label: "Team", value: userRoles.length, icon: Users, gradient: "from-accent/20 to-accent/5" },
+                { label: "Theme", value: settings.theme, icon: Palette, gradient: "from-primary/15 to-transparent" },
+                { label: "APIs", value: apiEndpoints.length, icon: Server, gradient: "from-accent/15 to-transparent" },
+                { label: "Themes", value: THEMES.length, icon: Sparkles, gradient: "from-primary/10 to-transparent" },
               ].map(s => (
-                <div key={s.label} className="p-4 sm:p-5 rounded-xl bg-card border border-border">
-                  <div className="flex items-center gap-2 mb-1">
-                    <s.icon className="w-4 h-4 text-muted-foreground" />
-                    <p className="text-[11px] sm:text-xs text-muted-foreground">{s.label}</p>
+                <div key={s.label} className="glass-card rounded-xl p-4 relative overflow-hidden group hover:border-primary/20 transition-all duration-300">
+                  <div className={`absolute inset-0 bg-gradient-to-br ${s.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
+                  <div className="relative">
+                    <div className="flex items-center gap-2 mb-2">
+                      <s.icon className="w-4 h-4 text-muted-foreground" />
+                      <p className="text-[11px] text-muted-foreground uppercase tracking-wider">{s.label}</p>
+                    </div>
+                    <p className="text-2xl font-display font-bold text-foreground capitalize">{s.value}</p>
                   </div>
-                  <p className={`text-xl sm:text-2xl font-display font-bold capitalize ${s.color}`}>{s.value}</p>
                 </div>
               ))}
             </div>
