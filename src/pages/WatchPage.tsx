@@ -10,6 +10,7 @@ import DownloadButton from "@/components/DownloadButton";
 import BackButton from "@/components/BackButton";
 import CommentSection from "@/components/CommentSection";
 import AnimeCard from "@/components/AnimeCard";
+import AnimeReportButton from "@/components/AnimeReportButton";
 import { getWorkingStream, StreamResult, HIANIME_SERVERS } from "@/lib/streaming";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { ChevronLeft, ChevronRight, List, Loader2, Server, RefreshCw, Globe, ChevronDown } from "lucide-react";
@@ -280,21 +281,22 @@ export default function WatchPage() {
             </p>
             <div className="flex gap-2 justify-center flex-wrap">
               <button onClick={() => setRetryKey((k) => k + 1)}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm">
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:shadow-glow transition-all duration-200">
                 <RefreshCw className="w-4 h-4" /> Try Again
               </button>
               {category !== "sub" && (
                 <button onClick={() => setCategory("sub")}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm">
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm hover:bg-secondary/80 transition-colors">
                   Switch to SUB
                 </button>
               )}
               {category !== "dub" && (
                 <button onClick={() => setCategory("dub")}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm">
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm hover:bg-secondary/80 transition-colors">
                   Switch to HINDI
                 </button>
               )}
+              <AnimeReportButton animeId={animeId} animeName={animeName} />
             </div>
           </div>
         </div>

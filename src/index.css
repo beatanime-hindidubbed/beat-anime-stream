@@ -278,13 +278,22 @@
     border: 1px solid hsl(var(--border) / 0.3);
   }
 
-  /* Card hover with red glow shadow + scale */
+  /* Card hover with glow shadow + scale */
   .card-hover {
     @apply transition-all duration-300;
   }
   .card-hover:hover {
     transform: scale(1.05);
-    box-shadow: 0 0 20px hsl(0 85% 55% / 0.3);
+    box-shadow: 0 0 20px hsl(var(--primary) / 0.3);
+  }
+
+  /* Button glow hover */
+  .btn-hover-glow {
+    @apply transition-all duration-200;
+  }
+  .btn-hover-glow:hover {
+    box-shadow: 0 0 16px hsl(var(--primary) / 0.35), 0 0 32px hsl(var(--primary) / 0.1);
+    transform: translateY(-1px);
   }
 
   /* Subtle lift hover */

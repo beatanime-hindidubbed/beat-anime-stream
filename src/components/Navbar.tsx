@@ -5,6 +5,7 @@ import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { api, AnimeItem } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
+import UserSettingsPanel from "@/components/UserSettingsPanel";
 
 export default function Navbar() {
   const { user, logout } = useSupabaseAuth();
@@ -119,7 +120,7 @@ export default function Navbar() {
             <Link
               key={l.to}
               to={l.to}
-              className="text-sm text-muted-foreground hover:text-primary transition-colors font-body"
+              className="relative text-sm text-muted-foreground hover:text-primary transition-all duration-200 font-body py-1 after:absolute after:bottom-0 after:left-0 after:w-full after:h-0.5 after:bg-primary after:scale-x-0 after:origin-left after:transition-transform after:duration-300 hover:after:scale-x-100"
             >
               {l.label}
             </Link>
@@ -185,7 +186,7 @@ export default function Navbar() {
           {/* Mobile search toggle */}
           <button
             onClick={() => setMobileSearch(!mobileSearch)}
-            className="md:hidden p-2 text-muted-foreground hover:text-primary transition-colors"
+            className="md:hidden p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-all duration-200"
           >
             <Search className="w-5 h-5" />
           </button>
@@ -195,18 +196,21 @@ export default function Navbar() {
               href={settings.telegramChannel}
               target="_blank"
               rel="noopener noreferrer"
-              className="hidden sm:flex p-2 text-muted-foreground hover:text-primary transition-colors"
+              className="hidden sm:flex p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-all duration-200"
               title="Telegram"
             >
               <Send className="w-4 h-4" />
             </a>
           )}
 
+          {/* User Settings */}
+          {user && <UserSettingsPanel />}
+
           {user ? (
             <div className="relative">
               <button
                 onClick={() => setUserMenu(!userMenu)}
-                className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 rounded-lg bg-secondary text-sm text-foreground hover:bg-secondary/80 transition-colors font-body"
+                className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 rounded-lg bg-secondary text-sm text-foreground hover:bg-primary/10 hover:text-primary border border-transparent hover:border-primary/20 transition-all duration-200 font-body"
               >
                 <User className="w-4 h-4" />
                 <span className="hidden sm:inline max-w-[80px] truncate">{displayName}</span>
@@ -239,7 +243,7 @@ export default function Navbar() {
           ) : (
             <Link
               to="/login"
-              className="px-3 sm:px-4 py-1.5 rounded-lg bg-gradient-primary text-xs sm:text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity"
+              className="px-3 sm:px-4 py-1.5 rounded-lg bg-gradient-primary text-xs sm:text-sm font-medium text-primary-foreground hover:shadow-glow hover:scale-105 transition-all duration-200"
             >
               Login
             </Link>
@@ -247,7 +251,7 @@ export default function Navbar() {
 
           <button
             onClick={() => { setMobileMenu(!mobileMenu); setMobileSearch(false); }}
-            className="lg:hidden p-2 text-muted-foreground"
+            className="lg:hidden p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-all duration-200"
           >
             {mobileMenu ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
