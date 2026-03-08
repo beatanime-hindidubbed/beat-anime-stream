@@ -789,6 +789,7 @@ export default function HindiVideoPlayer({
               onClick={togglePlay}
               crossOrigin="anonymous"
               playsInline
+              disablePictureInPicture
               controlsList="nodownload noremoteplayback"
               x-webkit-airplay="allow"
             >
