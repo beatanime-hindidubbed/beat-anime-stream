@@ -708,7 +708,7 @@ export default function VideoPlayer({
   const PREVIEW_W = 160;
   const previewLeft = `clamp(${PREVIEW_W / 2}px, ${hoverPct}%, calc(100% - ${PREVIEW_W / 2}px))`;
 
-  const settingsPositionClass = "absolute bottom-20 right-3 z-40";
+  const settingsPositionClass = "absolute bottom-14 sm:bottom-20 right-2 sm:right-3 z-40";
 
   return (
     <div ref={wrapperRef} className="relative">
