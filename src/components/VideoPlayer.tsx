@@ -900,15 +900,15 @@ export default function VideoPlayer({
                 </div>
               )}
               {settingsPanel === "speed" && (
-                <div className="py-1.5">
+                <div className="py-1">
                   <button onClick={() => setSettingsPanel("main")}
-                    className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-white/50 hover:bg-white/10">
+                    className="flex items-center gap-2 w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-white/50 hover:bg-white/10">
                     <ChevronRight className="w-3 h-3 rotate-180" /> Speed
                   </button>
-                  <div className="border-t border-white/10 mt-1" />
+                  <div className="border-t border-white/10 mt-0.5" />
                   {SPEEDS.map(s => (
                     <button key={s} onClick={() => changeSpeed(s)}
-                      className={`w-full px-4 py-2.5 text-sm text-left hover:bg-white/10 transition-colors ${speed === s ? "text-primary font-semibold" : "text-white/80"}`}>
+                      className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 transition-colors ${speed === s ? "text-primary font-semibold" : "text-white/80"}`}>
                       {s === 1 ? "Normal" : `${s}×`}
                     </button>
                   ))}
