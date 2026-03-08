@@ -42,6 +42,33 @@ export default function Index() {
     setContinueWatching([]);
   };
 
+  // Personalization: track watched genres
+  const personalizationEnabled = useMemo(() => {
+    try {
+      const d = localStorage.getItem("beat_user_prefs");
+      if (!d) return true;
+      return JSON.parse(d).personalization !== false;
+    } catch { return true; }
+  }, []);
+
+  // Pick a genre from watched anime for personalized recs
+  const watchedGenre = useMemo(() => {
+    if (!personalizationEnabled || !user) return null;
+    const genres = JSON.parse(localStorage.getItem("beat_watched_genres") || "[]") as string[];
+    if (!genres.length) return null;
+    // Pick random genre from recent ones
+    return genres[Math.floor(Math.random() * Math.min(genres.length, 5))];
+  }, [personalizationEnabled, user]);
+
+  const { data: forYouData } = useQuery({
+    queryKey: ["forYou", watchedGenre],
+    queryFn: () => api.getGenre(watchedGenre!, 1),
+    enabled: !!watchedGenre,
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const forYouAnimes = dedup(forYouData?.animes)?.slice(0, 6) || [];
+
   const spotlight = data?.spotlightAnimes || [];
   const grid = "grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4";
   const skeletons = Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />);
