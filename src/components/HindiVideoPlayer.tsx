@@ -483,8 +483,8 @@ export default function HindiVideoPlayer({
   const togglePlay = () => {
     const v = videoRef.current;
     if (!v) return;
-    if (v.paused) { v.play(); setPlaying(true); flashCenter("play"); }
-    else          { v.pause(); setPlaying(false); flashCenter("pause"); }
+    if (v.paused) { wasPlayingRef.current = true; v.play(); setPlaying(true); flashCenter("play"); }
+    else          { wasPlayingRef.current = false; v.pause(); setPlaying(false); flashCenter("pause"); }
   };
 
   const toggleMute = () => {
