@@ -129,7 +129,7 @@ export default function DownloadButton({
             if (!r.ok) continue;
             const d = await r.json();
             const raw = d?.data?.sources?.[0]?.url;
-            if (raw) return { proxyUrl: proxyify(apiBase, raw), apiBase, apiNum: apiNum + 1 };
+            if (raw) return { proxyUrl: proxyify(apiBase, raw, "https://megacloud.blog/"), apiBase, apiNum: apiNum + 1 };
           } catch { if (signal.aborted) return null; continue; }
         }
       }
@@ -138,7 +138,7 @@ export default function DownloadButton({
   };
 
   const downloadHLS = async (proxyUrl: string, apiBase: string, signal: AbortSignal): Promise<Uint8Array> => {
-    const referer     = extractParam(proxyUrl, "referer") || "https://megacloud.blog/";
+    const referer     = extractParam(proxyUrl, "referer") || undefined;
     const originalUrl = extractParam(proxyUrl, "url");
 
     const m3u8Res = await fetch(proxyUrl, { signal });
