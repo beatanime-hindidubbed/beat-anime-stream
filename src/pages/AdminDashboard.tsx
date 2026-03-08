@@ -401,7 +401,9 @@ export default function AdminDashboard() {
     </div>
   );
 
-  const tabs = [
+  const MODERATOR_TABS: TabKey[] = ["stats", "chat", "comments"];
+
+  const allTabs = [
     { key: "stats" as const, label: "Stats", icon: BarChart3 },
     { key: "branding" as const, label: "Branding", icon: Palette },
     { key: "effects" as const, label: "Effects", icon: Sparkles },
@@ -417,6 +419,9 @@ export default function AdminDashboard() {
     { key: "api" as const, label: "API", icon: Activity },
     { key: "logs" as const, label: "Logs", icon: ScrollText },
   ];
+
+  // Moderators only see limited tabs
+  const tabs = isAdmin ? allTabs : allTabs.filter(t => MODERATOR_TABS.includes(t.key));
 
   const logAction = async (action: string, details?: string, targetId?: string) => {
     if (!user) return;
