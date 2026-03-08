@@ -44,6 +44,7 @@ export interface SiteSettings {
   fontStyle: FontStyle;
   textEffect: TextEffect;
   particleEffect: ParticleEffect;
+  autoFestival: boolean;
   customThemeColors: CustomThemeColors;
   sandboxLinks: SandboxLink[];
   faviconUrl: string;
