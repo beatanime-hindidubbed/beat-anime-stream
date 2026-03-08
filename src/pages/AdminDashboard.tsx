@@ -182,7 +182,9 @@ export default function AdminDashboard() {
   }, [settings]);
 
   useEffect(() => {
-    if (!authLoading && (!user || !isAdmin)) navigate("/admin", { replace: true });
+    if (!authLoading && !user) navigate("/admin", { replace: true });
+    if (!authLoading && user && !isAdmin && !isModerator) navigate("/admin", { replace: true });
+  }, [user, isAdmin, isModerator, authLoading, navigate]);
   }, [user, isAdmin, authLoading, navigate]);
 
   useEffect(() => {
