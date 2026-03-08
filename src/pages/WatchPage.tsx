@@ -183,7 +183,7 @@ export default function WatchPage() {
   }, []);
 
   const scrollToPlayer = () => {
-    playerWrapperRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    playerAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   // PiP: directly mutate DOM style to avoid React re-renders/flickering
