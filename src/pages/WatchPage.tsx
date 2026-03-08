@@ -430,15 +430,9 @@ export default function WatchPage() {
                   <button
                     key={lang.code}
                     onClick={() => {
-                      // ── NEW: selecting "dub" redirects to the dedicated Hindi watch page ──
-                      if (lang.code === "dub") {
-                        const epNumber = currentEp?.number || 1;
-                        const baseAnimeId = animeId.includes("?") ? animeId.split("?")[0] : animeId;
-                        navigate(`/hindi/watch/${baseAnimeId}/${epNumber}`);
-                        return;
-                      }
                       setCategory(lang.code);
                       setShowLangMenu(false);
+                      setRetryKey(k => k + 1);
                     }}
                     className={`w-full px-4 py-2.5 text-sm text-left transition-colors hover:bg-secondary/80 ${
                       category === lang.code ? "text-primary font-medium bg-secondary/40" : "text-foreground"
