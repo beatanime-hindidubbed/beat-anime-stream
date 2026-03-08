@@ -138,11 +138,11 @@ export default function WatchPage() {
   const [hindiIframeSrc, setHindiIframeSrc] = useState<string | null>(null);
 
   const langRef = useRef<HTMLDivElement>(null);
+  const playerAnchorRef = useRef<HTMLDivElement>(null);
   const playerWrapperRef = useRef<HTMLDivElement>(null);
   const [showPip, setShowPip] = useState(false);
   const [mobileCompact, setMobileCompact] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
-  const touchStartY = useRef<number | null>(null);
   const { settings } = useSiteSettings();
 
   const animeId = fullEpisodeId.split("?")[0];
