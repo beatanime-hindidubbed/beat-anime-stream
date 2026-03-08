@@ -21,8 +21,10 @@ const SEGMENT_DELAY_MS  = 8;
 
 type DLState = "idle" | "finding" | "downloading" | "done" | "error";
 
-const proxyify = (base: string, raw: string, ref = "https://megacloud.blog/") =>
-  `${base}/hindiapi/proxy?url=${encodeURIComponent(raw)}&referer=${encodeURIComponent(ref)}`;
+const proxyify = (base: string, raw: string, ref?: string) => {
+  const refererPart = ref ? `&referer=${encodeURIComponent(ref)}` : "";
+  return `${base}/hindiapi/proxy?url=${encodeURIComponent(raw)}${refererPart}`;
+};
 
 const extractParam = (pUrl: string, param: string) => {
   try { return decodeURIComponent(new URL(pUrl).searchParams.get(param) || ""); } catch { return ""; }
