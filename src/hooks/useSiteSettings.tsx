@@ -121,6 +121,8 @@ const DEFAULTS: SiteSettings = {
   commentsDisabledAnimes: [],
   failCountThreshold: 5,
   apiEndpoints: ["https://beat-anime-api.onrender.com/api/v1"],
+  chatEnabled: true,
+  chatPermissions: DEFAULT_CHAT_PERMISSIONS,
 };
 
 interface SiteSettingsCtx {
