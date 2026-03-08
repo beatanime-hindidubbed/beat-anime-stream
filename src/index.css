@@ -60,6 +60,7 @@
     --shadow-card: 0 4px 24px hsl(0 0% 0% / 0.5);
     --shadow-neon: 0 0 15px hsl(180 80% 50% / 0.3);
     --theme-pattern: none;
+    --theme-bg-image: none;
   }
 }
 
