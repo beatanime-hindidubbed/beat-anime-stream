@@ -857,7 +857,7 @@ export default function VideoPlayer({
                     <button key={item.label} onClick={item.action}
                       className="flex items-center justify-between w-full px-2.5 sm:px-4 py-1.5 sm:py-2.5 text-[11px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
                       <span className="flex items-center gap-2">
-                        <item.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white/50" /> {item.label}
+                        <item.icon className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> {item.label}
                       </span>
                       <span className="flex items-center gap-1 text-white/40 text-[10px] sm:text-xs">{item.value} <ChevronRight className="w-3 h-3" /></span>
                     </button>
