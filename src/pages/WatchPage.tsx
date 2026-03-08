@@ -654,7 +654,7 @@ export default function WatchPage() {
             episodeId={currentEp.episodeId}
             episodeNumber={currentEp.number}
             animeName={animeName}
-            streamUrl={streamResult?.url}
+            streamUrl={category === "dub" ? (hindiHlsSrc || undefined) : streamResult?.url}
           />
         )}
       </div>
