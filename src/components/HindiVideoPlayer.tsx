@@ -840,7 +840,7 @@ export default function HindiVideoPlayer({
             {/* Settings panel */}
             {settingsOpen && (
                 <div
-                  className={`${settingsPositionClass} left-2 right-2 sm:left-auto sm:right-3 w-auto sm:w-52 max-w-[calc(100vw-1rem)] max-h-[40vh] sm:max-h-[60vh] overflow-y-auto overscroll-contain touch-pan-y bg-black/95 border border-white/10 rounded-lg sm:rounded-xl shadow-2xl text-[11px] sm:text-sm scrollbar-thin`}
+                  className={`${settingsPositionClass} left-2 right-2 sm:left-auto sm:right-3 w-auto sm:w-48 max-w-[calc(100vw-1rem)] max-h-[min(35vh,200px)] sm:max-h-[min(50vh,320px)] overflow-y-auto overscroll-contain touch-pan-y bg-black/95 border border-white/10 rounded-lg sm:rounded-xl shadow-2xl text-[10px] sm:text-sm scrollbar-thin`}
                   onClick={(e) => e.stopPropagation()}
                   onTouchMove={(e) => e.stopPropagation()}>
                   {settingsPanel === "main" && (
@@ -849,31 +849,31 @@ export default function HindiVideoPlayer({
                         { label: "Speed",    icon: Gauge,     value: `${speed}x`, action: () => setSettingsPanel("speed") },
                         { label: "Captions", icon: Subtitles, value: captionsOn ? subtitleTracks[activeTrackIdx]?.label || "On" : "Off", action: () => setSettingsPanel("caption") },
                       ].map(item => (
-                        <button key={item.label} onClick={item.action}
-                          className="flex items-center justify-between w-full px-2.5 sm:px-4 py-1.5 sm:py-2.5 text-[11px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
+                      <button key={item.label} onClick={item.action}
+                          className="flex items-center justify-between w-full px-2 sm:px-4 py-1 sm:py-2 text-[10px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
                           <span className="flex items-center gap-2"><item.icon className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> {item.label}</span>
                           <span className="flex items-center gap-1 text-white/40 text-[10px] sm:text-xs">{item.value} <ChevronRight className="w-3 h-3" /></span>
                         </button>
                       ))}
                       {qualityLevels.length > 0 && (
                         <button onClick={() => setSettingsPanel("quality")}
-                          className="flex items-center justify-between w-full px-2.5 sm:px-4 py-1.5 sm:py-2.5 text-[11px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
+                          className="flex items-center justify-between w-full px-2 sm:px-4 py-1 sm:py-2 text-[10px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
                           <span className="flex items-center gap-2"><Layers className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> Quality</span>
                           <span className="flex items-center gap-1 text-white/40 text-[10px] sm:text-xs">{qualityLabel(currentQuality)} <ChevronRight className="w-3 h-3" /></span>
                         </button>
                       )}
                       <button onClick={() => setSettingsPanel("boost")}
-                        className="flex items-center justify-between w-full px-2.5 sm:px-4 py-1.5 sm:py-2.5 text-[11px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
+                        className="flex items-center justify-between w-full px-2 sm:px-4 py-1 sm:py-2 text-[10px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
                         <span className="flex items-center gap-2"><Volume1 className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> Audio Boost</span>
                         <span className="flex items-center gap-1 text-white/40 text-[10px] sm:text-xs">{audioBoost > 1 ? `${audioBoost}x` : "Off"} <ChevronRight className="w-3 h-3" /></span>
                       </button>
                       <button onClick={takeScreenshot}
-                        className="flex items-center justify-between w-full px-2.5 sm:px-4 py-1.5 sm:py-2.5 text-[11px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
+                        className="flex items-center justify-between w-full px-2 sm:px-4 py-1 sm:py-2 text-[10px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
                         <span className="flex items-center gap-2"><Camera className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> Screenshot</span>
                         <span className="text-white/40 text-[10px] sm:text-xs">Save</span>
                       </button>
                       <button onClick={() => { const v = videoRef.current; if (!v) return; if (abLoop.a === null) setAbLoop({ a: v.currentTime, b: null }); else if (abLoop.b === null) setAbLoop(prev => ({ ...prev, b: v.currentTime })); else setAbLoop({ a: null, b: null }); }}
-                        className="flex items-center justify-between w-full px-2.5 sm:px-4 py-1.5 sm:py-2.5 text-[11px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
+                        className="flex items-center justify-between w-full px-2 sm:px-4 py-1 sm:py-2 text-[10px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
                         <span className="flex items-center gap-2"><Repeat className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> A-B Loop</span>
                         <span className={`text-[10px] sm:text-xs ${abLoop.a !== null ? "text-primary font-medium" : "text-white/40"}`}>{abLoop.a !== null && abLoop.b !== null ? "Active ✓" : abLoop.a !== null ? "Set B →" : "Set A"}</span>
                       </button>
@@ -883,10 +883,10 @@ export default function HindiVideoPlayer({
                         { label: "Autoplay", icon: SkipForward, value: autoPlayNext,   toggle: () => onAutoPlayToggle?.(!autoPlayNext) },
                       ].map(item => (
                         <button key={item.label} onClick={item.toggle}
-                          className="flex items-center justify-between w-full px-2.5 sm:px-4 py-1.5 sm:py-2.5 text-[11px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
+                          className="flex items-center justify-between w-full px-2 sm:px-4 py-1 sm:py-2 text-[10px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
                           <span className="flex items-center gap-2"><item.icon className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> {item.label}</span>
-                          <span className={`w-7 h-3.5 sm:w-9 sm:h-5 rounded-full transition-colors flex items-center ${item.value ? "bg-primary justify-end" : "bg-white/20 justify-start"}`}>
-                            <span className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 rounded-full bg-white mx-0.5 shadow" />
+                          <span className={`w-6 h-3 sm:w-9 sm:h-5 rounded-full transition-colors flex items-center ${item.value ? "bg-primary justify-end" : "bg-white/20 justify-start"}`}>
+                            <span className="w-2 h-2 sm:w-3.5 sm:h-3.5 rounded-full bg-white mx-0.5 shadow" />
                           </span>
                         </button>
                       ))}
