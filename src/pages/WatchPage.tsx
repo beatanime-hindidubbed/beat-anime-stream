@@ -124,6 +124,8 @@ export default function WatchPage() {
   const [hindiIframeSrc, setHindiIframeSrc] = useState<string | null>(null);
 
   const langRef = useRef<HTMLDivElement>(null);
+  const playerWrapperRef = useRef<HTMLDivElement>(null);
+  const [showPip, setShowPip] = useState(false);
   const { settings } = useSiteSettings();
 
   const animeId = fullEpisodeId.split("?")[0];
