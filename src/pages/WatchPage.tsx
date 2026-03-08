@@ -78,7 +78,29 @@ async function fetchHindiSources(animeInfo: any, episodeNumber: number): Promise
   const paramName = anilistId ? "anilistId" : "malId";
   const paramValue = anilistId || malId;
 
-  const url = `${HINDI_API_BASE}/hindiapi/episode?${paramName}=${paramValue}&season=1&episode=${episodeNumber}&type=series`;
+  // Detect season number from seasons array instead of hardcoding 1
+  let seasonNumber = 1;
+  const seasons = animeInfo?.seasons || [];
+  if (seasons.length > 0) {
+    const currentSeason = seasons.find((s: any) => s.isCurrent);
+    if (currentSeason) {
+      // Try to extract season number from title (e.g. "Season 3 (Part 1)")
+      const titleMatch = (currentSeason.title || currentSeason.name || "").match(/season\s*(\d+)/i);
+      if (titleMatch) {
+        seasonNumber = parseInt(titleMatch[1], 10);
+      } else {
+        // Fallback: count TV-type seasons (exclude movies/specials) up to current
+        const tvSeasons = seasons.filter((s: any) => {
+          const t = (s.title || s.name || "").toLowerCase();
+          return t.includes("season") || (!t.includes("movie") && !t.includes("special") && !t.includes("ova"));
+        });
+        const idx = tvSeasons.findIndex((s: any) => s.isCurrent);
+        if (idx >= 0) seasonNumber = idx + 1;
+      }
+    }
+  }
+
+  const url = `${HINDI_API_BASE}/hindiapi/episode?${paramName}=${paramValue}&season=${seasonNumber}&episode=${episodeNumber}&type=series`;
   const data = await raceHindiFetch(url);
 
   const sources = data.data?.streams || data.data?.sources || data.data?.servers || [];
