@@ -176,6 +176,19 @@ export default function WatchPage() {
     enabled: !!animeId,
   });
 
+  // Track genres for personalization
+  useEffect(() => {
+    if (!info) return;
+    const genres = info?.anime?.moreInfo?.genres || [];
+    if (genres.length) {
+      try {
+        const stored = JSON.parse(localStorage.getItem("beat_watched_genres") || "[]") as string[];
+        const updated = [...new Set([...genres, ...stored])].slice(0, 20);
+        localStorage.setItem("beat_watched_genres", JSON.stringify(updated));
+      } catch {}
+    }
+  }, [info]);
+
   const episodes = epData?.episodes || [];
   const currentEp = episodes.find((e) => e.episodeId === fullEpisodeId);
   const currentIdx = episodes.findIndex((e) => e.episodeId === fullEpisodeId);
