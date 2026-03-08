@@ -526,14 +526,14 @@ export default function ChatWidget() {
                 value={input}
                 onChange={e => { setInput(e.target.value); handleTyping(); }}
                 onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                placeholder={isBanned ? "You are banned" : isMuted ? "You are muted" : mode === "report" ? "Describe the issue..." : "Type a message..."}
-                disabled={isBanned || isMuted}
+                placeholder={isBanned ? "You are banned" : isMuted ? "You are muted" : (!isAdmin && !perms.sendMessages) ? "Messaging disabled" : mode === "report" ? "Describe the issue..." : perms.slowMode > 0 ? `Type a message... (slow mode: ${perms.slowMode}s)` : "Type a message..."}
+                disabled={isBanned || isMuted || (!isAdmin && !perms.sendMessages)}
                 className="flex-1 h-9 px-3 rounded-lg bg-secondary text-foreground text-sm border border-border focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50 min-w-0"
                 maxLength={500}
               />
               <button
                 onClick={sendMessage}
-                disabled={!input.trim() || sending || isBanned || isMuted}
+                disabled={!input.trim() || sending || isBanned || isMuted || (!isAdmin && !perms.sendMessages)}
                 className="w-9 h-9 rounded-lg bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-40 hover:opacity-90 active:scale-95 transition-all shrink-0"
               >
                 <Send className="w-4 h-4" />
