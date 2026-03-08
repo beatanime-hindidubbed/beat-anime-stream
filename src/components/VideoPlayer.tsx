@@ -875,7 +875,7 @@ export default function VideoPlayer({
                     <span className="flex items-center gap-1 text-white/40 text-[10px] sm:text-xs">{audioBoost > 1 ? `${audioBoost}x` : "Off"} <ChevronRight className="w-3 h-3" /></span>
                   </button>
                   <button onClick={takeScreenshot}
-                    className="flex items-center justify-between w-full px-2.5 sm:px-4 py-1.5 sm:py-2.5 text-[11px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
+                    className="flex items-center justify-between w-full px-2 sm:px-4 py-1 sm:py-2 text-[10px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
                     <span className="flex items-center gap-2"><Camera className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> Screenshot</span>
                     <span className="text-white/40 text-[10px] sm:text-xs">Save</span>
                   </button>
