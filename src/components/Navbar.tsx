@@ -196,12 +196,15 @@ export default function Navbar() {
               href={settings.telegramChannel}
               target="_blank"
               rel="noopener noreferrer"
-              className="hidden sm:flex p-2 text-muted-foreground hover:text-primary transition-colors"
+              className="hidden sm:flex p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-all duration-200"
               title="Telegram"
             >
               <Send className="w-4 h-4" />
             </a>
           )}
+
+          {/* User Settings */}
+          {user && <UserSettingsPanel />}
 
           {user ? (
             <div className="relative">
