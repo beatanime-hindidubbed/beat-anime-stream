@@ -575,29 +575,42 @@ export default function AdminDashboard() {
               </div>
             </div>
             <div className="space-y-3">
-              {userRoles.map(ur => (
-                <div key={ur.id} className="flex items-center justify-between p-4 rounded-xl bg-card border border-border">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center">
-                      <Shield className="w-4 h-4 text-primary" />
+              {userRoles.map(ur => {
+                const isPremium = ur.premium_until && new Date(ur.premium_until) > new Date();
+                return (
+                  <div key={ur.id} className="flex items-center justify-between p-4 rounded-xl bg-card border border-border">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center ${isPremium ? "bg-accent/20" : "bg-secondary"}`}>
+                        {isPremium ? <Crown className="w-4 h-4 text-accent" /> : <Shield className="w-4 h-4 text-primary" />}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium text-foreground">{ur.username}</p>
+                          {isPremium && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-accent/20 text-accent">PREMIUM</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground font-mono">{ur.user_id.slice(0, 8)}...</p>
+                        {isPremium && ur.premium_until && (
+                          <p className="text-[10px] text-accent/70">
+                            Premium until {new Date(ur.premium_until).toLocaleDateString()}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{ur.username}</p>
-                      <p className="text-xs text-muted-foreground font-mono">{ur.user_id.slice(0, 8)}...</p>
+                    <div className="flex items-center gap-3">
+                      <span className={`px-2.5 py-1 rounded-md text-xs font-medium ${ur.role === "admin" ? "bg-accent/20 text-accent" : ur.role === "moderator" ? "bg-primary/20 text-primary" : "bg-secondary text-secondary-foreground"}`}>
+                        {ur.role}
+                      </span>
+                      {ur.user_id !== user?.id && (
+                        <button onClick={() => removeUserRole(ur.id)} className="p-1.5 rounded-lg hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors">
+                          <UserMinus className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className={`px-2.5 py-1 rounded-md text-xs font-medium ${ur.role === "admin" ? "bg-accent/20 text-accent" : ur.role === "moderator" ? "bg-primary/20 text-primary" : "bg-secondary text-secondary-foreground"}`}>
-                      {ur.role}
-                    </span>
-                    {ur.user_id !== user?.id && (
-                      <button onClick={() => removeUserRole(ur.id)} className="p-1.5 rounded-lg hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors">
-                        <UserMinus className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </motion.div>
         )}
