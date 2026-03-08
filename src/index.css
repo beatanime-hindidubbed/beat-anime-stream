@@ -68,6 +68,17 @@
     @apply bg-background text-foreground font-body antialiased;
   }
 
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image: var(--theme-pattern, none);
+    background-size: 100% 100%;
+    opacity: 1;
+  }
+
   h1, h2, h3, h4, h5, h6 {
     @apply font-display;
   }
