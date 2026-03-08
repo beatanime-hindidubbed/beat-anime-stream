@@ -827,6 +827,50 @@ export default function AdminDashboard() {
         {/* ── Effects ── */}
         {tab === "effects" && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+
+            {/* Robot Verification Settings */}
+            <div className="p-4 sm:p-6 rounded-xl bg-card border border-border">
+              <h2 className="font-display text-lg font-bold text-foreground mb-3 flex items-center gap-2">
+                <Shield className="w-5 h-5 text-accent" /> Robot Verification
+              </h2>
+              <p className="text-xs sm:text-sm text-muted-foreground mb-4">Control how users verify before accessing the site</p>
+              
+              <div className="flex items-center gap-3 mb-5">
+                <button
+                  onClick={() => updateSettings({ verificationEnabled: !settings.verificationEnabled })}
+                  className={`relative w-12 h-6 rounded-full transition-colors ${settings.verificationEnabled ? "bg-primary" : "bg-secondary"}`}
+                >
+                  <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-primary-foreground shadow transition-transform ${settings.verificationEnabled ? "left-[26px]" : "left-0.5"}`} />
+                </button>
+                <span className="text-sm text-foreground">{settings.verificationEnabled ? "Verification ON" : "Verification OFF (site open to all)"}</span>
+              </div>
+
+              {settings.verificationEnabled && (
+                <div className="space-y-3">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Verification Mode</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {([
+                      { key: "code" as const, label: "Telegram Code", desc: "6-digit code from Telegram bot", icon: "🤖" },
+                      { key: "captcha" as const, label: "CAPTCHA", desc: "Google reCAPTCHA challenge", icon: "🧩" },
+                      { key: "checkbox" as const, label: "Checkbox", desc: "Simple 'I'm not a robot' tick", icon: "☑️" },
+                    ]).map(mode => (
+                      <button key={mode.key}
+                        onClick={() => updateSettings({ verificationMode: mode.key })}
+                        className={`p-4 rounded-xl border text-left transition-all ${
+                          settings.verificationMode === mode.key
+                            ? "border-primary bg-primary/10 shadow-glow"
+                            : "border-border bg-secondary/50 hover:border-primary/30"
+                        }`}>
+                        <span className="text-2xl mb-2 block">{mode.icon}</span>
+                        <p className="text-sm font-bold text-foreground">{mode.label}</p>
+                        <p className="text-[10px] text-muted-foreground mt-1">{mode.desc}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Auto Festival Detection */}
             <div className="p-4 sm:p-6 rounded-xl bg-card border border-border">
               <h2 className="font-display text-lg font-bold text-foreground mb-3 flex items-center gap-2">

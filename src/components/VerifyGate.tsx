@@ -1,6 +1,7 @@
 // src/components/VerifyGate.tsx — BULLETPROOF
 import { useEffect, useState, ReactNode, useRef, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useSiteSettings } from "@/hooks/useSiteSettings";
 
 // ─── Only these paths are accessible without verification ───────────────────
 const PUBLIC_PATHS = [
