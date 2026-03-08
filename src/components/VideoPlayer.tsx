@@ -214,11 +214,15 @@ export default function VideoPlayer({
 
   // Update mini player state when playing changes
   useEffect(() => {
+    if (disableInternalMiniPlayer) {
+      setMiniPlayer(false);
+      return;
+    }
     if (!wrapperRef.current) return;
     const rect = wrapperRef.current.getBoundingClientRect();
     const isVisible = rect.top > -rect.height * 0.8 && rect.bottom < window.innerHeight + rect.height * 0.8;
     setMiniPlayer(!isVisible && playing);
-  }, [playing]);
+  }, [playing, disableInternalMiniPlayer]);
 
   // Re-encode when src changes
   useEffect(() => {
