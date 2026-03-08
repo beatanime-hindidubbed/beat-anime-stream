@@ -59,6 +59,7 @@
     --shadow-glow: 0 0 20px hsl(0 85% 55% / 0.2);
     --shadow-card: 0 4px 24px hsl(0 0% 0% / 0.5);
     --shadow-neon: 0 0 15px hsl(180 80% 50% / 0.3);
+    --shadow-diamond: 0 0 40px hsl(var(--primary) / 0.08), 0 0 80px hsl(var(--accent) / 0.04), inset 0 1px 0 hsl(0 0% 100% / 0.03);
     --theme-pattern: none;
     --theme-bg-image: none;
   }
