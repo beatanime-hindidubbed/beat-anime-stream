@@ -870,13 +870,10 @@ export default function VideoPlayer({
         </AnimatePresence>
 
         {/* ── Settings panel ────────────────────────────────────────── */}
-        <AnimatePresence>
-          {settingsOpen && (
-            <motion.div key="settings"
-              initial={{ opacity: 0, scale: 0.95, y: 8 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 8 }}
-              className={`${settingsPositionClass} w-52 sm:w-56 max-h-[70vh] overflow-y-auto overscroll-contain bg-black/90 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl`}
+        {settingsOpen && (
+            <div
+              className={`${settingsPositionClass} w-52 sm:w-56 max-h-[70vh] overflow-y-auto overscroll-contain bg-black/95 border border-white/10 rounded-2xl shadow-2xl`}
+              onClick={(e) => e.stopPropagation()}
             >
               {settingsPanel === "main" && (
                 <div className="py-1.5">
@@ -1003,9 +1000,8 @@ export default function VideoPlayer({
                   ))}
                 </div>
               )}
-            </motion.div>
-          )}
-        </AnimatePresence>
+            </div>
+        )}
 
         {/* ══════════════════════════════════════════════════════════════
             CONTROLS OVERLAY — Beautiful redesigned UI
