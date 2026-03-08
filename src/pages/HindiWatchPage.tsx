@@ -56,11 +56,14 @@ async function fetchHindiSourcesFromAllApis(anilistId: string | undefined, malId
     return mapped;
   });
 
-  // Use Promise.any to get the FIRST successful result (truly parallel racing)
+  // Use allSettled + find first fulfilled (compatible with all targets)
   try {
-    const result = await Promise.any(promises);
+    const results = await Promise.allSettled(promises);
     clearTimeout(timeout);
-    return result;
+    for (const r of results) {
+      if (r.status === "fulfilled") return r.value;
+    }
+    throw new Error("No Hindi sources found");
   } catch {
     clearTimeout(timeout);
     throw new Error("No Hindi sources found");
