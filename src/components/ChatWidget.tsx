@@ -221,6 +221,7 @@ export default function ChatWidget() {
     setForwardMsg(null);
     setSending(false);
     setShowEmojiPicker(false);
+    setLastSentAt(Date.now());
     inputRef.current?.focus();
   };
 
