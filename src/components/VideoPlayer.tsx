@@ -732,8 +732,8 @@ export default function VideoPlayer({
           className="absolute -inset-8 w-[calc(100%+4rem)] h-[calc(100%+4rem)] opacity-40 blur-3xl scale-110 pointer-events-none -z-10 rounded-3xl" />
       )}
 
-      {/* Hidden preview video (desktop only) */}
-      {!isMobile && <video ref={previewVideoRef} className="hidden" muted playsInline preload="auto" />}
+      {/* Hidden preview video (hover-capable devices only) */}
+      {canHover && <video ref={previewVideoRef} className="hidden" muted playsInline preload="auto" />}
 
       <div
         ref={containerRef}
