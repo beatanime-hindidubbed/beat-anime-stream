@@ -102,6 +102,7 @@ export default function VideoPlayer({
   const [previewHasFrame, setPreviewHasFrame] = useState(false);
   const [previewReady, setPreviewReady] = useState(false);
   const [isMobile, setIsMobile]     = useState(false);
+  const [canHover, setCanHover]     = useState(false);
   // Advanced features
   const [audioBoost, setAudioBoost] = useState(1); // 1x = normal, up to 3x
   const [abLoop, setAbLoop] = useState<{ a: number | null; b: number | null }>({ a: null, b: null });
@@ -186,9 +187,12 @@ export default function VideoPlayer({
     link.click();
   };
 
-  // Detect mobile
+  // Detect mobile + hover capability
   useEffect(() => {
-    const check = () => setIsMobile(window.matchMedia("(max-width: 768px), (pointer: coarse)").matches);
+    const check = () => {
+      setIsMobile(window.matchMedia("(max-width: 768px), (pointer: coarse)").matches);
+      setCanHover(window.matchMedia("(hover: hover) and (pointer: fine)").matches);
+    };
     check();
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
@@ -295,7 +299,7 @@ export default function VideoPlayer({
 
   // ── Preview HLS (desktop only) ────────────────────────────────────────
   useEffect(() => {
-    if (isMobile) return;
+    if (!canHover) return;
     const preview = previewVideoRef.current;
     let realSrc: string;
     try { realSrc = getUrl.current(); } catch { return; }
@@ -318,7 +322,7 @@ export default function VideoPlayer({
       previewHlsRef.current = hls;
       return () => { hls.destroy(); previewHlsRef.current = null; setPreviewReady(false); };
     }
-  }, [src, isMobile]);
+  }, [src, canHover]);
 
   // Draw preview frame to canvas
   useEffect(() => {
@@ -512,9 +516,9 @@ export default function VideoPlayer({
     e.stopPropagation();
   };
 
-   // ── Preview thumbnail hover (desktop only) ────────────────────────────
+   // ── Preview thumbnail hover (desktop/laptop hover devices) ─────────────
   const handleProgressHover = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!duration || isMobile) return;
+    if (!duration || !canHover) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const pct  = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     const t    = pct * duration;
@@ -728,8 +732,8 @@ export default function VideoPlayer({
           className="absolute -inset-8 w-[calc(100%+4rem)] h-[calc(100%+4rem)] opacity-40 blur-3xl scale-110 pointer-events-none -z-10 rounded-3xl" />
       )}
 
-      {/* Hidden preview video (desktop only) */}
-      {!isMobile && <video ref={previewVideoRef} className="hidden" muted playsInline preload="auto" />}
+      {/* Hidden preview video (hover-capable devices only) */}
+      {canHover && <video ref={previewVideoRef} className="hidden" muted playsInline preload="auto" />}
 
       <div
         ref={containerRef}
@@ -840,7 +844,7 @@ export default function VideoPlayer({
         {/* ── Settings panel ────────────────────────────────────────── */}
         {settingsOpen && (
             <div
-              className={`${settingsPositionClass} w-44 sm:w-56 max-h-[50vh] sm:max-h-[70vh] overflow-y-auto overscroll-contain touch-pan-y bg-black/95 border border-white/10 rounded-xl sm:rounded-2xl shadow-2xl`}
+              className={`${settingsPositionClass} left-2 right-2 sm:left-auto sm:right-3 w-auto sm:w-56 max-w-[calc(100vw-1rem)] max-h-[min(60vh,calc(100vh-8.5rem))] sm:max-h-[70vh] overflow-y-auto overscroll-contain touch-pan-y bg-black/95 border border-white/10 rounded-xl sm:rounded-2xl shadow-2xl`}
               onClick={(e) => e.stopPropagation()}
               onTouchMove={(e) => e.stopPropagation()}
             >

@@ -121,6 +121,7 @@ export default function HindiVideoPlayer({
   const [previewHasFrame, setPreviewHasFrame] = useState(false);
   const [previewReady, setPreviewReady] = useState(false);
   const [isMobile, setIsMobile]     = useState(false);
+  const [canHover, setCanHover]     = useState(false);
   const [miniPlayer, setMiniPlayer] = useState(false);
   // Advanced features (ported from English player)
   const [audioBoost, setAudioBoost] = useState(1);
@@ -198,7 +199,10 @@ export default function HindiVideoPlayer({
   };
 
   useEffect(() => {
-    const check = () => setIsMobile(window.matchMedia("(max-width: 768px), (pointer: coarse)").matches);
+    const check = () => {
+      setIsMobile(window.matchMedia("(max-width: 768px), (pointer: coarse)").matches);
+      setCanHover(window.matchMedia("(hover: hover) and (pointer: fine)").matches);
+    };
     check();
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
@@ -301,7 +305,7 @@ export default function HindiVideoPlayer({
 
   // ── Preview HLS — use ENGLISH HiAnime stream (same frames, much faster) ─
   useEffect(() => {
-    if (isIframe || isMobile || !episodeId) return;
+    if (isIframe || !canHover || !episodeId) return;
     const preview = previewVideoRef.current;
     if (!preview) return;
 
@@ -342,7 +346,7 @@ export default function HindiVideoPlayer({
 
     loadEnglishPreview();
     return () => { cancelled = true; if (previewHlsRef.current) { previewHlsRef.current.destroy(); previewHlsRef.current = null; } setPreviewReady(false); };
-  }, [episodeId, isMobile, isIframe]);
+  }, [episodeId, canHover, isIframe]);
 
   // Draw preview frame to canvas
   useEffect(() => {
@@ -526,9 +530,9 @@ export default function HindiVideoPlayer({
     e.stopPropagation();
   };
 
-  // ── Preview thumbnail hover (desktop only, feature parity) ────────────
+  // ── Preview thumbnail hover (desktop/laptop hover devices) ────────────
   const handleProgressHover = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!duration || isMobile) return;
+    if (!duration || !canHover) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const pct  = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     const t    = pct * duration;
@@ -715,7 +719,7 @@ export default function HindiVideoPlayer({
       )}
 
       {/* Hidden preview video (desktop only, not for iframe) */}
-      {!isMobile && !isIframe && <video ref={previewVideoRef} className="hidden" muted playsInline preload="auto" />}
+      {canHover && !isIframe && <video ref={previewVideoRef} className="hidden" muted playsInline preload="auto" />}
 
       <div
         ref={containerRef}
@@ -836,7 +840,7 @@ export default function HindiVideoPlayer({
             {/* Settings panel */}
             {settingsOpen && (
                 <div
-                  className={`${settingsPositionClass} w-44 sm:w-56 max-h-[50vh] sm:max-h-[70vh] overflow-y-auto overscroll-contain touch-pan-y bg-black/95 border border-white/10 rounded-xl sm:rounded-2xl shadow-2xl`}
+                  className={`${settingsPositionClass} left-2 right-2 sm:left-auto sm:right-3 w-auto sm:w-56 max-w-[calc(100vw-1rem)] max-h-[min(60vh,calc(100vh-8.5rem))] sm:max-h-[70vh] overflow-y-auto overscroll-contain touch-pan-y bg-black/95 border border-white/10 rounded-xl sm:rounded-2xl shadow-2xl`}
                   onClick={(e) => e.stopPropagation()}
                   onTouchMove={(e) => e.stopPropagation()}>
                   {settingsPanel === "main" && (
