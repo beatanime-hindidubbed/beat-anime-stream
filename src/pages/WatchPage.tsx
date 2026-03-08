@@ -14,7 +14,7 @@ import AnimeCard from "@/components/AnimeCard";
 import AnimeReportButton from "@/components/AnimeReportButton";
 import { getWorkingStream, StreamResult, HIANIME_SERVERS } from "@/lib/streaming";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { ChevronLeft, ChevronRight, List, Loader2, Server, RefreshCw, Globe, ChevronDown, MessageSquare } from "lucide-react";
+import { ChevronLeft, ChevronRight, List, Loader2, Server, RefreshCw, Globe, ChevronDown, MessageSquare, ArrowUp } from "lucide-react";
 
 import { AnimatePresence, motion } from "framer-motion";
 
