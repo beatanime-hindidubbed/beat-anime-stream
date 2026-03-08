@@ -210,7 +210,7 @@ export default function WatchPage() {
     return () => { cancelled = true; };
   }, [category, info, currentEp, retryKey]);
 
-  // ── HiAnime (sub/raw) stream loader — unchanged from original ─────────
+  // ── HiAnime (sub/engdub/raw) stream loader ─────────────────────────
   useEffect(() => {
     if (category === "dub" || !fullEpisodeId) return;
     let cancelled = false;
@@ -224,6 +224,9 @@ export default function WatchPage() {
       setHindiIframeSrc(null);
       setRetryMessage("");
 
+      // Map engdub → "dub" for HiAnime API, sub/raw → "sub"
+      const apiCategory = category === "engdub" ? "dub" : category === "raw" ? "sub" : "sub";
+
       for (let i = 0; i < HIANIME_SERVERS.length; i++) {
         if (cancelled) return;
         const server = HIANIME_SERVERS[i];
@@ -232,7 +235,7 @@ export default function WatchPage() {
           await new Promise((r) => setTimeout(r, 800));
         }
         try {
-          const result = await getWorkingStream({ episodeId: fullEpisodeId, category: category === "raw" ? "sub" : category, server });
+          const result = await getWorkingStream({ episodeId: fullEpisodeId, category: apiCategory, server });
           if (cancelled) return;
           if (result) { setSelectedServer(server); setStreamResult(result); setStreamLoading(false); setRetryMessage(""); return; }
         } catch {}
