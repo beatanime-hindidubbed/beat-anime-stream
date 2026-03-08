@@ -67,7 +67,15 @@ const THEMES: { key: ThemeType; label: string; colors: string[]; tag?: string }[
   { key: "golden-hour", label: "Golden Hour", colors: ["#ca8a04", "#ea580c"], tag: "☀️" },
 ];
 
-type TabKey = "stats" | "branding" | "ads" | "api" | "users" | "policy" | "premium" | "chat";
+const PLAYER_THEMES: { key: PlayerTheme; label: string; desc: string }[] = [
+  { key: "default", label: "Default", desc: "Standard controls with red accent" },
+  { key: "minimal", label: "Minimal", desc: "Clean, thin controls, auto-hide" },
+  { key: "cinema", label: "Cinema", desc: "Dark overlay, large play button" },
+  { key: "retro", label: "Retro", desc: "VHS style with scan lines" },
+  { key: "glassmorphism", label: "Glass", desc: "Frosted glass controls" },
+];
+
+type TabKey = "stats" | "branding" | "ads" | "api" | "users" | "policy" | "premium" | "chat" | "player" | "banlist" | "logs";
 
 export default function AdminDashboard() {
   const { user, isAdmin, loading: authLoading, logout } = useSupabaseAuth();
