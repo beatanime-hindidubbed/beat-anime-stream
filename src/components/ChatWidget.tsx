@@ -70,7 +70,6 @@ export default function ChatWidget() {
 
   const QUICK_EMOJIS = ["😀", "😂", "😍", "🤔", "😭", "😎", "🔥", "👀", "💀", "🎉", "❤️", "👍", "🙏", "💯", "✨", "🤡"];
 
-  // Load messages
   const loadMessages = useCallback(async () => {
     if (!user) return;
     let query = supabase
@@ -91,7 +90,6 @@ export default function ChatWidget() {
     if (data) setMessages(data as unknown as ChatMsg[]);
   }, [user, mode, whisperTo]);
 
-  // Check ban
   useEffect(() => {
     if (!user) return;
     const checkBan = async () => {
@@ -114,7 +112,6 @@ export default function ChatWidget() {
     if (open && user) loadMessages();
   }, [open, mode, whisperTo, loadMessages, user]);
 
-  // Realtime
   useEffect(() => {
     if (!open || !user) return;
     const channel = supabase
@@ -138,7 +135,6 @@ export default function ChatWidget() {
     return () => { supabase.removeChannel(channel); };
   }, [open, user, mode, whisperTo]);
 
-  // Typing indicator via presence
   useEffect(() => {
     if (!open || !user) return;
     const channel = supabase.channel("chat-typing", { config: { presence: { key: user.id } } });
@@ -161,7 +157,6 @@ export default function ChatWidget() {
     return () => { supabase.removeChannel(channel); };
   }, [open, user]);
 
-  // Auto-scroll
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
@@ -255,8 +250,6 @@ export default function ChatWidget() {
 
   if (!user) return null;
 
-  const replyToMsg = replyTo ? messages.find(m => m.id === replyTo.id) : null;
-
   return (
     <>
       {/* Floating button */}
@@ -264,9 +257,9 @@ export default function ChatWidget() {
         <motion.button
           initial={{ scale: 0 }} animate={{ scale: 1 }}
           onClick={() => { setOpen(true); setUnread(0); }}
-          className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center justify-center"
+          className="fixed bottom-4 right-4 z-50 w-12 h-12 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center"
         >
-          <MessageCircle className="w-5 h-5 sm:w-6 sm:h-6" />
+          <MessageCircle className="w-5 h-5" />
           {unread > 0 && (
             <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center">
               {unread > 9 ? "9+" : unread}
@@ -282,24 +275,24 @@ export default function ChatWidget() {
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            className="fixed bottom-0 right-0 sm:bottom-4 sm:right-4 z-50 w-full sm:w-[380px] sm:max-w-[calc(100vw-2rem)] h-[100dvh] sm:h-[540px] sm:max-h-[calc(100vh-2rem)] flex flex-col bg-card border-0 sm:border border-border sm:rounded-2xl shadow-2xl overflow-hidden"
+            className="fixed inset-0 sm:inset-auto sm:bottom-4 sm:right-4 z-50 w-full sm:w-[380px] sm:max-w-[calc(100vw-2rem)] h-[100dvh] sm:h-[min(540px,calc(100vh-2rem))] flex flex-col bg-card sm:border border-border sm:rounded-2xl shadow-2xl overflow-hidden"
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card/80 backdrop-blur-sm">
-              <div className="flex items-center gap-2">
-                <MessageCircle className="w-4 h-4 text-primary" />
-                <span className="font-display font-bold text-sm text-foreground">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card/80 backdrop-blur-sm shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <MessageCircle className="w-4 h-4 text-primary shrink-0" />
+                <span className="font-display font-bold text-sm text-foreground truncate">
                   {mode === "group" ? "Group Chat" : mode === "report" ? "Report Bug" : `Whisper: ${whisperUsername}`}
                 </span>
-                <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+                <span className="w-2 h-2 rounded-full bg-accent animate-pulse shrink-0" />
               </div>
-              <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg hover:bg-secondary transition-colors">
+              <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg hover:bg-secondary transition-colors shrink-0">
                 <X className="w-4 h-4 text-muted-foreground" />
               </button>
             </div>
 
             {/* Mode tabs */}
-            <div className="flex border-b border-border bg-secondary/30">
+            <div className="flex border-b border-border bg-secondary/30 shrink-0">
               {([
                 { key: "group" as const, icon: Users, label: "Group" },
                 { key: "report" as const, icon: AlertTriangle, label: "Report" },
@@ -316,10 +309,10 @@ export default function ChatWidget() {
 
             {/* Pinned notice */}
             {showPin && (
-              <div className="flex items-center gap-2 px-3 py-2 bg-primary/5 border-b border-border text-[11px] text-muted-foreground">
+              <div className="flex items-center gap-2 px-3 py-2 bg-primary/5 border-b border-border text-[11px] text-muted-foreground shrink-0">
                 <Pin className="w-3 h-3 text-primary flex-shrink-0" />
-                <span className="flex-1">{PINNED_MSG}</span>
-                <button onClick={() => setShowPin(false)} className="text-muted-foreground hover:text-foreground">
+                <span className="flex-1 line-clamp-1">{PINNED_MSG}</span>
+                <button onClick={() => setShowPin(false)} className="text-muted-foreground hover:text-foreground shrink-0">
                   <X className="w-3 h-3" />
                 </button>
               </div>
@@ -327,14 +320,14 @@ export default function ChatWidget() {
 
             {/* Ban notice */}
             {(isBanned || isMuted) && (
-              <div className="px-3 py-2 bg-destructive/10 border-b border-border text-xs text-destructive flex items-center gap-2">
+              <div className="px-3 py-2 bg-destructive/10 border-b border-border text-xs text-destructive flex items-center gap-2 shrink-0">
                 <Ban className="w-3 h-3" />
                 {isBanned ? "You are banned from chat." : "You are muted by an admin."}
               </div>
             )}
 
             {/* Messages */}
-            <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-1.5 scrollbar-hide">
+            <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-1.5 scrollbar-hide min-h-0">
               {messages.length === 0 && (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm">
                   <MessageCircle className="w-8 h-8 mb-2 opacity-30" />
@@ -355,23 +348,22 @@ export default function ChatWidget() {
                         isOwn ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"
                       }`}>
                         {msg.avatar_url ? (
-                          <img src={msg.avatar_url} className="w-full h-full rounded-full object-cover" />
+                          <img src={msg.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
                         ) : (msg.username || "?")[0]?.toUpperCase()}
                       </div>
                     ) : <div className="w-7 flex-shrink-0" />}
 
                     {/* Bubble */}
-                    <div className={`max-w-[75%] ${isOwn ? "text-right" : ""}`}>
+                    <div className={`max-w-[75%] min-w-0 ${isOwn ? "text-right" : ""}`}>
                       {!sameUser && (
                         <div className={`flex items-center gap-1.5 mb-0.5 ${isOwn ? "justify-end" : ""}`}>
-                          <span className="text-[10px] font-medium text-foreground">{msg.username || "Anonymous"}</span>
-                          <span className="text-[9px] text-muted-foreground">
+                          <span className="text-[10px] font-medium text-foreground truncate max-w-[120px]">{msg.username || "Anonymous"}</span>
+                          <span className="text-[9px] text-muted-foreground shrink-0">
                             {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                           </span>
                         </div>
                       )}
 
-                      {/* Reply indicator */}
                       {msg.reply_to && (
                         <div className="text-[9px] text-muted-foreground bg-secondary/50 rounded px-1.5 py-0.5 mb-0.5 inline-block">
                           ↩ Reply
@@ -386,7 +378,6 @@ export default function ChatWidget() {
                           : "bg-secondary text-secondary-foreground rounded-tl-sm"
                       }`}>
                         {msg.content}
-                        {/* Read receipt for own msgs */}
                         {isOwn && !msg.is_deleted && (
                           <span className="inline-flex ml-1.5 align-bottom">
                             <CheckCheck className="w-3 h-3 text-primary-foreground/60" />
@@ -412,38 +403,38 @@ export default function ChatWidget() {
                         </div>
                       )}
 
-                      {/* Actions (hover) */}
-                      <div className={`flex items-center gap-0.5 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity ${isOwn ? "justify-end" : ""}`}>
+                      {/* Actions - visible on hover (desktop) or tap (mobile via group-focus-within) */}
+                      <div className={`flex items-center gap-0.5 mt-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity ${isOwn ? "justify-end" : ""}`}>
                         {!msg.is_deleted && (
                           <>
                             <button onClick={() => setShowReactions(showReactions === msg.id ? null : msg.id)}
-                              className="p-0.5 rounded hover:bg-secondary" title="React">
+                              className="p-1 rounded hover:bg-secondary" title="React">
                               <Smile className="w-3 h-3 text-muted-foreground" />
                             </button>
-                            <button onClick={() => setReplyTo(msg)} className="p-0.5 rounded hover:bg-secondary" title="Reply">
+                            <button onClick={() => setReplyTo(msg)} className="p-1 rounded hover:bg-secondary" title="Reply">
                               <Reply className="w-3 h-3 text-muted-foreground" />
                             </button>
-                            <button onClick={() => forwardMessage(msg)} className="p-0.5 rounded hover:bg-secondary" title="Forward">
+                            <button onClick={() => forwardMessage(msg)} className="p-1 rounded hover:bg-secondary" title="Forward">
                               <Forward className="w-3 h-3 text-muted-foreground" />
                             </button>
                           </>
                         )}
                         {!isOwn && (
-                          <button onClick={() => startWhisper(msg.user_id, msg.username || "User")} className="p-0.5 rounded hover:bg-secondary" title="Whisper">
+                          <button onClick={() => startWhisper(msg.user_id, msg.username || "User")} className="p-1 rounded hover:bg-secondary" title="Whisper">
                             <Lock className="w-3 h-3 text-muted-foreground" />
                           </button>
                         )}
                         {isAdmin && !msg.is_deleted && (
                           <>
-                            <button onClick={() => deleteMessage(msg.id)} className="p-0.5 rounded hover:bg-destructive/20" title="Delete">
+                            <button onClick={() => deleteMessage(msg.id)} className="p-1 rounded hover:bg-destructive/20" title="Delete">
                               <Trash2 className="w-3 h-3 text-destructive" />
                             </button>
                             {!isOwn && (
                               <>
-                                <button onClick={() => banUser(msg.user_id, "mute")} title="Mute 7d" className="p-0.5 rounded hover:bg-destructive/20">
+                                <button onClick={() => banUser(msg.user_id, "mute")} title="Mute 7d" className="p-1 rounded hover:bg-destructive/20">
                                   <VolumeX className="w-3 h-3 text-destructive" />
                                 </button>
-                                <button onClick={() => banUser(msg.user_id, "ban")} title="Ban 7d" className="p-0.5 rounded hover:bg-destructive/20">
+                                <button onClick={() => banUser(msg.user_id, "ban")} title="Ban 7d" className="p-1 rounded hover:bg-destructive/20">
                                   <Ban className="w-3 h-3 text-destructive" />
                                 </button>
                               </>
@@ -458,7 +449,7 @@ export default function ChatWidget() {
                           className={`flex gap-1 mt-1 p-1.5 rounded-xl bg-card border border-border shadow-lg ${isOwn ? "justify-end" : ""}`}>
                           {REACTIONS.map(r => (
                             <button key={r.emoji} onClick={() => addReaction(msg.id, r.emoji)}
-                              className="w-7 h-7 rounded-lg hover:bg-secondary flex items-center justify-center text-sm transition-transform hover:scale-125">
+                              className="w-7 h-7 rounded-lg hover:bg-secondary flex items-center justify-center text-sm transition-transform hover:scale-125 active:scale-95">
                               {r.emoji}
                             </button>
                           ))}
@@ -484,10 +475,10 @@ export default function ChatWidget() {
 
             {/* Reply indicator */}
             {replyTo && (
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-secondary/50 border-t border-border text-xs text-muted-foreground">
-                <Reply className="w-3 h-3" />
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-secondary/50 border-t border-border text-xs text-muted-foreground shrink-0">
+                <Reply className="w-3 h-3 shrink-0" />
                 <span className="truncate flex-1">Replying to <strong>{replyTo.username}</strong>: {replyTo.content.slice(0, 50)}</span>
-                <button onClick={() => setReplyTo(null)}><X className="w-3 h-3" /></button>
+                <button onClick={() => setReplyTo(null)} className="shrink-0"><X className="w-3 h-3" /></button>
               </div>
             )}
 
@@ -495,10 +486,10 @@ export default function ChatWidget() {
             <AnimatePresence>
               {showEmojiPicker && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}
-                  className="border-t border-border p-2 bg-card grid grid-cols-8 gap-1">
+                  className="border-t border-border p-2 bg-card grid grid-cols-8 gap-1 shrink-0">
                   {QUICK_EMOJIS.map(e => (
                     <button key={e} onClick={() => { setInput(prev => prev + e); inputRef.current?.focus(); }}
-                      className="w-8 h-8 rounded-lg hover:bg-secondary flex items-center justify-center text-lg transition-transform hover:scale-110">
+                      className="w-8 h-8 rounded-lg hover:bg-secondary flex items-center justify-center text-lg transition-transform hover:scale-110 active:scale-95">
                       {e}
                     </button>
                   ))}
@@ -507,9 +498,9 @@ export default function ChatWidget() {
             </AnimatePresence>
 
             {/* Input */}
-            <div className="border-t border-border p-3 flex items-center gap-2 bg-card">
+            <div className="border-t border-border p-2 sm:p-3 flex items-center gap-2 bg-card shrink-0 safe-area-bottom">
               <button onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                className={`p-2 rounded-lg transition-colors ${showEmojiPicker ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-secondary"}`}>
+                className={`p-2 rounded-lg transition-colors shrink-0 ${showEmojiPicker ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-secondary"}`}>
                 <Smile className="w-4 h-4" />
               </button>
               <input
@@ -519,13 +510,13 @@ export default function ChatWidget() {
                 onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
                 placeholder={isBanned ? "You are banned" : isMuted ? "You are muted" : mode === "report" ? "Describe the issue..." : "Type a message..."}
                 disabled={isBanned || isMuted}
-                className="flex-1 h-9 px-3 rounded-lg bg-secondary text-foreground text-sm border border-border focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+                className="flex-1 h-9 px-3 rounded-lg bg-secondary text-foreground text-sm border border-border focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50 min-w-0"
                 maxLength={500}
               />
               <button
                 onClick={sendMessage}
                 disabled={!input.trim() || sending || isBanned || isMuted}
-                className="w-9 h-9 rounded-lg bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-40 hover:opacity-90 transition-opacity"
+                className="w-9 h-9 rounded-lg bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-40 hover:opacity-90 active:scale-95 transition-all shrink-0"
               >
                 <Send className="w-4 h-4" />
               </button>

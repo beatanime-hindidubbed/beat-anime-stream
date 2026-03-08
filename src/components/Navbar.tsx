@@ -14,13 +14,13 @@ export default function Navbar() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [userMenu, setUserMenu] = useState(false);
+  const [mobileSearch, setMobileSearch] = useState(false);
   const navigate = useNavigate();
   const searchRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef<any>(null);
 
-  // Voice search
   const startVoice = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) return;
@@ -33,6 +33,7 @@ export default function Navbar() {
       setQuery(transcript);
       navigate(`/search?q=${encodeURIComponent(transcript)}`);
       setListening(false);
+      setMobileSearch(false);
     };
     recognition.onerror = () => setListening(false);
     recognition.onend = () => setListening(false);
@@ -58,6 +59,13 @@ export default function Navbar() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // Close menus on route change
+  useEffect(() => {
+    setMobileMenu(false);
+    setMobileSearch(false);
+    setUserMenu(false);
+  }, []);
+
   const handleSearch = (val: string) => {
     setQuery(val);
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -77,6 +85,7 @@ export default function Navbar() {
       navigate(`/search?q=${encodeURIComponent(query.trim())}`);
       setShowSuggestions(false);
       setMobileMenu(false);
+      setMobileSearch(false);
     }
   };
 
@@ -91,7 +100,7 @@ export default function Navbar() {
 
   return (
     <nav className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-xl">
-      <div className="container flex items-center justify-between h-16 gap-4">
+      <div className="container flex items-center justify-between h-14 sm:h-16 gap-2 sm:gap-4">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2 shrink-0">
           <div className="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center">
@@ -99,13 +108,13 @@ export default function Navbar() {
               {settings.siteIcon || "B"}
             </span>
           </div>
-          <span className="font-display font-bold text-lg hidden sm:block">
+          <span className="font-display font-bold text-base sm:text-lg hidden xs:block">
             <span className="text-gradient">{settings.siteName || "Beat Anistream"}</span>
           </span>
         </Link>
 
         {/* Desktop Nav */}
-        <div className="hidden md:flex items-center gap-5">
+        <div className="hidden lg:flex items-center gap-5">
           {navLinks.map((l) => (
             <Link
               key={l.to}
@@ -117,8 +126,8 @@ export default function Navbar() {
           ))}
         </div>
 
-        {/* Search */}
-        <div ref={searchRef} className="relative hidden sm:block flex-1 max-w-sm">
+        {/* Desktop Search */}
+        <div ref={searchRef} className="relative hidden md:block flex-1 max-w-sm">
           <form onSubmit={submitSearch}>
             <div className="relative flex items-center">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -172,13 +181,21 @@ export default function Navbar() {
         </div>
 
         {/* Right side */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
+          {/* Mobile search toggle */}
+          <button
+            onClick={() => setMobileSearch(!mobileSearch)}
+            className="md:hidden p-2 text-muted-foreground hover:text-primary transition-colors"
+          >
+            <Search className="w-5 h-5" />
+          </button>
+
           {settings.telegramChannel && (
             <a
               href={settings.telegramChannel}
               target="_blank"
               rel="noopener noreferrer"
-              className="p-2 text-muted-foreground hover:text-primary transition-colors"
+              className="hidden sm:flex p-2 text-muted-foreground hover:text-primary transition-colors"
               title="Telegram"
             >
               <Send className="w-4 h-4" />
@@ -189,10 +206,10 @@ export default function Navbar() {
             <div className="relative">
               <button
                 onClick={() => setUserMenu(!userMenu)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary text-sm text-foreground hover:bg-secondary/80 transition-colors font-body"
+                className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 rounded-lg bg-secondary text-sm text-foreground hover:bg-secondary/80 transition-colors font-body"
               >
                 <User className="w-4 h-4" />
-                <span className="hidden sm:inline">{displayName}</span>
+                <span className="hidden sm:inline max-w-[80px] truncate">{displayName}</span>
               </button>
               <AnimatePresence>
                 {userMenu && (
@@ -222,53 +239,109 @@ export default function Navbar() {
           ) : (
             <Link
               to="/login"
-              className="px-4 py-1.5 rounded-lg bg-gradient-primary text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity"
+              className="px-3 sm:px-4 py-1.5 rounded-lg bg-gradient-primary text-xs sm:text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity"
             >
               Login
             </Link>
           )}
 
           <button
-            onClick={() => setMobileMenu(!mobileMenu)}
-            className="md:hidden p-2 text-muted-foreground"
+            onClick={() => { setMobileMenu(!mobileMenu); setMobileSearch(false); }}
+            className="lg:hidden p-2 text-muted-foreground"
           >
             {mobileMenu ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
         </div>
       </div>
 
-      {/* Mobile menu */}
+      {/* Mobile search bar */}
+      <AnimatePresence>
+        {mobileSearch && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="md:hidden overflow-hidden border-t border-border"
+          >
+            <div className="container py-3">
+              <form onSubmit={submitSearch}>
+                <div className="relative flex items-center">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <input
+                    type="text"
+                    placeholder="Search anime..."
+                    value={query}
+                    onChange={(e) => handleSearch(e.target.value)}
+                    autoFocus
+                    className="w-full h-10 pl-9 pr-10 rounded-lg bg-secondary text-sm text-foreground placeholder:text-muted-foreground border border-border focus:outline-none focus:ring-1 focus:ring-primary font-body"
+                  />
+                  <button
+                    type="button"
+                    onClick={listening ? stopVoice : startVoice}
+                    className={`absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md transition-colors ${
+                      listening ? "text-destructive animate-pulse" : "text-muted-foreground hover:text-primary"
+                    }`}
+                  >
+                    {listening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                  </button>
+                </div>
+              </form>
+              {/* Mobile suggestions */}
+              {showSuggestions && suggestions.length > 0 && (
+                <div className="mt-2 bg-card border border-border rounded-lg overflow-hidden max-h-60 overflow-y-auto">
+                  {suggestions.map((s) => (
+                    <Link
+                      key={s.id}
+                      to={`/anime/${s.id}`}
+                      onClick={() => { setShowSuggestions(false); setQuery(""); setMobileSearch(false); }}
+                      className="flex items-center gap-3 px-3 py-2.5 hover:bg-secondary transition-colors"
+                    >
+                      {s.poster && (
+                        <img src={s.poster} alt={s.name} className="w-9 h-12 object-cover rounded" />
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-sm text-foreground line-clamp-1">{s.name}</p>
+                        {s.jname && <p className="text-xs text-muted-foreground line-clamp-1">{s.jname}</p>}
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Mobile nav menu */}
       <AnimatePresence>
         {mobileMenu && (
           <motion.div
             initial={{ height: 0 }}
             animate={{ height: "auto" }}
             exit={{ height: 0 }}
-            className="md:hidden overflow-hidden border-t border-border"
+            className="lg:hidden overflow-hidden border-t border-border"
           >
-            <div className="container py-4 space-y-3">
-              <form onSubmit={submitSearch}>
-                <div className="relative sm:hidden">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <input
-                    type="text"
-                    placeholder="Search anime..."
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    className="w-full h-9 pl-9 pr-4 rounded-lg bg-secondary text-sm text-foreground placeholder:text-muted-foreground border border-border focus:outline-none focus:ring-1 focus:ring-primary font-body"
-                  />
-                </div>
-              </form>
+            <div className="container py-3 space-y-1">
               {navLinks.map((l) => (
                 <Link
                   key={l.to}
                   to={l.to}
                   onClick={() => setMobileMenu(false)}
-                  className="block text-sm text-muted-foreground hover:text-primary transition-colors py-1 font-body"
+                  className="flex items-center h-10 text-sm text-muted-foreground hover:text-primary transition-colors font-body px-2 rounded-lg hover:bg-secondary/50"
                 >
                   {l.label}
                 </Link>
               ))}
+              {settings.telegramChannel && (
+                <a
+                  href={settings.telegramChannel}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 h-10 text-sm text-muted-foreground hover:text-primary transition-colors px-2 rounded-lg hover:bg-secondary/50"
+                >
+                  <Send className="w-4 h-4" /> Telegram
+                </a>
+              )}
             </div>
           </motion.div>
         )}
