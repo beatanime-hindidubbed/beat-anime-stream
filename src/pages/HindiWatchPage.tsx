@@ -179,8 +179,6 @@ export default function HindiWatchPage() {
   const hindiHlsSrc = selectedSource?.isHLS ? selectedSource.url : null;
   const hindiIframeSrc = selectedSource && !selectedSource.isHLS ? selectedSource.url : null;
 
-  // Download URL: pass raw HLS, downloader will race multiple APIs itself
-  const hindiDownloadUrl = hindiHlsSrc || undefined;
 
   const renderPlayer = () => {
     if (loading) {
