@@ -591,6 +591,28 @@ export default function HindiVideoPlayer({
     setSettingsPanel("main");
   };
 
+  // ── Nudge subtitle cues up on mobile so controls don't overlap ────────
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || !isMobile) return;
+    const nudgeCues = (track: TextTrack) => {
+      if (!track.cues) return;
+      for (let i = 0; i < track.cues.length; i++) {
+        const cue = track.cues[i] as VTTCue;
+        if (cue.line === "auto" || cue.line === undefined) cue.line = -4;
+      }
+    };
+    const onTrackLoad = () => {
+      for (let i = 0; i < v.textTracks.length; i++) nudgeCues(v.textTracks[i]);
+    };
+    onTrackLoad();
+    for (let i = 0; i < v.textTracks.length; i++) {
+      v.textTracks[i].addEventListener("cuechange", () => nudgeCues(v.textTracks[i]));
+    }
+    v.addEventListener("loadedmetadata", onTrackLoad);
+    return () => v.removeEventListener("loadedmetadata", onTrackLoad);
+  }, [isMobile, src, tracks]);
+
   const fmt = (s: number) => {
     if (!s || isNaN(s)) return "0:00";
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = Math.floor(s % 60);

@@ -457,3 +457,19 @@
   0%, 100% { opacity: 0; transform: scale(0.95); }
   50% { opacity: 1; transform: scale(1); }
 }
+
+/* Subtitle cue styling — nudge up on mobile so controls don't cover them */
+video::cue {
+  font-size: 1rem;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  border-radius: 2px;
+  padding: 2px 4px;
+}
+
+@media (max-width: 767px) {
+  video::cue {
+    font-size: 0.75rem;
+    line-height: 1.2;
+  }
+}
