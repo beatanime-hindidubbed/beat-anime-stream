@@ -42,6 +42,7 @@ const SIZES = ["banner", "square", "leaderboard", "skyscraper"];
 const ROLES = ["admin", "moderator", "user"] as const;
 
 const THEMES: { key: ThemeType; label: string; colors: string[]; tag?: string }[] = [
+  { key: "netflix", label: "Netflix", colors: ["#e50914", "#f5f5f5"], tag: "🎬 Netflix" },
   { key: "classic", label: "Classic", colors: ["#00e5c8", "#ff4d9e"] },
   { key: "cyberpunk", label: "Cyberpunk", colors: ["#ffff00", "#ff00ff"], tag: "Grid" },
   { key: "neon", label: "Neon", colors: ["#00ffaa", "#aa00ff"], tag: "Glow" },
@@ -65,6 +66,7 @@ const THEMES: { key: ThemeType; label: string; colors: string[]; tag?: string }[
   { key: "jade", label: "Jade", colors: ["#059669", "#16a34a"] },
   { key: "violet-storm", label: "Violet Storm", colors: ["#a855f7", "#06b6d4"], tag: "⚡" },
   { key: "golden-hour", label: "Golden Hour", colors: ["#ca8a04", "#ea580c"], tag: "☀️" },
+  { key: "custom", label: "Custom", colors: ["#888", "#ccc"], tag: "🎨 Builder" },
 ];
 
 const PLAYER_THEMES: { key: PlayerTheme; label: string; desc: string }[] = [
