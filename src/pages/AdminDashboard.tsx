@@ -207,6 +207,56 @@ export default function AdminDashboard() {
     }
   }, [tab]);
 
+  // Load stats data
+  useEffect(() => {
+    if (tab === "stats") {
+      // Comment stats
+      supabase.from("comments").select("id, created_at, is_censored", { count: "exact" }).then(({ data, count }) => {
+        const today = new Date().toISOString().split("T")[0];
+        const todayCount = data?.filter(c => c.created_at.startsWith(today)).length || 0;
+        const censoredCount = data?.filter(c => c.is_censored).length || 0;
+        setCommentStats({ total: count || 0, today: todayCount, censored: censoredCount });
+
+        // Daily comments for last 7 days
+        const days: Record<string, number> = {};
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date(); d.setDate(d.getDate() - i);
+          days[d.toISOString().split("T")[0]] = 0;
+        }
+        data?.forEach(c => { const d = c.created_at.split("T")[0]; if (days[d] !== undefined) days[d]++; });
+        const dailyComments = Object.entries(days).map(([date, count]) => ({ date: date.slice(5), count }));
+        setStatsData(prev => ({ ...prev, dailyComments }));
+      });
+
+      // Chat activity last 7 days
+      const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
+      supabase.from("chat_messages").select("created_at").gte("created_at", weekAgo.toISOString()).then(({ data }) => {
+        const days: Record<string, number> = {};
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date(); d.setDate(d.getDate() - i);
+          days[d.toISOString().split("T")[0]] = 0;
+        }
+        data?.forEach(m => { const d = m.created_at.split("T")[0]; if (days[d] !== undefined) days[d]++; });
+        const chatActivity = Object.entries(days).map(([date, messages]) => ({ date: date.slice(5), messages }));
+        setStatsData(prev => ({ ...prev, chatActivity }));
+      });
+
+      // Role distribution
+      supabase.from("user_roles").select("role").then(({ data }) => {
+        const counts: Record<string, number> = { admin: 0, moderator: 0, user: 0 };
+        data?.forEach(r => { counts[r.role] = (counts[r.role] || 0) + 1; });
+        setStatsData(prev => ({ ...prev, roleDistribution: Object.entries(counts).map(([name, value]) => ({ name, value })) }));
+      });
+    }
+  }, [tab]);
+
+  // Load comment controls
+  useEffect(() => {
+    if (tab === "comments") {
+      setCommentsDisabledAnimes(settings.commentsDisabledAnimes || []);
+    }
+  }, [tab, settings.commentsDisabledAnimes]);
+
   const loadUserRoles = async () => {
     const { data: roles } = await supabase.from("user_roles").select("*");
     if (!roles) return;
