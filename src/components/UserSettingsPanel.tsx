@@ -93,14 +93,14 @@ export default function UserSettingsPanel() {
         <Settings className="w-4 h-4" />
       </button>
 
-      {open && (
+      {open && createPortal(
         <>
           <div
-            className="fixed inset-0 z-50 bg-background/80"
+            className="fixed inset-0 z-[9998] bg-background/80"
             onClick={() => setOpen(false)}
           />
           <div
-            className="fixed right-0 top-0 bottom-0 z-[60] w-80 sm:w-96 bg-card border-l border-border overflow-y-auto"
+            className="fixed right-0 top-0 bottom-0 z-[9999] w-80 sm:w-96 bg-card border-l border-border overflow-y-auto"
           >
             <div className="p-4 border-b border-border flex items-center justify-between">
               <h2 className="font-display text-lg font-bold text-foreground flex items-center gap-2">
