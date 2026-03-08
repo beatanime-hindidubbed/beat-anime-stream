@@ -521,6 +521,8 @@ export default function AdminDashboard() {
                 ))}
               </div>
             </div>
+
+            <div className="p-6 rounded-xl bg-card border border-border">
               <h2 className="font-display text-lg font-bold text-foreground mb-4 flex items-center gap-2">
                 <Type className="w-5 h-5" /> Site Identity
               </h2>
