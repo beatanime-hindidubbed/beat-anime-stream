@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
+import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { sanitizeMessage, containsProfanity } from "@/lib/profanityFilter";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Trash2, Flag, MessageSquare, Shield, Loader2, Reply, ChevronDown } from "lucide-react";
+import { Send, Trash2, Flag, MessageSquare, Shield, Loader2, Reply, ChevronDown, MessageCircleOff } from "lucide-react";
 
 interface Comment {
   id: string;
