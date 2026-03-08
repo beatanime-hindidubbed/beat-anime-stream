@@ -170,6 +170,9 @@ export default function AdminDashboard() {
     chatActivity: { date: string; messages: number }[];
   }>({ dailyComments: [], roleDistribution: [], apiResponseTimes: [], chatActivity: [] });
 
+  // Censor alert
+  const [censorAlert, setCensorAlert] = useState<{ count: number; total: number; rate: number; timestamp: string; samples: any[] } | null>(null);
+
   useEffect(() => {
     setBrandName(settings.siteName); setBrandIcon(settings.siteIcon);
     setTgChannel(settings.telegramChannel); setTgGroup(settings.telegramGroup);
@@ -250,6 +253,16 @@ export default function AdminDashboard() {
         data?.forEach(r => { counts[r.role] = (counts[r.role] || 0) + 1; });
         setStatsData(prev => ({ ...prev, roleDistribution: Object.entries(counts).map(([name, value]) => ({ name, value })) }));
       });
+
+      // Fetch censor alert from site_settings
+      supabase.from("site_settings").select("value").eq("key", "last_censor_alert").single().then(({ data }) => {
+        if (data?.value && typeof data.value === "object") {
+          setCensorAlert(data.value as any);
+        }
+      });
+
+      // Trigger censor check via edge function
+      supabase.functions.invoke("comment-notify", { body: { type: "censored_check" } }).catch(() => {});
     }
   }, [tab]);
 
@@ -528,7 +541,34 @@ export default function AdminDashboard() {
               ))}
             </div>
 
-            {/* Charts row */}
+            {/* Censor Alert Banner */}
+            {censorAlert && (
+              <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/30 flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-sm font-bold text-destructive">⚠️ Censor Spike Detected</h3>
+                  <p className="text-xs text-destructive/80 mt-1">
+                    {censorAlert.count} censored comments ({censorAlert.rate}% rate) out of {censorAlert.total} total in last hour
+                  </p>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Last alert: {new Date(censorAlert.timestamp).toLocaleString()}
+                  </p>
+                  {censorAlert.samples?.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      <p className="text-[10px] font-medium text-destructive/70">Recent samples:</p>
+                      {censorAlert.samples.map((s: any, i: number) => (
+                        <div key={i} className="text-[10px] px-2 py-1 rounded bg-destructive/5 text-muted-foreground truncate">
+                          "{s.content}" — {s.anime_id} / {s.episode_id}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button onClick={() => setCensorAlert(null)} className="p-1 rounded hover:bg-destructive/20 flex-shrink-0">
+                  <XCircle className="w-4 h-4 text-destructive/60" />
+                </button>
+              </div>
+            )}
             <div className="grid gap-4 md:grid-cols-2">
               {/* Comments over 7 days */}
               <div className="p-4 sm:p-5 rounded-xl bg-card border border-border">
@@ -631,7 +671,7 @@ export default function AdminDashboard() {
                   <button
                     key={theme.key}
                     onClick={() => updateSettings({ theme: theme.key })}
-                    className={`p-4 rounded-xl border-2 transition-all relative ${
+                    className={`group/theme p-4 rounded-xl border-2 transition-all relative ${
                       settings.theme === theme.key ? "border-primary scale-105 shadow-[0_0_20px_hsl(var(--primary)/0.2)]" : "border-border hover:border-primary/40"
                     }`}
                   >
@@ -649,6 +689,23 @@ export default function AdminDashboard() {
                     {settings.theme === theme.key && (
                       <p className="text-xs text-primary mt-0.5">Active</p>
                     )}
+                    {/* Theme preview tooltip */}
+                    <div className="absolute z-20 bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/theme:block pointer-events-none">
+                      <div className="w-40 rounded-lg overflow-hidden border border-border shadow-xl">
+                        <div className="h-16 relative" style={{
+                          background: `linear-gradient(135deg, ${theme.colors[0]}, ${theme.colors[1] || theme.colors[0]})`,
+                        }}>
+                          <div className="absolute bottom-1 left-1 right-1 flex gap-0.5">
+                            {theme.colors.map((c, i) => (
+                              <div key={i} className="flex-1 h-1 rounded-full" style={{ background: c }} />
+                            ))}
+                          </div>
+                        </div>
+                        <div className="px-2 py-1.5 bg-card text-[9px] text-center text-muted-foreground">
+                          {theme.label} Theme
+                        </div>
+                      </div>
+                    </div>
                   </button>
                 ))}
               </div>
