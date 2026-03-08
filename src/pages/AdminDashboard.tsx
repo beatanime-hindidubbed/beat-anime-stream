@@ -611,6 +611,8 @@ export default function AdminDashboard() {
                   { key: "diyas" as ParticleEffect, label: "Diyas", emoji: "🪔", desc: "Diwali oil lamps" },
                   { key: "colors" as ParticleEffect, label: "Colors", emoji: "🎨", desc: "Holi color splash" },
                   { key: "tricolor" as ParticleEffect, label: "Tricolor", emoji: "🇮🇳", desc: "Independence Day" },
+                  { key: "lanterns" as ParticleEffect, label: "Lanterns", emoji: "🏮", desc: "Japanese festival lanterns" },
+                  { key: "fireflies" as ParticleEffect, label: "Fireflies", emoji: "✨", desc: "Zen garden fireflies" },
                 ] as const).map(p => (
                   <button key={p.key} onClick={async () => { await updateSettings({ particleEffect: p.key }); await logAction("particle_effect", p.key); }}
                     className={`p-4 rounded-xl border-2 text-left transition-all ${
