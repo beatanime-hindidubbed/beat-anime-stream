@@ -30,6 +30,7 @@ const RATE_LIMIT_SECONDS = 15;
 
 export default function CommentSection({ episodeId, animeId }: Props) {
   const { user, isAdmin } = useSupabaseAuth();
+  const { settings } = useSiteSettings();
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState("");
   const [replyTo, setReplyTo] = useState<string | null>(null);
@@ -38,6 +39,18 @@ export default function CommentSection({ episodeId, animeId }: Props) {
   const [error, setError] = useState("");
   const [showAll, setShowAll] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Check if comments are disabled
+  const isDisabled = !settings.commentsEnabled || (settings.commentsDisabledAnimes || []).includes(animeId);
+
+  if (isDisabled) {
+    return (
+      <div className="mt-6 sm:mt-8 p-6 rounded-xl bg-card border border-border text-center">
+        <MessageCircleOff className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+        <p className="text-sm text-muted-foreground">Comments are disabled for this content.</p>
+      </div>
+    );
+  }
 
   const loadComments = useCallback(async () => {
     const { data } = await supabase
