@@ -102,6 +102,8 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     await supabase.auth.signOut();
+    // Force full page reload to clear all cached state
+    window.location.reload();
   }, []);
 
   return (

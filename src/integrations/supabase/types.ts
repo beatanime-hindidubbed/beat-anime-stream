@@ -237,6 +237,45 @@ export type Database = {
           },
         ]
       }
+      continue_watching: {
+        Row: {
+          anime_id: string
+          anime_name: string
+          duration: number
+          episode_id: string
+          episode_number: number
+          id: string
+          poster: string | null
+          progress: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          anime_id: string
+          anime_name: string
+          duration?: number
+          episode_id: string
+          episode_number?: number
+          id?: string
+          poster?: string | null
+          progress?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          anime_id?: string
+          anime_name?: string
+          duration?: number
+          episode_id?: string
+          episode_number?: number
+          id?: string
+          poster?: string | null
+          progress?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       premium_codes: {
         Row: {
           code: string

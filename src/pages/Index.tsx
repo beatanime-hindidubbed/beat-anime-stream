@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { store, ContinueWatchingItem } from "@/lib/store";
+import { store, ContinueWatchingItem, mergeCloudWatchHistory } from "@/lib/store";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import AnimeCard from "@/components/AnimeCard";
 import AnimeSection from "@/components/AnimeSection";
@@ -22,7 +22,14 @@ export default function Index() {
   const [continueWatching, setContinueWatching] = useState<ContinueWatchingItem[]>([]);
 
   useEffect(() => {
-    if (user) setContinueWatching(store.getContinueWatching());
+    if (user) {
+      // Merge cloud history then load
+      mergeCloudWatchHistory().finally(() => {
+        setContinueWatching(store.getContinueWatching());
+      });
+    } else {
+      setContinueWatching([]);
+    }
   }, [user]);
 
   const removeCW = (id: string) => {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Settings, X, Monitor, Volume2, VolumeX, SkipForward, Subtitles, Crown, Send, Moon, Sun } from "lucide-react";
+import { Settings, X, Monitor, Volume2, VolumeX, SkipForward, Subtitles, Crown, Send, Moon, Sun, Cloud, CloudOff, Trash2, History, Gauge } from "lucide-react";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { useIsPremium } from "@/hooks/useIsPremium";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
@@ -14,17 +14,23 @@ interface UserPrefs {
   volume: number;
   reducedMotion: boolean;
   compactCards: boolean;
+  cloudSync: boolean;
+  pipOnScroll: boolean;
+  bufferSize: "normal" | "high" | "max";
 }
 
 const DEFAULTS: UserPrefs = {
   autoplay: true,
   autoNext: true,
   defaultQuality: "auto",
-  defaultLanguage: "sub",
+  defaultLanguage: "dub",
   subtitleSize: "medium",
   volume: 100,
   reducedMotion: false,
   compactCards: false,
+  cloudSync: true,
+  pipOnScroll: true,
+  bufferSize: "max",
 };
 
 function getPrefs(): UserPrefs {
@@ -51,6 +57,10 @@ export default function UserSettingsPanel() {
     const next = { ...prefs, ...partial };
     setPrefs(next);
     savePrefs(next);
+  };
+
+  const clearContinueWatching = () => {
+    localStorage.setItem("beat_continue", JSON.stringify([]));
   };
 
   const tgGroup = settings.telegramGroup || "https://t.me/beat_discussion_group";
@@ -105,7 +115,7 @@ export default function UserSettingsPanel() {
                       <p className="text-xs text-muted-foreground">
                         {isLoggedIn
                           ? "Get ad-free streaming, no watermarks, bulk downloads & more!"
-                          : "You can still use local playback settings. Sign in to sync settings across devices."}
+                          : "Sign in to sync watch history across devices."}
                       </p>
                       <a
                         href={tgGroup}
@@ -123,6 +133,7 @@ export default function UserSettingsPanel() {
                 <Section title="Playback" icon={<Monitor className="w-4 h-4" />}>
                   <Toggle label="Autoplay videos" checked={prefs.autoplay} onChange={(v) => update({ autoplay: v })} />
                   <Toggle label="Auto-next episode" checked={prefs.autoNext} onChange={(v) => update({ autoNext: v })} />
+                  <Toggle label="PiP on scroll" checked={prefs.pipOnScroll} onChange={(v) => update({ pipOnScroll: v })} />
 
                   <Select
                     label="Default quality"
@@ -141,11 +152,22 @@ export default function UserSettingsPanel() {
                     label="Default language"
                     value={prefs.defaultLanguage}
                     options={[
-                      { value: "sub", label: "English (Sub)" },
                       { value: "dub", label: "Hindi (Dub)" },
+                      { value: "sub", label: "English (Sub)" },
                       { value: "raw", label: "Japanese (Raw)" },
                     ]}
                     onChange={(v) => update({ defaultLanguage: v as any })}
+                  />
+
+                  <Select
+                    label="Buffer size"
+                    value={prefs.bufferSize}
+                    options={[
+                      { value: "normal", label: "Normal (20s)" },
+                      { value: "high", label: "High (1min)" },
+                      { value: "max", label: "Max (3min)" },
+                    ]}
+                    onChange={(v) => update({ bufferSize: v as any })}
                   />
 
                   <div className="flex items-center justify-between">
@@ -179,6 +201,30 @@ export default function UserSettingsPanel() {
                     ]}
                     onChange={(v) => update({ subtitleSize: v as any })}
                   />
+                </Section>
+
+                {/* Streaming & Sync */}
+                <Section title="Streaming" icon={<Cloud className="w-4 h-4" />}>
+                  <Toggle
+                    label="Cloud sync watch history"
+                    checked={prefs.cloudSync}
+                    onChange={(v) => update({ cloudSync: v })}
+                  />
+                  <p className="text-[11px] text-muted-foreground -mt-1">
+                    {prefs.cloudSync
+                      ? "Your watch progress syncs across all devices when logged in."
+                      : "Watch history stays on this device only."}
+                  </p>
+
+                  <button
+                    onClick={() => {
+                      clearContinueWatching();
+                      alert("Continue watching history cleared!");
+                    }}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-destructive/10 text-destructive text-sm hover:bg-destructive/20 transition-colors w-full"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Clear Watch History
+                  </button>
                 </Section>
 
                 {/* Interface */}
