@@ -203,8 +203,8 @@ export default function Navbar() {
             </a>
           )}
 
-          {/* User Settings — only for logged-in users */}
-          {user && <UserSettingsPanel />}
+          {/* User Settings */}
+          <UserSettingsPanel />
 
           {user ? (
             <div className="relative">
