@@ -17,7 +17,7 @@ interface Ad {
 }
 
 interface UserRole {
-  id: string; user_id: string; role: string; username?: string;
+  id: string; user_id: string; role: string; username?: string; premium_until?: string;
 }
 
 interface PremiumCode {
