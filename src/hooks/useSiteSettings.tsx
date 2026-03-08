@@ -57,6 +57,8 @@ export interface SiteSettings {
   telegramGroup: string;
   hiddenAnimes: string[];
   bannedAnimes: string[];
+  commentsEnabled: boolean;
+  commentsDisabledAnimes: string[];
   failCountThreshold: number;
   apiEndpoints: string[];
 }
@@ -85,6 +87,8 @@ const DEFAULTS: SiteSettings = {
   telegramGroup: "https://t.me/beat_discussion_group",
   hiddenAnimes: [],
   bannedAnimes: [],
+  commentsEnabled: true,
+  commentsDisabledAnimes: [],
   failCountThreshold: 5,
   apiEndpoints: ["https://beat-anime-api.onrender.com/api/v1"],
 };
