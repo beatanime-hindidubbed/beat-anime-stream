@@ -8,10 +8,14 @@ export type ThemeType =
   | "anime-dark" | "anime-pastel" | "anime-retro" | "dragon" | "galaxy"
   | "bloodmoon" | "phantom" | "jade" | "violet-storm" | "golden-hour";
 
+export type PlayerTheme = "default" | "minimal" | "cinema" | "retro" | "glassmorphism";
+
 export interface SiteSettings {
   siteName: string;
   siteIcon: string;
   theme: ThemeType;
+  playerTheme: PlayerTheme;
+  faviconUrl: string;
   errorGif: string;
   loadingGif: string;
   dmcaContent: string;
@@ -20,6 +24,7 @@ export interface SiteSettings {
   telegramChannel: string;
   telegramGroup: string;
   hiddenAnimes: string[];
+  bannedAnimes: string[];
   failCountThreshold: number;
   apiEndpoints: string[];
 }
@@ -28,6 +33,8 @@ const DEFAULTS: SiteSettings = {
   siteName: "Beat Anistream",
   siteIcon: "B",
   theme: "classic",
+  playerTheme: "default",
+  faviconUrl: "",
   errorGif: "",
   loadingGif: "",
   dmcaContent:
@@ -39,6 +46,7 @@ const DEFAULTS: SiteSettings = {
   telegramChannel: "https://t.me/beatanime",
   telegramGroup: "https://t.me/beat_discussion_group",
   hiddenAnimes: [],
+  bannedAnimes: [],
   failCountThreshold: 5,
   apiEndpoints: ["https://beat-anime-api.onrender.com/api/v1"],
 };
@@ -75,6 +83,19 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     applyTheme(settings.theme);
   }, [settings.theme]);
+
+  // Apply favicon dynamically
+  useEffect(() => {
+    if (settings.faviconUrl) {
+      let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
+      if (!link) {
+        link = document.createElement("link");
+        link.rel = "icon";
+        document.head.appendChild(link);
+      }
+      link.href = settings.faviconUrl;
+    }
+  }, [settings.faviconUrl]);
 
   const updateSettings = useCallback(
     async (partial: Partial<SiteSettings>) => {
@@ -117,8 +138,10 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
   );
 
   const isHidden = useCallback(
-    (animeId: string) => (settings.hiddenAnimes || []).includes(animeId),
-    [settings.hiddenAnimes]
+    (animeId: string) =>
+      (settings.hiddenAnimes || []).includes(animeId) ||
+      (settings.bannedAnimes || []).includes(animeId),
+    [settings.hiddenAnimes, settings.bannedAnimes]
   );
 
   return (

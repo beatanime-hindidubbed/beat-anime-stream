@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
-import { Search, Menu, X, User, LogOut, BookmarkPlus, Send } from "lucide-react";
+import { Search, Menu, X, User, LogOut, BookmarkPlus, Send, Mic, MicOff } from "lucide-react";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { api, AnimeItem } from "@/lib/api";
@@ -17,6 +17,34 @@ export default function Navbar() {
   const navigate = useNavigate();
   const searchRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const [listening, setListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
+
+  // Voice search
+  const startVoice = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setQuery(transcript);
+      navigate(`/search?q=${encodeURIComponent(transcript)}`);
+      setListening(false);
+    };
+    recognition.onerror = () => setListening(false);
+    recognition.onend = () => setListening(false);
+    recognition.start();
+    setListening(true);
+    recognitionRef.current = recognition;
+  };
+
+  const stopVoice = () => {
+    recognitionRef.current?.stop();
+    setListening(false);
+  };
 
   const displayName = user?.user_metadata?.username || user?.email?.split("@")[0] || "User";
 
@@ -92,7 +120,7 @@ export default function Navbar() {
         {/* Search */}
         <div ref={searchRef} className="relative hidden sm:block flex-1 max-w-sm">
           <form onSubmit={submitSearch}>
-            <div className="relative">
+            <div className="relative flex items-center">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
                 type="text"
@@ -100,8 +128,18 @@ export default function Navbar() {
                 value={query}
                 onChange={(e) => handleSearch(e.target.value)}
                 onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-                className="w-full h-9 pl-9 pr-4 rounded-lg bg-secondary text-sm text-foreground placeholder:text-muted-foreground border border-border focus:outline-none focus:ring-1 focus:ring-primary font-body"
+                className="w-full h-9 pl-9 pr-10 rounded-lg bg-secondary text-sm text-foreground placeholder:text-muted-foreground border border-border focus:outline-none focus:ring-1 focus:ring-primary font-body"
               />
+              <button
+                type="button"
+                onClick={listening ? stopVoice : startVoice}
+                className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md transition-colors ${
+                  listening ? "text-destructive animate-pulse" : "text-muted-foreground hover:text-primary"
+                }`}
+                title={listening ? "Stop listening" : "Voice search"}
+              >
+                {listening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              </button>
             </div>
           </form>
           <AnimatePresence>

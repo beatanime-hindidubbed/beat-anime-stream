@@ -1,14 +1,15 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
-import { useSiteSettings, ThemeType } from "@/hooks/useSiteSettings";
+import { useSiteSettings, ThemeType, PlayerTheme } from "@/hooks/useSiteSettings";
 import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
 import {
   BarChart3, Image, Activity, LogOut, Plus, Trash2,
   ToggleLeft, ToggleRight, Save, Loader2, CheckCircle, XCircle, Globe,
   Users, Shield, UserPlus, UserMinus, Palette, Type, FileText,
-  Crown, Copy, Clock, Zap, Server, RefreshCw, MessageCircle, Ban, VolumeX, Trash2 as Trash2Icon, AlertTriangle
+  Crown, Copy, Clock, Zap, Server, RefreshCw, MessageCircle, Ban, VolumeX,
+  AlertTriangle, MonitorPlay, Link2, ScrollText, EyeOff
 } from "lucide-react";
 
 interface Ad {
@@ -66,7 +67,15 @@ const THEMES: { key: ThemeType; label: string; colors: string[]; tag?: string }[
   { key: "golden-hour", label: "Golden Hour", colors: ["#ca8a04", "#ea580c"], tag: "☀️" },
 ];
 
-type TabKey = "stats" | "branding" | "ads" | "api" | "users" | "policy" | "premium" | "chat";
+const PLAYER_THEMES: { key: PlayerTheme; label: string; desc: string }[] = [
+  { key: "default", label: "Default", desc: "Standard controls with red accent" },
+  { key: "minimal", label: "Minimal", desc: "Clean, thin controls, auto-hide" },
+  { key: "cinema", label: "Cinema", desc: "Dark overlay, large play button" },
+  { key: "retro", label: "Retro", desc: "VHS style with scan lines" },
+  { key: "glassmorphism", label: "Glass", desc: "Frosted glass controls" },
+];
+
+type TabKey = "stats" | "branding" | "ads" | "api" | "users" | "policy" | "premium" | "chat" | "player" | "banlist" | "logs";
 
 export default function AdminDashboard() {
   const { user, isAdmin, loading: authLoading, logout } = useSupabaseAuth();
@@ -109,6 +118,12 @@ export default function AdminDashboard() {
   const [chatBans, setChatBans] = useState<any[]>([]);
   const [chatReports, setChatReports] = useState<any[]>([]);
 
+  // Extra features
+  const [faviconUrl, setFaviconUrl] = useState(settings.faviconUrl || "");
+  const [bannedAnimes, setBannedAnimes] = useState<string[]>(settings.bannedAnimes || []);
+  const [newBanId, setNewBanId] = useState("");
+  const [adminLogs, setAdminLogs] = useState<any[]>([]);
+
   useEffect(() => {
     setBrandName(settings.siteName); setBrandIcon(settings.siteIcon);
     setTgChannel(settings.telegramChannel); setTgGroup(settings.telegramGroup);
@@ -116,6 +131,8 @@ export default function AdminDashboard() {
     setDmca(settings.dmcaContent); setPrivacy(settings.privacyContent);
     setTerms(settings.termsContent);
     setApiEndpoints(settings.apiEndpoints || ["https://beat-anime-api.onrender.com/api/v1"]);
+    setFaviconUrl(settings.faviconUrl || "");
+    setBannedAnimes(settings.bannedAnimes || []);
   }, [settings]);
 
   useEffect(() => {
@@ -136,6 +153,12 @@ export default function AdminDashboard() {
         .then(({ data }) => { if (data) setChatMessages(data); });
       supabase.from("chat_bans").select("*").order("created_at", { ascending: false })
         .then(({ data }) => { if (data) setChatBans(data); });
+    }
+  }, [tab]);
+  useEffect(() => {
+    if (tab === "logs") {
+      supabase.from("admin_logs").select("*").order("created_at", { ascending: false }).limit(100)
+        .then(({ data }) => { if (data) setAdminLogs(data); });
     }
   }, [tab]);
 
@@ -283,13 +306,44 @@ export default function AdminDashboard() {
   const tabs = [
     { key: "stats" as const, label: "Stats", icon: BarChart3 },
     { key: "branding" as const, label: "Branding", icon: Palette },
+    { key: "player" as const, label: "Player", icon: MonitorPlay },
     { key: "premium" as const, label: "Premium", icon: Crown },
     { key: "chat" as const, label: "Chat", icon: MessageCircle },
+    { key: "banlist" as const, label: "Ban List", icon: EyeOff },
     { key: "policy" as const, label: "Policies", icon: FileText },
     { key: "ads" as const, label: "Ads", icon: Image },
     { key: "users" as const, label: "Users", icon: Users },
     { key: "api" as const, label: "API", icon: Activity },
+    { key: "logs" as const, label: "Logs", icon: ScrollText },
   ];
+
+  const logAction = async (action: string, details?: string, targetId?: string) => {
+    if (!user) return;
+    await supabase.from("admin_logs").insert({ admin_id: user.id, action, details, target_id: targetId });
+  };
+
+  const saveFavicon = async () => {
+    setSaving(true);
+    await updateSettings({ faviconUrl });
+    await logAction("update_favicon", faviconUrl);
+    setSaving(false); setBrandingSaved(true); setTimeout(() => setBrandingSaved(false), 2000);
+  };
+
+  const addBannedAnime = async () => {
+    if (!newBanId.trim()) return;
+    const next = [...bannedAnimes, newBanId.trim()];
+    setBannedAnimes(next);
+    await updateSettings({ bannedAnimes: next });
+    await logAction("ban_anime", newBanId.trim());
+    setNewBanId("");
+  };
+
+  const removeBannedAnime = async (id: string) => {
+    const next = bannedAnimes.filter(a => a !== id);
+    setBannedAnimes(next);
+    await updateSettings({ bannedAnimes: next });
+    await logAction("unban_anime", id);
+  };
 
 
 
@@ -824,6 +878,104 @@ export default function AdminDashboard() {
                         </div>
                       );
                     })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── Player Theme ── */}
+        {tab === "player" && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+            <div className="p-6 rounded-xl bg-card border border-border">
+              <h2 className="font-display text-lg font-bold text-foreground mb-4 flex items-center gap-2">
+                <MonitorPlay className="w-5 h-5 text-primary" /> Video Player Theme
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {PLAYER_THEMES.map(pt => (
+                  <button key={pt.key} onClick={() => updateSettings({ playerTheme: pt.key })}
+                    className={`p-4 rounded-xl border-2 text-left transition-all ${settings.playerTheme === pt.key ? "border-primary shadow-[0_0_15px_hsl(var(--primary)/0.2)]" : "border-border hover:border-primary/40"}`}>
+                    <p className="text-sm font-bold text-foreground">{pt.label}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{pt.desc}</p>
+                    {settings.playerTheme === pt.key && <p className="text-xs text-primary mt-1">Active</p>}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="p-6 rounded-xl bg-card border border-border">
+              <h2 className="font-display text-base font-bold text-foreground mb-3 flex items-center gap-2">
+                <Link2 className="w-4 h-4 text-primary" /> Favicon URL
+              </h2>
+              <p className="text-xs text-muted-foreground mb-3">Enter a .ico or .png URL for your site favicon</p>
+              <div className="flex gap-2">
+                <input value={faviconUrl} onChange={e => setFaviconUrl(e.target.value)} placeholder="https://example.com/favicon.ico"
+                  className="flex-1 h-9 px-3 rounded-lg bg-secondary text-foreground text-sm border border-border focus:ring-1 focus:ring-primary focus:outline-none font-mono text-xs" />
+                <button onClick={saveFavicon} disabled={saving}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50">
+                  <Save className="w-4 h-4" /> Save
+                </button>
+              </div>
+              {faviconUrl && <img src={faviconUrl} alt="favicon preview" className="w-8 h-8 mt-3 rounded" onError={(e) => (e.currentTarget.style.display = "none")} />}
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── Anime Ban List ── */}
+        {tab === "banlist" && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+            <div className="p-6 rounded-xl bg-card border border-border">
+              <h2 className="font-display text-lg font-bold text-foreground mb-4 flex items-center gap-2">
+                <EyeOff className="w-5 h-5 text-destructive" /> Anime Ban List
+              </h2>
+              <p className="text-xs text-muted-foreground mb-4">Banned anime IDs will be hidden from all pages and search results.</p>
+              <div className="flex gap-2 mb-4">
+                <input value={newBanId} onChange={e => setNewBanId(e.target.value)} placeholder="anime-slug-id (e.g. one-piece-100)"
+                  className="flex-1 h-9 px-3 rounded-lg bg-secondary text-foreground text-sm border border-border focus:ring-1 focus:ring-primary focus:outline-none font-mono text-xs" />
+                <button onClick={addBannedAnime}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-destructive text-destructive-foreground text-sm font-medium">
+                  <Plus className="w-4 h-4" /> Ban
+                </button>
+              </div>
+              <div className="space-y-2">
+                {bannedAnimes.length === 0 && <p className="text-sm text-muted-foreground">No banned anime.</p>}
+                {bannedAnimes.map(id => (
+                  <div key={id} className="flex items-center justify-between p-3 rounded-lg bg-secondary">
+                    <span className="text-sm font-mono text-foreground">{id}</span>
+                    <button onClick={() => removeBannedAnime(id)} className="px-2 py-1 rounded text-xs bg-accent text-accent-foreground hover:opacity-80">Unban</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── Logs ── */}
+        {tab === "logs" && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-display text-lg font-bold text-foreground flex items-center gap-2">
+                <ScrollText className="w-5 h-5 text-primary" /> Admin Audit Logs
+              </h2>
+              <button onClick={() => supabase.from("admin_logs").select("*").order("created_at", { ascending: false }).limit(100).then(({ data }) => { if (data) setAdminLogs(data); })}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm">
+                <RefreshCw className="w-4 h-4" /> Refresh
+              </button>
+            </div>
+            <div className="space-y-2">
+              {adminLogs.length === 0 && <p className="text-center text-muted-foreground py-12">No logs yet. Actions like banning anime, changing settings, and moderation are logged here.</p>}
+              {adminLogs.map((log: any) => (
+                <div key={log.id} className="flex items-start gap-3 p-3 rounded-xl bg-card border border-border">
+                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <Shield className="w-4 h-4 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium text-foreground">{log.action}</span>
+                      <span className="text-[10px] text-muted-foreground">{new Date(log.created_at).toLocaleString()}</span>
+                    </div>
+                    {log.details && <p className="text-xs text-muted-foreground mt-0.5">{log.details}</p>}
+                    {log.target_id && <p className="text-[10px] font-mono text-muted-foreground/60">{log.target_id}</p>}
                   </div>
                 </div>
               ))}
