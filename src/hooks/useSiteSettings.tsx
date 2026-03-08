@@ -112,21 +112,25 @@ const Ctx = createContext<SiteSettingsCtx>({
 export function SiteSettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<SiteSettings>(DEFAULTS);
   const [currentFestival, setCurrentFestival] = useState<DetectedFestival | null>(null);
+  const [dbLoaded, setDbLoaded] = useState(false);
 
   useEffect(() => {
     supabase
       .from("site_settings")
       .select("*")
       .then(({ data, error }) => {
-        if (error || !data?.length) return;
-        const map: Record<string, any> = {};
-        data.forEach((row) => { map[row.key] = row.value; });
-        setSettings((prev) => ({ ...prev, ...map }));
+        if (!error && data?.length) {
+          const map: Record<string, any> = {};
+          data.forEach((row) => { map[row.key] = row.value; });
+          setSettings((prev) => ({ ...prev, ...map }));
+        }
+        setDbLoaded(true);
       });
   }, []);
 
-  // Auto-festival detection
+  // Auto-festival detection — only after DB settings are loaded
   useEffect(() => {
+    if (!dbLoaded) return;
     try {
       const festival = detectCurrentFestival();
       setCurrentFestival(festival);
@@ -143,7 +147,7 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       console.warn("Festival detection failed:", e);
     }
-  }, [settings.autoFestival]);
+  }, [dbLoaded, settings.autoFestival]);
 
   useEffect(() => {
     applyTheme(settings.theme, settings.customThemeColors);
