@@ -481,9 +481,9 @@ export default function VideoPlayer({
   const togglePlay = () => {
     const v = videoRef.current;
     if (!v) return;
-    if (v.paused) { v.play(); setPlaying(true); flashCenter("play"); }
-    else          { v.pause(); setPlaying(false); flashCenter("pause"); }
-    flashWatermark(); // ← C. Added
+    if (v.paused) { wasPlayingRef.current = true; v.play(); setPlaying(true); flashCenter("play"); }
+    else          { wasPlayingRef.current = false; v.pause(); setPlaying(false); flashCenter("pause"); }
+    flashWatermark();
   };
 
   const toggleMute = () => {
