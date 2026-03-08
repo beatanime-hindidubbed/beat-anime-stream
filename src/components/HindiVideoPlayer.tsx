@@ -144,6 +144,56 @@ export default function HindiVideoPlayer({
   // iframeSrc with no src = iframe mode
   const isIframe = !!iframeSrc && !src;
 
+  // ── Audio boost via Web Audio API ─────────────────────────────────────
+  useEffect(() => {
+    if (isIframe) return;
+    const v = videoRef.current;
+    if (!v) return;
+    if (audioBoost <= 1) {
+      if (gainNodeRef.current) gainNodeRef.current.gain.value = 1;
+      return;
+    }
+    if (!audioCtxRef.current) {
+      const ctx = new AudioContext();
+      const source = ctx.createMediaElementSource(v);
+      const gain = ctx.createGain();
+      source.connect(gain);
+      gain.connect(ctx.destination);
+      audioCtxRef.current = ctx;
+      gainNodeRef.current = gain;
+      audioSourceRef.current = source;
+    }
+    if (gainNodeRef.current) gainNodeRef.current.gain.value = audioBoost;
+  }, [audioBoost, isIframe]);
+
+  // ── A-B Loop ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (isIframe) return;
+    const v = videoRef.current;
+    if (!v || abLoop.a === null || abLoop.b === null) return;
+    const check = () => {
+      if (v.currentTime >= abLoop.b!) v.currentTime = abLoop.a!;
+    };
+    v.addEventListener("timeupdate", check);
+    return () => v.removeEventListener("timeupdate", check);
+  }, [abLoop, isIframe]);
+
+  // Screenshot function
+  const takeScreenshot = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = v.videoWidth;
+    canvas.height = v.videoHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(v, 0, 0);
+    const link = document.createElement("a");
+    link.download = `screenshot_hindi_${Math.floor(v.currentTime)}s.png`;
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+  };
+
   useEffect(() => {
     const check = () => setIsMobile(window.matchMedia("(max-width: 768px), (pointer: coarse)").matches);
     check();
