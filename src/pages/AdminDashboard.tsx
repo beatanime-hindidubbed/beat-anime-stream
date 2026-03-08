@@ -129,8 +129,8 @@ export default function AdminDashboard() {
     if (!roles) return;
     const enriched: UserRole[] = [];
     for (const r of roles) {
-      const { data: profile } = await supabase.from("profiles").select("username").eq("user_id", r.user_id).single();
-      enriched.push({ ...r, username: profile?.username || "Unknown" });
+      const { data: profile } = await supabase.from("profiles").select("username, premium_until").eq("user_id", r.user_id).single();
+      enriched.push({ ...r, username: profile?.username || "Unknown", premium_until: (profile as any)?.premium_until || null });
     }
     setUserRoles(enriched);
   };
