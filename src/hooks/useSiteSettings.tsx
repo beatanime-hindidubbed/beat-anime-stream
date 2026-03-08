@@ -14,6 +14,18 @@ export type PlayerTheme = "default" | "minimal" | "cinema" | "retro" | "glassmor
 
 export type FontStyle = "default" | "elegant" | "playful" | "monospace" | "cinematic";
 
+export type TextEffect = "none" | "neon-glow" | "typewriter" | "gradient-wave" | "neon-pulse";
+
+export type ParticleEffect = "none" | "stars" | "sakura" | "snow" | "diyas" | "colors" | "tricolor";
+
+export interface SandboxLink {
+  id: string;
+  url: string;
+  label: string;
+  countdown: number;
+  isActive: boolean;
+}
+
 export interface CustomThemeColors {
   primary: string;
   accent: string;
