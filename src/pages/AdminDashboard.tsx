@@ -646,14 +646,14 @@ export default function AdminDashboard() {
 
             {/* Role distribution + Admin permissions */}
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="p-4 sm:p-5 rounded-xl bg-card border border-border">
+              <div className="glass-card rounded-xl p-4 sm:p-5">
                 <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
                   <Users className="w-4 h-4 text-primary" /> Role Distribution
                 </h3>
                 <div className="h-48 sm:h-56">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={statsData.roleDistribution} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={({ name, value }) => `${name}: ${value}`}>
+                      <Pie data={statsData.roleDistribution} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} innerRadius={35} label={({ name, value }) => `${name}: ${value}`}>
                         {statsData.roleDistribution.map((_, i) => (
                           <Cell key={i} fill={["hsl(var(--accent))", "hsl(var(--primary))", "hsl(var(--muted-foreground))"][i % 3]} />
                         ))}
