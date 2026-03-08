@@ -53,6 +53,86 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_bans: {
+        Row: {
+          ban_type: string
+          banned_by: string
+          created_at: string
+          expires_at: string | null
+          id: string
+          reason: string | null
+          user_id: string
+        }
+        Insert: {
+          ban_type?: string
+          banned_by: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          reason?: string | null
+          user_id: string
+        }
+        Update: {
+          ban_type?: string
+          banned_by?: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          reason?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      chat_messages: {
+        Row: {
+          avatar_url: string | null
+          content: string
+          created_at: string
+          id: string
+          image_url: string | null
+          is_deleted: boolean
+          recipient_id: string | null
+          reply_to: string | null
+          type: string
+          user_id: string
+          username: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          content: string
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          is_deleted?: boolean
+          recipient_id?: string | null
+          reply_to?: string | null
+          type?: string
+          user_id: string
+          username?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          content?: string
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          is_deleted?: boolean
+          recipient_id?: string | null
+          reply_to?: string | null
+          type?: string
+          user_id?: string
+          username?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_reply_to_fkey"
+            columns: ["reply_to"]
+            isOneToOne: false
+            referencedRelation: "chat_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       premium_codes: {
         Row: {
           code: string
