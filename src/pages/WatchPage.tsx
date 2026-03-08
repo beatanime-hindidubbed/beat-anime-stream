@@ -634,7 +634,7 @@ export default function WatchPage() {
           </div>
         ) : category !== "dub" ? (
           <div className="flex items-center gap-1 border border-border rounded-lg p-0.5">
-            {HIANIME_SERVERS.map((srv) => (
+            {(["hd-1", "hd-2"] as const).map((srv, i) => (
               <button
                 key={srv}
                 onClick={() => { setSelectedServer(srv); setRetryKey((k) => k + 1); }}
@@ -642,7 +642,7 @@ export default function WatchPage() {
                   selectedServer === srv ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {srv.toUpperCase()}
+                Server {i + 1}
               </button>
             ))}
           </div>
