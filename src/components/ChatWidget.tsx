@@ -266,6 +266,7 @@ export default function ChatWidget() {
   };
 
   if (!user) return null;
+  if (!settings.chatEnabled && !isAdmin) return null;
 
   return (
     <>
