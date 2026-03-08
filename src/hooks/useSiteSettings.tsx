@@ -127,18 +127,21 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
 
   // Auto-festival detection
   useEffect(() => {
-    const festival = detectCurrentFestival();
-    setCurrentFestival(festival);
-    if (festival && settings.autoFestival) {
-      // Only auto-apply if user hasn't manually set a festival/custom theme
-      const manualThemes: ThemeType[] = ["custom"];
-      if (!manualThemes.includes(settings.theme)) {
-        setSettings(prev => ({
-          ...prev,
-          theme: festival.theme,
-          particleEffect: festival.particle,
-        }));
+    try {
+      const festival = detectCurrentFestival();
+      setCurrentFestival(festival);
+      if (festival && settings.autoFestival) {
+        const manualThemes: ThemeType[] = ["custom"];
+        if (!manualThemes.includes(settings.theme)) {
+          setSettings(prev => ({
+            ...prev,
+            theme: festival.theme as ThemeType,
+            particleEffect: festival.particle as ParticleEffect,
+          }));
+        }
       }
+    } catch (e) {
+      console.warn("Festival detection failed:", e);
     }
   }, [settings.autoFestival]);
 
