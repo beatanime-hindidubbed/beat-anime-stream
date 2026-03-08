@@ -13,6 +13,7 @@ const CommentSection = lazy(() => import("@/components/CommentSection"));
 import AnimeCard from "@/components/AnimeCard";
 import AnimeReportButton from "@/components/AnimeReportButton";
 import { getWorkingStream, StreamResult, HIANIME_SERVERS } from "@/lib/streaming";
+import { getCachedStream, setCachedStream } from "@/lib/streamCache";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { ChevronLeft, ChevronRight, List, Loader2, Server, RefreshCw, Globe, ChevronDown, MessageSquare, ArrowUp } from "lucide-react";
 
@@ -268,6 +269,17 @@ export default function WatchPage() {
       setHindiIframeSrc(null);
       setRetryMessage("");
 
+      // Check cache first (1hr TTL)
+      const cacheKey = `eng_${fullEpisodeId}_${category}`;
+      const cached = getCachedStream<StreamResult>(cacheKey);
+      if (cached && retryKey === 0) {
+        setSelectedServer(cached.server as any);
+        setStreamResult(cached);
+        setStreamLoading(false);
+        if (category === "eng") setEngMode(cached.category as "sub" | "dub");
+        return;
+      }
+
       // For "eng", try sub first then dub; for "raw" use sub
       const categoriesToTry = category === "eng" ? ["sub", "dub"] : ["sub"];
 
@@ -280,6 +292,7 @@ export default function WatchPage() {
             const result = await getWorkingStream({ episodeId: fullEpisodeId, category: apiCat, server });
             if (cancelled) return;
             if (result) {
+              setCachedStream(cacheKey, result);
               setSelectedServer(server);
               setStreamResult(result);
               setStreamLoading(false);

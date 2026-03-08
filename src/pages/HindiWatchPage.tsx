@@ -6,6 +6,7 @@ import HindiVideoPlayer from "@/components/HindiVideoPlayer";
 import DownloadButton from "@/components/DownloadButton";
 import BackButton from "@/components/BackButton";
 import { getApiPool, getNextApi, proxyUrl as makeProxyUrl } from "@/lib/streaming";
+import { getCachedStream, setCachedStream } from "@/lib/streamCache";
 import { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight, List, Loader2, Server, RefreshCw } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -116,9 +117,22 @@ export default function HindiWatchPage() {
       setSources([]);
       setSelectedSource(null);
 
+      // Check cache first (1hr TTL)
+      const cacheKey = `hindi_${anilistId || malId}_${epNum}`;
+      const cached = getCachedStream<HindiSource[]>(cacheKey);
+      if (cached && retryKey === 0) {
+        setSources(cached);
+        const firstHLS = cached.find((s) => s.isHLS) || cached[0];
+        if (firstHLS) setSelectedSource(firstHLS);
+        else setError("No playable sources");
+        setLoading(false);
+        return;
+      }
+
       try {
         const srcs = await fetchHindiSourcesFromAllApis(anilistId, malId, epNum);
         if (cancelled) return;
+        setCachedStream(cacheKey, srcs);
         setSources(srcs);
         const firstHLS = srcs.find((s) => s.isHLS) || srcs[0];
         if (firstHLS) setSelectedSource(firstHLS);
