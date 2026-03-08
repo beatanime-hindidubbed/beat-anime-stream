@@ -122,10 +122,10 @@
   }
 
   /* Scrollbar */
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { background: hsl(230 20% 10%); }
-  ::-webkit-scrollbar-thumb { background: hsl(var(--primary) / 0.4); border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--primary) / 0.7); }
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: hsl(220 12% 6%); }
+  ::-webkit-scrollbar-thumb { background: hsl(var(--primary) / 0.3); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--primary) / 0.6); }
 
   /* Mecha Gaming theme enhancements */
   [data-theme="mecha-gaming"] * {
