@@ -570,12 +570,45 @@ export default function AdminDashboard() {
         {/* ── Effects ── */}
         {tab === "effects" && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+            {/* Auto Festival Detection */}
+            <div className="p-4 sm:p-6 rounded-xl bg-card border border-border">
+              <h2 className="font-display text-lg font-bold text-foreground mb-3 flex items-center gap-2">
+                🎉 Auto Festival Detection
+              </h2>
+              <p className="text-xs sm:text-sm text-muted-foreground mb-4">Automatically switch theme & particles based on Indian/Japanese calendar dates</p>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => updateSettings({ autoFestival: !settings.autoFestival })}
+                  className={`relative w-12 h-6 rounded-full transition-colors ${settings.autoFestival ? "bg-primary" : "bg-secondary"}`}
+                >
+                  <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-primary-foreground shadow transition-transform ${settings.autoFestival ? "left-[26px]" : "left-0.5"}`} />
+                </button>
+                <span className="text-sm text-foreground">{settings.autoFestival ? "Enabled" : "Disabled"}</span>
+              </div>
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-[11px] text-muted-foreground">
+                {[
+                  { name: "🪔 Diwali", period: "Oct 15 – Nov 15" },
+                  { name: "🎨 Holi", period: "Mar 1 – 20" },
+                  { name: "🇮🇳 Independence Day", period: "Aug 13 – 17" },
+                  { name: "🇮🇳 Republic Day", period: "Jan 24 – 28" },
+                  { name: "🌸 Cherry Blossom", period: "Mar 20 – Apr 15" },
+                  { name: "🏮 Matsuri", period: "Jul 10 – Aug 12" },
+                  { name: "❄️ Winter", period: "Dec 15 – Jan 5" },
+                ].map(f => (
+                  <div key={f.name} className="flex items-center justify-between px-3 py-2 rounded-lg bg-secondary/50">
+                    <span>{f.name}</span>
+                    <span className="text-[10px] text-muted-foreground/70">{f.period}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {/* Text Effects */}
-            <div className="p-6 rounded-xl bg-card border border-border">
+            <div className="p-4 sm:p-6 rounded-xl bg-card border border-border">
               <h2 className="font-display text-lg font-bold text-foreground mb-4 flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-primary" /> Text Effects
               </h2>
-              <p className="text-sm text-muted-foreground mb-4">Applied to section titles across the site</p>
+              <p className="text-xs sm:text-sm text-muted-foreground mb-4">Applied to section titles across the site</p>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                 {([
                   { key: "none" as TextEffect, label: "None", preview: "Normal Text" },
@@ -585,43 +618,53 @@ export default function AdminDashboard() {
                   { key: "neon-pulse" as TextEffect, label: "Neon Pulse", preview: "Pulse" },
                 ] as const).map(e => (
                   <button key={e.key} onClick={async () => { await updateSettings({ textEffect: e.key }); await logAction("text_effect", e.key); }}
-                    className={`p-4 rounded-xl border-2 text-left transition-all ${
+                    className={`p-3 sm:p-4 rounded-xl border-2 text-left transition-all ${
                       settings.textEffect === e.key ? "border-primary shadow-[0_0_15px_hsl(var(--primary)/0.2)]" : "border-border hover:border-primary/40"
                     }`}>
-                    <p className={`text-base font-bold text-foreground mb-1 ${e.key !== "none" ? `text-effect-${e.key}` : ""}`}>{e.preview}</p>
-                    <p className="text-xs text-muted-foreground">{e.label}</p>
+                    <p className={`text-sm sm:text-base font-bold text-foreground mb-1 ${e.key !== "none" ? `text-effect-${e.key}` : ""}`}>{e.preview}</p>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground">{e.label}</p>
                     {settings.textEffect === e.key && <p className="text-[10px] text-primary mt-0.5">Active</p>}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Particle Effects */}
-            <div className="p-6 rounded-xl bg-card border border-border">
+            {/* Particle Effects with mini preview */}
+            <div className="p-4 sm:p-6 rounded-xl bg-card border border-border">
               <h2 className="font-display text-lg font-bold text-foreground mb-4 flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-accent" /> Particle Effects
               </h2>
-              <p className="text-sm text-muted-foreground mb-4">Background particle animations — perfect for festivals!</p>
+              <p className="text-xs sm:text-sm text-muted-foreground mb-4">Background particle animations — perfect for festivals!</p>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                 {([
-                  { key: "none" as ParticleEffect, label: "None", emoji: "⛔", desc: "No particles" },
-                  { key: "stars" as ParticleEffect, label: "Stars", emoji: "⭐", desc: "Twinkling stars" },
-                  { key: "sakura" as ParticleEffect, label: "Sakura", emoji: "🌸", desc: "Cherry blossom petals" },
-                  { key: "snow" as ParticleEffect, label: "Snow", emoji: "❄️", desc: "Falling snowflakes" },
-                  { key: "diyas" as ParticleEffect, label: "Diyas", emoji: "🪔", desc: "Diwali oil lamps" },
-                  { key: "colors" as ParticleEffect, label: "Colors", emoji: "🎨", desc: "Holi color splash" },
-                  { key: "tricolor" as ParticleEffect, label: "Tricolor", emoji: "🇮🇳", desc: "Independence Day" },
-                  { key: "lanterns" as ParticleEffect, label: "Lanterns", emoji: "🏮", desc: "Japanese festival lanterns" },
-                  { key: "fireflies" as ParticleEffect, label: "Fireflies", emoji: "✨", desc: "Zen garden fireflies" },
+                  { key: "none" as ParticleEffect, label: "None", emoji: "⛔", desc: "No particles", preview: "bg-secondary" },
+                  { key: "stars" as ParticleEffect, label: "Stars", emoji: "⭐", desc: "Twinkling stars", preview: "bg-gradient-to-b from-[hsl(220_30%_8%)] to-[hsl(220_25%_4%)]" },
+                  { key: "sakura" as ParticleEffect, label: "Sakura", emoji: "🌸", desc: "Cherry blossom", preview: "bg-gradient-to-b from-[hsl(340_20%_10%)] to-[hsl(340_15%_6%)]" },
+                  { key: "snow" as ParticleEffect, label: "Snow", emoji: "❄️", desc: "Falling snowflakes", preview: "bg-gradient-to-b from-[hsl(210_25%_10%)] to-[hsl(210_20%_6%)]" },
+                  { key: "diyas" as ParticleEffect, label: "Diyas", emoji: "🪔", desc: "Diwali lamps", preview: "bg-gradient-to-b from-[hsl(25_25%_8%)] to-[hsl(25_20%_4%)]" },
+                  { key: "colors" as ParticleEffect, label: "Colors", emoji: "🎨", desc: "Holi splash", preview: "bg-gradient-to-br from-[hsl(320_30%_8%)] to-[hsl(160_20%_6%)]" },
+                  { key: "tricolor" as ParticleEffect, label: "Tricolor", emoji: "🇮🇳", desc: "Independence Day", preview: "bg-gradient-to-b from-[hsl(25_40%_12%)] via-[hsl(0_0%_10%)] to-[hsl(140_30%_10%)]" },
+                  { key: "lanterns" as ParticleEffect, label: "Lanterns", emoji: "🏮", desc: "Japanese lanterns", preview: "bg-gradient-to-b from-[hsl(0_30%_8%)] to-[hsl(220_25%_5%)]" },
+                  { key: "fireflies" as ParticleEffect, label: "Fireflies", emoji: "✨", desc: "Zen fireflies", preview: "bg-gradient-to-b from-[hsl(160_15%_6%)] to-[hsl(160_10%_3%)]" },
                 ] as const).map(p => (
                   <button key={p.key} onClick={async () => { await updateSettings({ particleEffect: p.key }); await logAction("particle_effect", p.key); }}
-                    className={`p-4 rounded-xl border-2 text-left transition-all ${
+                    className={`rounded-xl border-2 text-left transition-all overflow-hidden ${
                       settings.particleEffect === p.key ? "border-primary shadow-[0_0_15px_hsl(var(--primary)/0.2)]" : "border-border hover:border-primary/40"
                     }`}>
-                    <span className="text-2xl mb-2 block">{p.emoji}</span>
-                    <p className="text-xs font-bold text-foreground">{p.label}</p>
-                    <p className="text-[10px] text-muted-foreground">{p.desc}</p>
-                    {settings.particleEffect === p.key && <p className="text-[10px] text-primary mt-0.5">Active</p>}
+                    {/* Mini preview area */}
+                    <div className={`h-16 sm:h-20 ${p.preview} flex items-center justify-center relative`}>
+                      <span className="text-2xl sm:text-3xl">{p.emoji}</span>
+                      {p.key !== "none" && (
+                        <div className="absolute inset-0 flex items-end justify-center pb-1">
+                          <span className="text-[8px] px-1.5 py-0.5 rounded bg-background/60 text-foreground/80 backdrop-blur-sm">Preview</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-2 sm:p-3">
+                      <p className="text-[11px] sm:text-xs font-bold text-foreground">{p.label}</p>
+                      <p className="text-[9px] sm:text-[10px] text-muted-foreground">{p.desc}</p>
+                      {settings.particleEffect === p.key && <p className="text-[9px] sm:text-[10px] text-primary mt-0.5">Active</p>}
+                    </div>
                   </button>
                 ))}
               </div>

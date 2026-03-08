@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { detectCurrentFestival, DetectedFestival } from "@/lib/festivalDetector";
 
 export type ThemeType =
   | "classic" | "cyberpunk" | "neon" | "sakura" | "minimal"
@@ -43,6 +44,7 @@ export interface SiteSettings {
   fontStyle: FontStyle;
   textEffect: TextEffect;
   particleEffect: ParticleEffect;
+  autoFestival: boolean;
   customThemeColors: CustomThemeColors;
   sandboxLinks: SandboxLink[];
   faviconUrl: string;
@@ -67,6 +69,7 @@ const DEFAULTS: SiteSettings = {
   fontStyle: "default",
   textEffect: "none",
   particleEffect: "none",
+  autoFestival: true,
   customThemeColors: { primary: "175 80% 50%", accent: "330 70% 55%", background: "220 20% 7%", card: "220 18% 10%", border: "220 15% 18%" },
   sandboxLinks: [],
   faviconUrl: "",
@@ -91,6 +94,7 @@ interface SiteSettingsCtx {
   updateSettings: (partial: Partial<SiteSettings>) => Promise<void>;
   reportAnimeFail: (animeId: string) => void;
   isHidden: (animeId: string) => boolean;
+  currentFestival: DetectedFestival | null;
 }
 
 const Ctx = createContext<SiteSettingsCtx>({
@@ -98,10 +102,12 @@ const Ctx = createContext<SiteSettingsCtx>({
   updateSettings: async () => {},
   reportAnimeFail: () => {},
   isHidden: () => false,
+  currentFestival: null,
 });
 
 export function SiteSettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<SiteSettings>(DEFAULTS);
+  const [currentFestival, setCurrentFestival] = useState<DetectedFestival | null>(null);
 
   useEffect(() => {
     supabase
@@ -114,6 +120,23 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
         setSettings((prev) => ({ ...prev, ...map }));
       });
   }, []);
+
+  // Auto-festival detection
+  useEffect(() => {
+    const festival = detectCurrentFestival();
+    setCurrentFestival(festival);
+    if (festival && settings.autoFestival) {
+      // Only auto-apply if user hasn't manually set a festival/custom theme
+      const manualThemes: ThemeType[] = ["custom"];
+      if (!manualThemes.includes(settings.theme)) {
+        setSettings(prev => ({
+          ...prev,
+          theme: festival.theme,
+          particleEffect: festival.particle,
+        }));
+      }
+    }
+  }, [settings.autoFestival]);
 
   useEffect(() => {
     applyTheme(settings.theme, settings.customThemeColors);
@@ -183,7 +206,7 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <Ctx.Provider value={{ settings, updateSettings, reportAnimeFail, isHidden }}>
+    <Ctx.Provider value={{ settings, updateSettings, reportAnimeFail, isHidden, currentFestival }}>
       {children}
     </Ctx.Provider>
   );

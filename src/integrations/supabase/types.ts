@@ -160,6 +160,53 @@ export type Database = {
           },
         ]
       }
+      comments: {
+        Row: {
+          anime_id: string
+          content: string
+          created_at: string
+          episode_id: string
+          id: string
+          is_censored: boolean
+          is_deleted: boolean
+          parent_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          anime_id: string
+          content: string
+          created_at?: string
+          episode_id: string
+          id?: string
+          is_censored?: boolean
+          is_deleted?: boolean
+          parent_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          anime_id?: string
+          content?: string
+          created_at?: string
+          episode_id?: string
+          id?: string
+          is_censored?: boolean
+          is_deleted?: boolean
+          parent_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comments_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "comments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       premium_codes: {
         Row: {
           code: string
@@ -217,6 +264,27 @@ export type Database = {
           premium_until?: string | null
           user_id?: string
           username?: string | null
+        }
+        Relationships: []
+      }
+      rate_limits: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          user_id?: string
         }
         Relationships: []
       }
