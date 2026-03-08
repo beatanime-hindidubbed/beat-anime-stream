@@ -169,7 +169,7 @@ export default function WatchPage() {
       const anchor = playerAnchorRef.current;
       if (!anchor) return;
       const rect = anchor.getBoundingClientRect();
-      setShowPip(rect.top < -120);
+      setShowPip(rect.top < -250);
     };
 
     window.addEventListener("scroll", updatePip, { passive: true });
