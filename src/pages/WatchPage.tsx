@@ -413,7 +413,33 @@ export default function WatchPage() {
     <div className="container py-4 max-w-6xl">
       <BackButton />
 
-      <div ref={playerWrapperRef} className="mb-2">{renderPlayer()}</div>
+      {/* Player with mobile swipe compact/expand */}
+      <div
+        ref={playerWrapperRef}
+        className={`mb-2 transition-all duration-300 ${isMobile && mobileCompact ? "max-h-[35vh] overflow-hidden" : ""}`}
+        onTouchStart={(e) => { touchStartY.current = e.touches[0].clientY; }}
+        onTouchEnd={(e) => {
+          if (touchStartY.current === null) return;
+          const diff = e.changedTouches[0].clientY - touchStartY.current;
+          if (Math.abs(diff) > 50) {
+            setMobileCompact(diff < 0); // swipe up = expand (false), swipe down = compact (true)
+          }
+          touchStartY.current = null;
+        }}
+      >
+        {renderPlayer()}
+        {isMobile && (
+          <div className="flex justify-center py-1">
+            <button
+              onClick={() => setMobileCompact(!mobileCompact)}
+              className="flex items-center gap-1 text-[10px] text-muted-foreground"
+            >
+              <ChevronDown className={`w-3 h-3 transition-transform ${mobileCompact ? "" : "rotate-180"}`} />
+              {mobileCompact ? "Swipe up to expand" : "Swipe down to minimize"}
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Floating PiP when scrolled past player */}
       <AnimatePresence>
