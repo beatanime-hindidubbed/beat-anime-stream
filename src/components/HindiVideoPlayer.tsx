@@ -605,7 +605,7 @@ export default function HindiVideoPlayer({
   // ── Seek bar touch ────────────────────────────────────────────────────
   // Track active dragging for instant preview mode
   const isDraggingSeekBar = useRef(false);
-  const lastInstantPreviewTime = useRef(0);
+  const dragTargetTimeRef = useRef<number | null>(null);
   const instantPreviewRAF = useRef<number>();
 
   // Instant preview: capture frame from main video at current seek position (fastest method)
