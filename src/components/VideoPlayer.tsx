@@ -712,7 +712,8 @@ export default function VideoPlayer({
     return lvl.height ? `${lvl.height}p` : `${Math.round(lvl.bitrate / 1000)}k`;
   };
 
-  const PREVIEW_W = 160;
+  const PREVIEW_W = isMobile ? 100 : 160;
+  const PREVIEW_H = isMobile ? 56 : 90;
   const previewLeft = `clamp(${PREVIEW_W / 2}px, ${hoverPct}%, calc(100% - ${PREVIEW_W / 2}px))`;
 
   const settingsPositionClass = "absolute bottom-14 sm:bottom-20 right-2 sm:right-3 z-40";
