@@ -83,7 +83,7 @@ export default function HindiVideoPlayer({
   const hlsRef       = useRef<Hls | null>(null);
   const wrapperRef   = useRef<HTMLDivElement>(null);
 
-  // ── Preview thumbnail pool (3 parallel instances) ──────────────
+  // ── Preview thumbnail pool (3 parallel instances) ──────────
   const PREVIEW_POOL_SIZE = 3;
   const previewVideoRefs = useRef<(HTMLVideoElement | null)[]>(Array(3).fill(null));
   const previewHlsRefs   = useRef<(Hls | null)[]>(Array(3).fill(null));
@@ -154,6 +154,12 @@ export default function HindiVideoPlayer({
   const wasPlayingRef   = useRef(false);
   const isSeeking       = useRef(false);
   const touchJustEnded  = useRef(false);
+
+  // ── FIX: Track fullscreen transition to prevent spurious pause handling ──
+  const isFullscreenTransition = useRef(false);
+  const fullscreenTransitionTimer = useRef<ReturnType<typeof setTimeout>>();
+  // ── FIX: Track if video was playing before fullscreen change ────────────
+  const wasPlayingBeforeFullscreen = useRef(false);
 
   // iframeSrc with no src = iframe mode
   const isIframe = !!iframeSrc && !src;
@@ -258,16 +264,46 @@ export default function HindiVideoPlayer({
     return () => v.removeEventListener("contextmenu", prevent);
   }, []);
 
-  // ── Handle fullscreen state tracking ────────────────────────────────────
+  // ── FIX: Handle fullscreen state tracking with transition guard ─────────
   useEffect(() => {
     const handler = () => {
-      setFullscreen(!!document.fullscreenElement);
+      const isNowFullscreen = !!document.fullscreenElement;
+
+      // Mark that we are in a fullscreen transition
+      isFullscreenTransition.current = true;
+      if (fullscreenTransitionTimer.current) clearTimeout(fullscreenTransitionTimer.current);
+
+      if (isNowFullscreen) {
+        // Entering fullscreen: save playing state
+        wasPlayingBeforeFullscreen.current = wasPlayingRef.current;
+      }
+
+      setFullscreen(isNowFullscreen);
+
+      // After transition settles, restore playback if needed
+      fullscreenTransitionTimer.current = setTimeout(() => {
+        isFullscreenTransition.current = false;
+        const v = videoRef.current;
+        if (!v) return;
+
+        // If we were playing before fullscreen change, ensure video is still playing
+        if (wasPlayingBeforeFullscreen.current && v.paused && !isSeeking.current) {
+          v.play().catch(() => {});
+          setPlaying(true);
+        }
+      }, 800); // 800ms covers iOS/Android fullscreen animation delay
     };
+
     document.addEventListener("fullscreenchange", handler);
     document.addEventListener("webkitfullscreenchange", handler);
+    document.addEventListener("mozfullscreenchange", handler);
+    document.addEventListener("MSFullscreenChange", handler);
     return () => {
       document.removeEventListener("fullscreenchange", handler);
       document.removeEventListener("webkitfullscreenchange", handler);
+      document.removeEventListener("mozfullscreenchange", handler);
+      document.removeEventListener("MSFullscreenChange", handler);
+      if (fullscreenTransitionTimer.current) clearTimeout(fullscreenTransitionTimer.current);
     };
   }, []);
 
@@ -579,7 +615,9 @@ export default function HindiVideoPlayer({
   const togglePlay = () => {
     const v = videoRef.current;
     if (!v) return;
-    if (v.paused) { wasPlayingRef.current = true; v.play(); setPlaying(true); flashCenter("play"); }
+    // ── FIX: Guard against touch event double-fire ──
+    if (touchJustEnded.current) { touchJustEnded.current = false; return; }
+    if (v.paused) { wasPlayingRef.current = true; v.play().catch(() => {}); setPlaying(true); flashCenter("play"); }
     else          { wasPlayingRef.current = false; v.pause(); setPlaying(false); flashCenter("pause"); }
   };
 
@@ -901,6 +939,7 @@ export default function HindiVideoPlayer({
 
   const handleContainerTouchEnd = (e: React.TouchEvent) => {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    // ── FIX: mark touch just ended to prevent onClick double-fire ──
     touchJustEnded.current = true;
     setTimeout(() => { touchJustEnded.current = false; }, 300);
 
@@ -1043,8 +1082,20 @@ export default function HindiVideoPlayer({
               ref={videoRef}
               className="w-full h-full"
               onTimeUpdate={handleTimeUpdate}
-              onPlay={() => { setPlaying(true); if (!isSeeking.current) wasPlayingRef.current = true; }}
-              onPause={() => { setPlaying(false); }}
+              onPlay={() => {
+                setPlaying(true);
+                // ── FIX: only update wasPlayingRef when NOT in a seek or fullscreen transition ──
+                if (!isSeeking.current && !isFullscreenTransition.current) {
+                  wasPlayingRef.current = true;
+                }
+              }}
+              onPause={() => {
+                // ── FIX: Don't update state during fullscreen transitions or seek operations ──
+                // This is the root cause of the auto-pause bug on mobile fullscreen
+                if (isFullscreenTransition.current || isSeeking.current) return;
+                setPlaying(false);
+                // Do NOT reset wasPlayingRef here — it breaks seek resume on mobile
+              }}
               onEnded={() => { setPlaying(false); wasPlayingRef.current = false; onEnded?.(); }}
               onClick={togglePlay}
               crossOrigin="anonymous"
