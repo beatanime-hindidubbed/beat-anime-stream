@@ -83,15 +83,20 @@ export default function HindiVideoPlayer({
   const hlsRef       = useRef<Hls | null>(null);
   const wrapperRef   = useRef<HTMLDivElement>(null);
 
-  // ── Preview thumbnail (feature parity with VideoPlayer) ──────────────
-  const previewVideoRef  = useRef<HTMLVideoElement>(null);
-  const previewHlsRef    = useRef<Hls | null>(null);
+  // ── Preview thumbnail pool (3 parallel instances) ──────────────
+  const PREVIEW_POOL_SIZE = 3;
+  const previewVideoRefs = useRef<(HTMLVideoElement | null)[]>(Array(3).fill(null));
+  const previewHlsRefs   = useRef<(Hls | null)[]>(Array(3).fill(null));
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const previewSeekTimer = useRef<ReturnType<typeof setTimeout>>();
   const lastPreviewSeek  = useRef<number>(-999);
-  const previewSeeking   = useRef(false);
+  const previewSeeking   = useRef<boolean[]>([false, false, false]);
+  const previewRoundRobin = useRef(0);
   const frameCacheRef = useRef<Map<number, ImageBitmap>>(new Map());
   const lastCaptureTime = useRef<number>(-999);
+  // Legacy compat
+  const previewVideoRef = useRef<HTMLVideoElement | null>(null);
+  const previewHlsRef = useRef<Hls | null>(null);
 
   const encodedSrc = useRef(src ? obfuscate(src) : "");
   const getUrl     = useRef(src ? makeAccessor(encodedSrc.current) : () => "");
