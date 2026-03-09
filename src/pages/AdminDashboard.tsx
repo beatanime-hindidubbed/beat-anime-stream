@@ -432,6 +432,7 @@ export default function AdminDashboard() {
     { key: "users" as const, label: "Users", icon: Users },
     { key: "api" as const, label: "API", icon: Activity },
     { key: "logs" as const, label: "Logs", icon: ScrollText },
+    { key: "database" as const, label: "Database", icon: Database },
   ];
 
   // Moderators only see limited tabs
