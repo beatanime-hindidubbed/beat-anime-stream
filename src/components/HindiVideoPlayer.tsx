@@ -305,7 +305,7 @@ export default function HindiVideoPlayer({
 
   // ── Preview HLS — use ENGLISH HiAnime stream (same frames, much faster) ─
   useEffect(() => {
-    if (isIframe || !canHover || !episodeId) return;
+    if (isIframe || !episodeId) return;
     const preview = previewVideoRef.current;
     if (!preview) return;
 
