@@ -279,8 +279,15 @@ export default function WatchPage() {
   const nextEp = currentIdx < episodes.length - 1 ? episodes[currentIdx + 1] : null;
 
   const { user } = useSupabaseAuth();
+  const { trackView } = useRegion();
   const animeName = info?.anime?.info?.name || animeId;
   const animePoster = info?.anime?.info?.poster;
+
+  // Track regional view when anime info loads
+  useEffect(() => {
+    if (!info || !animeName || !animeId) return;
+    trackView({ id: animeId, name: animeName, poster: animePoster });
+  }, [info, animeId, animeName, animePoster, trackView]);
 
   // Switch between Hindi sources — same logic as original switchHindiSource
   const switchHindiSource = (src: HindiSource) => {
