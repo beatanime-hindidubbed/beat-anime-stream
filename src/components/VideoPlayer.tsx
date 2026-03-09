@@ -602,7 +602,7 @@ export default function VideoPlayer({
     const v = videoRef.current;
     const canvas = previewCanvasRef.current;
     if (!v || !canvas || !v.videoWidth) return false;
-    
+
     // If main video is near target time, capture directly (instant!)
     if (Math.abs(v.currentTime - targetTime) < 3) {
       const ctx = canvas.getContext("2d");
@@ -613,6 +613,27 @@ export default function VideoPlayer({
       }
     }
     return false;
+  }, []);
+
+  // Ensure mobile preview updates AFTER the seek completes (fixes blank frames on iOS)
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const onSeeked = () => {
+      if (!isDraggingSeekBar.current) return;
+      const canvas = previewCanvasRef.current;
+      if (!canvas || !v.videoWidth) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      try {
+        ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+        setPreviewHasFrame(true);
+      } catch {
+        // ignore
+      }
+    };
+    v.addEventListener("seeked", onSeeked);
+    return () => v.removeEventListener("seeked", onSeeked);
   }, []);
 
   const seekPreviewToTime = useCallback((t: number, forceImmediate = false) => {
