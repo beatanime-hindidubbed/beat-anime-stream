@@ -112,6 +112,9 @@ export default function AdminDashboard() {
   const [newAdminRole, setNewAdminRole] = useState<string>("moderator");
   const [addingUser, setAddingUser] = useState(false);
   const [userError, setUserError] = useState("");
+  const [userFilterRole, setUserFilterRole] = useState("all");
+  const [userFilterCountry, setUserFilterCountry] = useState("all");
+  const [userSortBy, setUserSortBy] = useState("role");
   const [brandingSaved, setBrandingSaved] = useState(false);
 
   // Branding
