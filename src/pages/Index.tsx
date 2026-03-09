@@ -6,6 +6,7 @@ import AnimeCard from "@/components/AnimeCard";
 import AnimeSection from "@/components/AnimeSection";
 import SkeletonCard from "@/components/SkeletonCard";
 import SwipeableBanner from "@/components/SwipeableBanner";
+import { RegionalPopularSection } from "@/components/RegionalPopular";
 import { useQuery } from "@tanstack/react-query";
 import { api, HomeData, AnimeItem } from "@/lib/api";
 import { X, Trash2, Sparkles } from "lucide-react";
