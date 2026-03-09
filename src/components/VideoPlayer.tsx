@@ -682,7 +682,9 @@ export default function VideoPlayer({
     e.preventDefault();
     e.stopPropagation();
     touchOnSeekBar.current = true;
+    isDraggingSeekBar.current = true;
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    if (instantPreviewRAF.current) cancelAnimationFrame(instantPreviewRAF.current);
     touchMoved.current = true;
     wasPlayingRef.current = playing;
     const v = videoRef.current;
@@ -691,10 +693,11 @@ export default function VideoPlayer({
     const rect = e.currentTarget.getBoundingClientRect();
     const touch = e.touches[0];
     const pct = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
-    v.currentTime = pct * duration;
-    setHoverTime(pct * duration);
+    const targetTime = pct * duration;
+    v.currentTime = targetTime;
+    setHoverTime(targetTime);
     setHoverPct(pct * 100);
-    seekPreviewToTime(pct * duration);
+    seekPreviewToTime(targetTime, true);
   };
 
   const handleSeekBarTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
@@ -706,16 +709,24 @@ export default function VideoPlayer({
     const rect = e.currentTarget.getBoundingClientRect();
     const touch = e.touches[0];
     const pct = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
-    v.currentTime = pct * duration;
-    setHoverTime(pct * duration);
-    setHoverPct(pct * 100);
-    seekPreviewToTime(pct * duration);
+    const targetTime = pct * duration;
+    
+    // Use RAF for smoother 60fps preview updates during drag
+    if (instantPreviewRAF.current) cancelAnimationFrame(instantPreviewRAF.current);
+    instantPreviewRAF.current = requestAnimationFrame(() => {
+      v.currentTime = targetTime;
+      setHoverTime(targetTime);
+      setHoverPct(pct * 100);
+      seekPreviewToTime(targetTime, true);
+    });
   };
 
   const handleSeekBarTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
     e.stopPropagation();
     touchOnSeekBar.current = false;
+    isDraggingSeekBar.current = false;
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    if (instantPreviewRAF.current) cancelAnimationFrame(instantPreviewRAF.current);
     setHoverTime(null);
     const v = videoRef.current;
     if (!v || !duration) return;
@@ -730,7 +741,7 @@ export default function VideoPlayer({
 
    // ── Preview thumbnail hover (desktop/laptop hover devices) ─────────────
   const handleProgressHover = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!duration || !canHover) return;
+    if (!duration) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const pct  = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     const t    = pct * duration;
@@ -741,7 +752,9 @@ export default function VideoPlayer({
 
   const handleProgressLeave = () => {
     setHoverTime(null);
+    isDraggingSeekBar.current = false;
     if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
+    if (instantPreviewRAF.current) cancelAnimationFrame(instantPreviewRAF.current);
   };
 
   const toggleFullscreen = () => {
