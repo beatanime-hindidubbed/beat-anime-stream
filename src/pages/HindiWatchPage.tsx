@@ -136,8 +136,12 @@ export default function HindiWatchPage() {
         setCachedStream(cacheKey, srcs);
         setSources(srcs);
         const firstHLS = srcs.find((s) => s.isHLS) || srcs[0];
-        if (firstHLS) setSelectedSource(firstHLS);
-        else setError("No playable sources");
+        if (firstHLS) {
+          setSelectedSource(firstHLS);
+        } else if (!cancelled) {
+          toast.warning("Hindi Dub not available for this episode. Switching to English...", { duration: 5000 });
+          navigate(`/watch/${animeId}?lang=eng`);
+        }
       } catch (err: any) {
         if (!cancelled) {
           // Auto-fallback: redirect to English watch page
