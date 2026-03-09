@@ -63,16 +63,22 @@ export default function VideoPlayer({
   const hlsRef       = useRef<Hls | null>(null);
   const wrapperRef   = useRef<HTMLDivElement>(null);
 
-  // Preview thumbnail
-  const previewVideoRef  = useRef<HTMLVideoElement>(null);
-  const previewHlsRef    = useRef<Hls | null>(null);
+  // Preview thumbnail — pool of 3 preview videos for parallel seeking
+  const PREVIEW_POOL_SIZE = 3;
+  const previewVideoRefs = useRef<(HTMLVideoElement | null)[]>(Array(3).fill(null));
+  const previewHlsRefs   = useRef<(Hls | null)[]>(Array(3).fill(null));
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const previewSeekTimer = useRef<ReturnType<typeof setTimeout>>();
   const lastPreviewSeek  = useRef<number>(-999);
-  const previewSeeking   = useRef(false);
-  // Frame cache: capture frames from main video for instant previews
+  const previewSeeking   = useRef<boolean[]>([false, false, false]);
+  const previewRoundRobin = useRef(0);
+  // Frame cache: capture frames from main + predictive pre-fetch for instant previews
   const frameCacheRef = useRef<Map<number, ImageBitmap>>(new Map());
   const lastCaptureTime = useRef<number>(-999);
+  const prefetchTimer = useRef<ReturnType<typeof setTimeout>>();
+  // Legacy compat refs
+  const previewVideoRef = useRef<HTMLVideoElement | null>(null);
+  const previewHlsRef = useRef<Hls | null>(null);
 
   // Secure URL accessors
   const encodedSrc = useRef(obfuscate(src));
@@ -300,70 +306,104 @@ export default function VideoPlayer({
     }
   }, [src, startTime]);
 
-  // ── Preview HLS (desktop + mobile drag) ─────────────────────────────
+  // ── Preview HLS pool (3 parallel instances for fast seeking) ──────────
+  const [previewReadyCount, setPreviewReadyCount] = useState(0);
   useEffect(() => {
-    const preview = previewVideoRef.current;
     let realSrc: string;
     try { realSrc = getUrl.current(); } catch { return; }
-    if (!preview || !realSrc) return;
+    if (!realSrc || !Hls.isSupported()) return;
 
-    if (Hls.isSupported()) {
+    const destroyers: (() => void)[] = [];
+    let readyCount = 0;
+
+    for (let i = 0; i < PREVIEW_POOL_SIZE; i++) {
+      const pv = previewVideoRefs.current[i];
+      if (!pv) continue;
       const hls = new Hls({
-        maxBufferLength: 2, maxMaxBufferLength: 4,
-        maxBufferSize: 1 * 1000 * 1000, // 1MB max
+        maxBufferLength: 3, maxMaxBufferLength: 6,
+        maxBufferSize: 2 * 1000 * 1000,
         startPosition: -1, enableWorker: false, startLevel: 0,
         capLevelToPlayerSize: true,
-        abrEwmaDefaultEstimate: 100000, // assume low bandwidth to stay on lowest level
+        abrEwmaDefaultEstimate: 100000,
         abrMaxWithRealBitrate: true,
         xhrSetup: (xhr) => { xhr.withCredentials = false; },
       });
       hls.loadSource(realSrc);
-      hls.attachMedia(preview);
+      hls.attachMedia(pv);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        hls.currentLevel = 0; // lock to lowest quality
-        hls.autoLevelCapping = 0; // never go above level 0
-        preview.pause();
-        setPreviewReady(true);
+        hls.currentLevel = 0;
+        hls.autoLevelCapping = 0;
+        pv.pause();
+        readyCount++;
+        if (readyCount >= PREVIEW_POOL_SIZE) setPreviewReady(true);
+        setPreviewReadyCount(readyCount);
       });
-      previewHlsRef.current = hls;
-      return () => { hls.destroy(); previewHlsRef.current = null; setPreviewReady(false); };
+      previewHlsRefs.current[i] = hls;
+      destroyers.push(() => { hls.destroy(); previewHlsRefs.current[i] = null; });
     }
+    // Keep legacy ref pointing to first
+    previewVideoRef.current = previewVideoRefs.current[0];
+    previewHlsRef.current = previewHlsRefs.current[0];
+
+    return () => { destroyers.forEach(d => d()); setPreviewReady(false); setPreviewReadyCount(0); };
   }, [src]);
 
-  // Draw preview frame to canvas
+  // Draw preview frame to canvas from ANY pool video that finishes seeking
   useEffect(() => {
-    const preview = previewVideoRef.current;
-    if (!preview) return;
-    const onSeeked = () => {
-      previewSeeking.current = false;
-      const canvas = previewCanvasRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext("2d");
-      if (ctx) { ctx.drawImage(preview, 0, 0, canvas.width, canvas.height); setPreviewHasFrame(true); }
-    };
-    const onError = () => { previewSeeking.current = false; };
-    const onStalled = () => { previewSeeking.current = false; };
-    preview.addEventListener("seeked", onSeeked);
-    preview.addEventListener("error", onError);
-    preview.addEventListener("stalled", onStalled);
-    return () => {
-      preview.removeEventListener("seeked", onSeeked);
-      preview.removeEventListener("error", onError);
-      preview.removeEventListener("stalled", onStalled);
-    };
-  }, []);
+    const handlers: (() => void)[] = [];
+    for (let i = 0; i < PREVIEW_POOL_SIZE; i++) {
+      const pv = previewVideoRefs.current[i];
+      if (!pv) continue;
+      const onSeeked = () => {
+        previewSeeking.current[i] = false;
+        const canvas = previewCanvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(pv, 0, 0, canvas.width, canvas.height);
+          setPreviewHasFrame(true);
+          // Cache the frame we just got from HLS
+          const t = Math.round(pv.currentTime);
+          try {
+            const oc = new OffscreenCanvas(80, 45);
+            const octx = oc.getContext("2d");
+            if (octx) {
+              octx.drawImage(pv, 0, 0, 80, 45);
+              createImageBitmap(oc).then(bmp => {
+                frameCacheRef.current.set(t, bmp);
+                if (frameCacheRef.current.size > 400) {
+                  const first = frameCacheRef.current.keys().next().value;
+                  if (first !== undefined) frameCacheRef.current.delete(first);
+                }
+              }).catch(() => {});
+            }
+          } catch {}
+        }
+      };
+      const onError = () => { previewSeeking.current[i] = false; };
+      const onStalled = () => { previewSeeking.current[i] = false; };
+      pv.addEventListener("seeked", onSeeked);
+      pv.addEventListener("error", onError);
+      pv.addEventListener("stalled", onStalled);
+      handlers.push(() => {
+        pv.removeEventListener("seeked", onSeeked);
+        pv.removeEventListener("error", onError);
+        pv.removeEventListener("stalled", onStalled);
+      });
+    }
+    return () => handlers.forEach(h => h());
+  }, [previewReadyCount]);
 
   // Periodically capture frames from main video for instant preview cache
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
-    const CAPTURE_INTERVAL = 3; // capture every 3 seconds of video time
+    const CAPTURE_INTERVAL = 2; // capture every 2 seconds of video time
     const captureFrame = () => {
       if (v.paused || v.ended || !v.videoWidth) return;
       const t = Math.round(v.currentTime);
       if (Math.abs(t - lastCaptureTime.current) < CAPTURE_INTERVAL) return;
       lastCaptureTime.current = t;
-      // Use OffscreenCanvas for faster capture
       try {
         const oc = new OffscreenCanvas(80, 45);
         const ctx = oc.getContext("2d");
@@ -371,33 +411,48 @@ export default function VideoPlayer({
           ctx.drawImage(v, 0, 0, 80, 45);
           createImageBitmap(oc).then(bmp => {
             frameCacheRef.current.set(t, bmp);
-            // Limit cache to ~200 entries (~10 min of video)
-            if (frameCacheRef.current.size > 200) {
+            if (frameCacheRef.current.size > 400) {
               const first = frameCacheRef.current.keys().next().value;
               if (first !== undefined) frameCacheRef.current.delete(first);
             }
           }).catch(() => {});
         }
-      } catch {
-        // OffscreenCanvas not supported, use regular canvas
-        const tc = document.createElement("canvas");
-        tc.width = 80; tc.height = 45;
-        const ctx = tc.getContext("2d");
-        if (ctx) {
-          ctx.drawImage(v, 0, 0, 80, 45);
-          createImageBitmap(tc).then(bmp => {
-            frameCacheRef.current.set(t, bmp);
-            if (frameCacheRef.current.size > 200) {
-              const first = frameCacheRef.current.keys().next().value;
-              if (first !== undefined) frameCacheRef.current.delete(first);
-            }
-          }).catch(() => {});
+      } catch {}
+    };
+    const interval = setInterval(captureFrame, 400);
+    return () => clearInterval(interval);
+  }, []);
+
+  // ── Predictive pre-fetch: seek preview pool to upcoming positions ────
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || !previewReady) return;
+    const prefetch = () => {
+      if (v.paused || v.ended || !v.duration) return;
+      const ct = Math.round(v.currentTime);
+      const dur = v.duration;
+      // Pre-fetch frames at 10s intervals ahead (up to 60s ahead)
+      const targets: number[] = [];
+      for (let offset = 10; offset <= 60; offset += 10) {
+        const target = ct + offset;
+        if (target < dur && !frameCacheRef.current.has(Math.round(target))) {
+          targets.push(target);
+        }
+      }
+      // Distribute pre-fetch seeks across pool (one per video)
+      for (let i = 0; i < Math.min(targets.length, PREVIEW_POOL_SIZE); i++) {
+        const poolIdx = (previewRoundRobin.current + i) % PREVIEW_POOL_SIZE;
+        const pv = previewVideoRefs.current[poolIdx];
+        if (pv && !previewSeeking.current[poolIdx]) {
+          previewSeeking.current[poolIdx] = true;
+          pv.currentTime = targets[i];
+          setTimeout(() => { previewSeeking.current[poolIdx] = false; }, 800);
         }
       }
     };
-    const interval = setInterval(captureFrame, 500); // check every 500ms
+    const interval = setInterval(prefetch, 5000); // every 5s
     return () => clearInterval(interval);
-  }, []);
+  }, [previewReady]);
 
   // Clear frame cache on src change
   useEffect(() => {
@@ -553,18 +608,31 @@ export default function VideoPlayer({
         if (ctx) { ctx.drawImage(best, 0, 0, canvas.width, canvas.height); setPreviewHasFrame(true); }
       }
     }
-    // Always seek HLS preview for sharper/forward frames (even if cache hit)
-    if (!previewReady || !previewVideoRef.current) return;
+    // Seek next available preview video from pool for sharper/forward frames
+    if (!previewReady) return;
     if (Math.abs(lastPreviewSeek.current - t) < 0.5) return;
-    if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
-    // Force-reset seeking flag so we don't get stuck
-    previewSeeking.current = false;
-    const pv = previewVideoRef.current;
     lastPreviewSeek.current = t;
-    previewSeeking.current = true;
-    if (!best) setPreviewHasFrame(false); // only flash blank if no cache
-    pv.currentTime = t;
-    setTimeout(() => { previewSeeking.current = false; }, 300);
+    // Find a non-seeking pool member (round-robin)
+    for (let attempt = 0; attempt < PREVIEW_POOL_SIZE; attempt++) {
+      const idx = (previewRoundRobin.current + attempt) % PREVIEW_POOL_SIZE;
+      const pv = previewVideoRefs.current[idx];
+      if (pv && !previewSeeking.current[idx]) {
+        previewRoundRobin.current = idx + 1;
+        previewSeeking.current[idx] = true;
+        if (!best) setPreviewHasFrame(false);
+        pv.currentTime = t;
+        setTimeout(() => { previewSeeking.current[idx] = false; }, 300);
+        return;
+      }
+    }
+    // All busy — force the first one
+    const pv = previewVideoRefs.current[0];
+    if (pv) {
+      previewSeeking.current[0] = true;
+      if (!best) setPreviewHasFrame(false);
+      pv.currentTime = t;
+      setTimeout(() => { previewSeeking.current[0] = false; }, 300);
+    }
   };
 
   const handleSeekBarTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
@@ -839,8 +907,10 @@ export default function VideoPlayer({
           className="absolute -inset-8 w-[calc(100%+4rem)] h-[calc(100%+4rem)] opacity-40 blur-3xl scale-110 pointer-events-none -z-10 rounded-3xl" />
       )}
 
-      {/* Hidden preview video (hover-capable devices only) */}
-      {canHover && <video ref={previewVideoRef} className="hidden" muted playsInline preload="auto" />}
+      {/* Hidden preview video pool (3 parallel instances) */}
+      {[0, 1, 2].map(i => (
+        <video key={i} ref={el => { previewVideoRefs.current[i] = el; }} className="hidden" muted playsInline preload="auto" />
+      ))}
 
       <div
         ref={containerRef}
