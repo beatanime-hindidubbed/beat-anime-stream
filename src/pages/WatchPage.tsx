@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import { store } from "@/lib/store";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
+import { useRegion } from "@/hooks/useRegion";
 import VideoPlayer from "@/components/VideoPlayer";
 import HindiVideoPlayer from "@/components/HindiVideoPlayer";
 import DownloadButton from "@/components/DownloadButton";
@@ -12,6 +13,7 @@ import { lazy, Suspense } from "react";
 const CommentSection = lazy(() => import("@/components/CommentSection"));
 import AnimeCard from "@/components/AnimeCard";
 import AnimeReportButton from "@/components/AnimeReportButton";
+import { RegionalPopularWidget } from "@/components/RegionalPopular";
 import { getWorkingStream, StreamResult, HIANIME_SERVERS } from "@/lib/streaming";
 import { getCachedStream, setCachedStream } from "@/lib/streamCache";
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -277,8 +279,15 @@ export default function WatchPage() {
   const nextEp = currentIdx < episodes.length - 1 ? episodes[currentIdx + 1] : null;
 
   const { user } = useSupabaseAuth();
+  const { trackView } = useRegion();
   const animeName = info?.anime?.info?.name || animeId;
   const animePoster = info?.anime?.info?.poster;
+
+  // Track regional view when anime info loads
+  useEffect(() => {
+    if (!info || !animeName || !animeId) return;
+    trackView({ id: animeId, name: animeName, poster: animePoster });
+  }, [info, animeId, animeName, animePoster, trackView]);
 
   // Switch between Hindi sources — same logic as original switchHindiSource
   const switchHindiSource = (src: HindiSource) => {
@@ -740,15 +749,20 @@ export default function WatchPage() {
         </div>
       )}
 
-      {/* Recommended */}
-      {recommended.length > 0 && (
-        <div className="mt-8">
-          <h2 className="font-display text-xl font-bold text-foreground mb-4">You might also like</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-            {recommended.slice(0, 12).map((a, i) => (
-              <AnimeCard key={a.id} anime={a} index={i} />
-            ))}
-          </div>
+      {/* Recommended + Regional sidebar */}
+      {(recommended.length > 0 || user) && (
+        <div className="mt-8 flex flex-col lg:flex-row gap-6">
+          {recommended.length > 0 && (
+            <div className="flex-1">
+              <h2 className="font-display text-xl font-bold text-foreground mb-4">You might also like</h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {recommended.slice(0, 12).map((a, i) => (
+                  <AnimeCard key={a.id} anime={a} index={i} />
+                ))}
+              </div>
+            </div>
+          )}
+          {user && <RegionalPopularWidget className="lg:w-64 flex-shrink-0" />}
         </div>
       )}
     </div>
