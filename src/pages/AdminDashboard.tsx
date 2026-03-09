@@ -11,7 +11,7 @@ import {
   Users, Shield, UserPlus, UserMinus, Palette, Type, FileText,
   Crown, Copy, Clock, Zap, Server, RefreshCw, MessageCircle, Ban, VolumeX,
   AlertTriangle, MonitorPlay, Link2, ScrollText, EyeOff, Sparkles, ExternalLink,
-  MessageSquare, TrendingUp, Eye, Database
+  MessageSquare, TrendingUp, Eye, Database, MapPin
 } from "lucide-react";
 
 interface Ad {
@@ -95,7 +95,7 @@ const FONT_STYLES: { key: FontStyle; label: string; desc: string; preview: strin
   { key: "cinematic", label: "Cinematic", desc: "Bebas Neue + Inter", preview: "Aa" },
 ];
 
-type TabKey = "stats" | "branding" | "effects" | "sandbox" | "ads" | "api" | "users" | "policy" | "premium" | "chat" | "comments" | "player" | "banlist" | "logs" | "database";
+type TabKey = "stats" | "branding" | "effects" | "sandbox" | "ads" | "api" | "users" | "policy" | "premium" | "chat" | "comments" | "player" | "banlist" | "logs" | "database" | "regions";
 
 export default function AdminDashboard() {
   const { user, isAdmin, isModerator, loading: authLoading, logout } = useSupabaseAuth();
@@ -432,6 +432,7 @@ export default function AdminDashboard() {
     { key: "users" as const, label: "Users", icon: Users },
     { key: "api" as const, label: "API", icon: Activity },
     { key: "logs" as const, label: "Logs", icon: ScrollText },
+    { key: "regions" as const, label: "Regions", icon: MapPin },
     { key: "database" as const, label: "Database", icon: Database },
   ];
 
@@ -1759,6 +1760,11 @@ export default function AdminDashboard() {
           </motion.div>
         )}
 
+        {/* ── Regions ── */}
+        {tab === "regions" && isAdmin && (
+          <RegionsPanel />
+        )}
+
         {/* ── Database ── */}
         {tab === "database" && isAdmin && (
           <DatabaseManager />
@@ -1929,6 +1935,189 @@ function DatabaseManager() {
           </button>
         </div>
       )}
+    </motion.div>
+  );
+}
+
+// Regions Analytics Panel
+function RegionsPanel() {
+  const [regionStats, setRegionStats] = useState<{ country_code: string; country_name: string; views: number; unique_users: number }[]>([]);
+  const [recentViews, setRecentViews] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [usersByCountry, setUsersByCountry] = useState<{ country: string; count: number }[]>([]);
+
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      
+      // Get regional views aggregated by country
+      const { data: views } = await supabase
+        .from("regional_views")
+        .select("country_code, country_name, user_id")
+        .order("created_at", { ascending: false });
+      
+      if (views) {
+        // Aggregate by country
+        const countryMap: Record<string, { code: string; name: string; views: number; users: Set<string> }> = {};
+        for (const v of views) {
+          if (!countryMap[v.country_code]) {
+            countryMap[v.country_code] = { code: v.country_code, name: v.country_name, views: 0, users: new Set() };
+          }
+          countryMap[v.country_code].views++;
+          countryMap[v.country_code].users.add(v.user_id);
+        }
+        
+        const stats = Object.values(countryMap)
+          .map(c => ({ country_code: c.code, country_name: c.name, views: c.views, unique_users: c.users.size }))
+          .sort((a, b) => b.views - a.views);
+        
+        setRegionStats(stats);
+        setUsersByCountry(stats.map(s => ({ country: s.country_name, count: s.unique_users })));
+      }
+      
+      // Get recent views with anime info
+      const { data: recent } = await supabase
+        .from("regional_views")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(50);
+      
+      if (recent) setRecentViews(recent);
+      
+      // Get user profiles with country
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("country_code, country_name")
+        .not("country_code", "is", null);
+      
+      if (profiles) {
+        const profileMap: Record<string, number> = {};
+        for (const p of profiles) {
+          const key = p.country_name || p.country_code || "Unknown";
+          profileMap[key] = (profileMap[key] || 0) + 1;
+        }
+        // Don't overwrite if we already have view-based data
+      }
+      
+      setLoading(false);
+    };
+    
+    loadData();
+  }, []);
+
+  const COUNTRY_FLAGS: Record<string, string> = {
+    IN: "🇮🇳", US: "🇺🇸", GB: "🇬🇧", CA: "🇨🇦", AU: "🇦🇺", DE: "🇩🇪", FR: "🇫🇷", JP: "🇯🇵",
+    BR: "🇧🇷", MX: "🇲🇽", PH: "🇵🇭", ID: "🇮🇩", MY: "🇲🇾", SG: "🇸🇬", PK: "🇵🇰", BD: "🇧🇩",
+    NP: "🇳🇵", LK: "🇱🇰", AE: "🇦🇪", SA: "🇸🇦", NG: "🇳🇬", ZA: "🇿🇦", KE: "🇰🇪", EG: "🇪🇬",
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+      <div className="flex items-center gap-2">
+        <MapPin className="w-5 h-5 text-primary" />
+        <h2 className="text-lg font-bold text-foreground">User Regions</h2>
+      </div>
+
+      {/* Stats cards */}
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+        <div className="rounded-xl border border-border bg-card p-4">
+          <p className="text-xs text-muted-foreground">Countries</p>
+          <p className="text-2xl font-bold text-foreground">{regionStats.length}</p>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-4">
+          <p className="text-xs text-muted-foreground">Total Views</p>
+          <p className="text-2xl font-bold text-foreground">{regionStats.reduce((a, b) => a + b.views, 0)}</p>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-4">
+          <p className="text-xs text-muted-foreground">Unique Users</p>
+          <p className="text-2xl font-bold text-foreground">{regionStats.reduce((a, b) => a + b.unique_users, 0)}</p>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-4">
+          <p className="text-xs text-muted-foreground">Top Country</p>
+          <p className="text-xl font-bold text-foreground flex items-center gap-1">
+            {regionStats[0] ? (
+              <>
+                <span>{COUNTRY_FLAGS[regionStats[0].country_code] || "🌍"}</span>
+                <span>{regionStats[0].country_code}</span>
+              </>
+            ) : "—"}
+          </p>
+        </div>
+      </div>
+
+      {/* Country chart */}
+      {regionStats.length > 0 && (
+        <div className="rounded-xl border border-border bg-card p-4">
+          <h3 className="text-sm font-bold text-foreground mb-4">Views by Country</h3>
+          <ResponsiveContainer width="100%" height={250}>
+            <BarChart data={regionStats.slice(0, 10)} layout="vertical">
+              <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={10} />
+              <YAxis type="category" dataKey="country_code" stroke="hsl(var(--muted-foreground))" fontSize={10} width={40} />
+              <Tooltip 
+                contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }}
+                labelFormatter={(v) => regionStats.find(r => r.country_code === v)?.country_name || v}
+              />
+              <Bar dataKey="views" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Country leaderboard */}
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <div className="p-3 border-b border-border bg-secondary/30">
+          <h3 className="text-sm font-bold text-foreground">Country Leaderboard</h3>
+        </div>
+        <div className="divide-y divide-border max-h-80 overflow-y-auto">
+          {regionStats.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">No regional data yet. Users will be tracked as they watch anime.</p>
+          ) : regionStats.map((r, idx) => (
+            <div key={r.country_code} className="flex items-center gap-3 p-3 hover:bg-secondary/30">
+              <span className="w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center">
+                {idx + 1}
+              </span>
+              <span className="text-xl">{COUNTRY_FLAGS[r.country_code] || "🌍"}</span>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-foreground">{r.country_name}</p>
+                <p className="text-xs text-muted-foreground">{r.country_code}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm font-bold text-foreground">{r.views} views</p>
+                <p className="text-xs text-muted-foreground">{r.unique_users} users</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Recent views */}
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <div className="p-3 border-b border-border bg-secondary/30">
+          <h3 className="text-sm font-bold text-foreground">Recent Views</h3>
+        </div>
+        <div className="divide-y divide-border max-h-64 overflow-y-auto">
+          {recentViews.slice(0, 20).map((v) => (
+            <div key={v.id} className="flex items-center gap-3 p-2">
+              <span className="text-lg">{COUNTRY_FLAGS[v.country_code] || "🌍"}</span>
+              {v.anime_poster && (
+                <img src={v.anime_poster} alt="" className="w-8 h-10 rounded object-cover" />
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-foreground truncate">{v.anime_name}</p>
+                <p className="text-[10px] text-muted-foreground">{v.country_name} · {new Date(v.created_at).toLocaleString()}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </motion.div>
   );
 }
