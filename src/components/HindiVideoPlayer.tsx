@@ -326,9 +326,12 @@ export default function HindiVideoPlayer({
 
         if (Hls.isSupported()) {
           const hls = new Hls({
-            maxBufferLength: 4, maxMaxBufferLength: 10,
+            maxBufferLength: 2, maxMaxBufferLength: 4,
+            maxBufferSize: 1 * 1000 * 1000,
             startPosition: -1, enableWorker: false, startLevel: 0,
-            capLevelToPlayerSize: false,
+            capLevelToPlayerSize: true,
+            abrEwmaDefaultEstimate: 100000,
+            abrMaxWithRealBitrate: true,
             xhrSetup: (xhr) => { xhr.withCredentials = false; },
           });
           hls.loadSource(proxiedUrl);
@@ -336,6 +339,7 @@ export default function HindiVideoPlayer({
           hls.on(Hls.Events.MANIFEST_PARSED, () => {
             if (cancelled) { hls.destroy(); return; }
             hls.currentLevel = 0;
+            hls.autoLevelCapping = 0;
             preview.pause();
             setPreviewReady(true);
           });

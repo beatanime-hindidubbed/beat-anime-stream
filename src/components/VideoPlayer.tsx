@@ -306,15 +306,19 @@ export default function VideoPlayer({
 
     if (Hls.isSupported()) {
       const hls = new Hls({
-        maxBufferLength: 4, maxMaxBufferLength: 10,
+        maxBufferLength: 2, maxMaxBufferLength: 4,
+        maxBufferSize: 1 * 1000 * 1000, // 1MB max
         startPosition: -1, enableWorker: false, startLevel: 0,
-        capLevelToPlayerSize: false,
+        capLevelToPlayerSize: true,
+        abrEwmaDefaultEstimate: 100000, // assume low bandwidth to stay on lowest level
+        abrMaxWithRealBitrate: true,
         xhrSetup: (xhr) => { xhr.withCredentials = false; },
       });
       hls.loadSource(realSrc);
       hls.attachMedia(preview);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        hls.currentLevel = 0;
+        hls.currentLevel = 0; // lock to lowest quality
+        hls.autoLevelCapping = 0; // never go above level 0
         preview.pause();
         setPreviewReady(true);
       });
