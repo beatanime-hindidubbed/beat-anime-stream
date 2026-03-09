@@ -640,24 +640,8 @@ export default function VideoPlayer({
     const t    = pct * duration;
     setHoverTime(t);
     setHoverPct(pct * 100);
-
-    if (!previewVideoRef.current) return;
-    // Skip seeking if preview HLS not ready yet — but still show time tooltip
-    if (!previewReady) return;
-    if (Math.abs(lastPreviewSeek.current - t) < 0.3) return;
-    // Always reset seeking after a timeout to prevent stuck state
-    if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
-    // Use 0ms delay always — the safety timeout handles stuck states
-    previewSeekTimer.current = setTimeout(() => {
-      const pv = previewVideoRef.current;
-      if (!pv || previewSeeking.current) return;
-      lastPreviewSeek.current = t;
-      previewSeeking.current  = true;
-      setPreviewHasFrame(false);
-      pv.currentTime = t;
-      // Safety: auto-reset seeking flag after 400ms if seeked event never fires
-      setTimeout(() => { previewSeeking.current = false; }, 400);
-    }, 20);
+    seekPreviewToTime(t);
+  };
   };
 
   const handleProgressLeave = () => {
