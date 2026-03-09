@@ -341,7 +341,6 @@ export default function VideoPlayer({
       const ctx = canvas.getContext("2d");
       if (ctx) { ctx.drawImage(preview, 0, 0, canvas.width, canvas.height); setPreviewHasFrame(true); }
     };
-    // Also handle errors — reset seeking flag so it doesn't get stuck
     const onError = () => { previewSeeking.current = false; };
     const onStalled = () => { previewSeeking.current = false; };
     preview.addEventListener("seeked", onSeeked);
@@ -353,6 +352,58 @@ export default function VideoPlayer({
       preview.removeEventListener("stalled", onStalled);
     };
   }, []);
+
+  // Periodically capture frames from main video for instant preview cache
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const CAPTURE_INTERVAL = 3; // capture every 3 seconds of video time
+    const captureFrame = () => {
+      if (v.paused || v.ended || !v.videoWidth) return;
+      const t = Math.round(v.currentTime);
+      if (Math.abs(t - lastCaptureTime.current) < CAPTURE_INTERVAL) return;
+      lastCaptureTime.current = t;
+      // Use OffscreenCanvas for faster capture
+      try {
+        const oc = new OffscreenCanvas(80, 45);
+        const ctx = oc.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(v, 0, 0, 80, 45);
+          createImageBitmap(oc).then(bmp => {
+            frameCacheRef.current.set(t, bmp);
+            // Limit cache to ~200 entries (~10 min of video)
+            if (frameCacheRef.current.size > 200) {
+              const first = frameCacheRef.current.keys().next().value;
+              if (first !== undefined) frameCacheRef.current.delete(first);
+            }
+          }).catch(() => {});
+        }
+      } catch {
+        // OffscreenCanvas not supported, use regular canvas
+        const tc = document.createElement("canvas");
+        tc.width = 80; tc.height = 45;
+        const ctx = tc.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(v, 0, 0, 80, 45);
+          createImageBitmap(tc).then(bmp => {
+            frameCacheRef.current.set(t, bmp);
+            if (frameCacheRef.current.size > 200) {
+              const first = frameCacheRef.current.keys().next().value;
+              if (first !== undefined) frameCacheRef.current.delete(first);
+            }
+          }).catch(() => {});
+        }
+      }
+    };
+    const interval = setInterval(captureFrame, 500); // check every 500ms
+    return () => clearInterval(interval);
+  }, []);
+
+  // Clear frame cache on src change
+  useEffect(() => {
+    frameCacheRef.current.clear();
+    lastCaptureTime.current = -999;
+  }, [src]);
 
   // Buffering events
   useEffect(() => {
