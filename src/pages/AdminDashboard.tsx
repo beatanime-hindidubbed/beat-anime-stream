@@ -21,6 +21,7 @@ interface Ad {
 
 interface UserRole {
   id: string; user_id: string; role: string; username?: string; premium_until?: string;
+  country_code?: string; country_name?: string;
 }
 
 interface PremiumCode {
@@ -279,8 +280,14 @@ export default function AdminDashboard() {
     if (!roles) return;
     const enriched: UserRole[] = [];
     for (const r of roles) {
-      const { data: profile } = await supabase.from("profiles").select("username, premium_until").eq("user_id", r.user_id).single();
-      enriched.push({ ...r, username: profile?.username || "Unknown", premium_until: (profile as any)?.premium_until || null });
+      const { data: profile } = await supabase.from("profiles").select("username, premium_until, country_code, country_name").eq("user_id", r.user_id).single();
+      enriched.push({
+        ...r,
+        username: profile?.username || "Unknown",
+        premium_until: (profile as any)?.premium_until || null,
+        country_code: (profile as any)?.country_code || null,
+        country_name: (profile as any)?.country_name || null,
+      });
     }
     setUserRoles(enriched);
   };
@@ -1552,7 +1559,19 @@ export default function AdminDashboard() {
                             <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-accent/20 text-accent">PREMIUM</span>
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground font-mono">{ur.user_id.slice(0, 8)}...</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-xs text-muted-foreground font-mono">{ur.user_id.slice(0, 8)}...</p>
+                          {ur.country_code && (
+                            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-secondary text-[10px] text-muted-foreground">
+                              <MapPin className="w-2.5 h-2.5" />
+                              {({"IN":"🇮🇳","US":"🇺🇸","GB":"🇬🇧","CA":"🇨🇦","AU":"🇦🇺","DE":"🇩🇪","FR":"🇫🇷","JP":"🇯🇵","BR":"🇧🇷","PH":"🇵🇭","ID":"🇮🇩","PK":"🇵🇰","BD":"🇧🇩","NP":"🇳🇵","AE":"🇦🇪","SA":"🇸🇦"} as Record<string,string>)[ur.country_code] || "🌍"}{" "}
+                              {ur.country_name || ur.country_code}
+                            </span>
+                          )}
+                          {!ur.country_code && (
+                            <span className="text-[10px] text-muted-foreground/50">Region unknown</span>
+                          )}
+                        </div>
                         {isPremium && ur.premium_until && (
                           <p className="text-[10px] text-accent/70">
                             Premium until {new Date(ur.premium_until).toLocaleDateString()}
