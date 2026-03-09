@@ -564,13 +564,15 @@ export default function VideoPlayer({
     setShowSkipOutro(!!outro && v.currentTime >= outro.start && v.currentTime < outro.end);
   }, [intro, outro, onTimeUpdate]);
 
-  const togglePlay = () => {
+  const togglePlay = useCallback(() => {
     const v = videoRef.current;
     if (!v) return;
-    if (v.paused) { wasPlayingRef.current = true; v.play(); setPlaying(true); flashCenter("play"); }
+    // Prevent click from firing right after touch events on mobile
+    if (touchJustEnded.current) { touchJustEnded.current = false; return; }
+    if (v.paused) { wasPlayingRef.current = true; v.play().catch(() => {}); setPlaying(true); flashCenter("play"); }
     else          { wasPlayingRef.current = false; v.pause(); setPlaying(false); flashCenter("pause"); }
     flashWatermark();
-  };
+  }, []);
 
   const toggleMute = () => {
     const v = videoRef.current;
