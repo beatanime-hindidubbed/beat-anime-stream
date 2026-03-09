@@ -537,7 +537,6 @@ export default function VideoPlayer({
 
   // ── Seek bar touch ────────────────────────────────────────────────────
   const seekPreviewToTime = (t: number) => {
-    // Try frame cache first — instant, no network
     const rounded = Math.round(t);
     const cache = frameCacheRef.current;
     // Find nearest cached frame within 5s
@@ -553,33 +552,19 @@ export default function VideoPlayer({
         const ctx = canvas.getContext("2d");
         if (ctx) { ctx.drawImage(best, 0, 0, canvas.width, canvas.height); setPreviewHasFrame(true); }
       }
-      // Still seek HLS in background for a sharper frame
-      if (bestDist > 2 && previewReady && previewVideoRef.current) {
-        if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
-        previewSeekTimer.current = setTimeout(() => {
-          const pv = previewVideoRef.current;
-          if (!pv || previewSeeking.current) return;
-          lastPreviewSeek.current = t;
-          previewSeeking.current = true;
-          pv.currentTime = t;
-          setTimeout(() => { previewSeeking.current = false; }, 400);
-        }, 50);
-      }
-      return;
     }
-    // No cache hit — fall back to HLS preview seek
+    // Always seek HLS preview for sharper/forward frames (even if cache hit)
     if (!previewReady || !previewVideoRef.current) return;
-    if (Math.abs(lastPreviewSeek.current - t) < 0.3) return;
+    if (Math.abs(lastPreviewSeek.current - t) < 0.5) return;
     if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
-    previewSeekTimer.current = setTimeout(() => {
-      const pv = previewVideoRef.current;
-      if (!pv || previewSeeking.current) return;
-      lastPreviewSeek.current = t;
-      previewSeeking.current = true;
-      setPreviewHasFrame(false);
-      pv.currentTime = t;
-      setTimeout(() => { previewSeeking.current = false; }, 400);
-    }, 0); // no debounce for faster response
+    // Force-reset seeking flag so we don't get stuck
+    previewSeeking.current = false;
+    const pv = previewVideoRef.current;
+    lastPreviewSeek.current = t;
+    previewSeeking.current = true;
+    if (!best) setPreviewHasFrame(false); // only flash blank if no cache
+    pv.currentTime = t;
+    setTimeout(() => { previewSeeking.current = false; }, 300);
   };
 
   const handleSeekBarTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {

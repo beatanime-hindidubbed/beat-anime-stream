@@ -569,31 +569,18 @@ export default function HindiVideoPlayer({
         const ctx = canvas.getContext("2d");
         if (ctx) { ctx.drawImage(best, 0, 0, canvas.width, canvas.height); setPreviewHasFrame(true); }
       }
-      if (bestDist > 2 && previewReady && previewVideoRef.current) {
-        if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
-        previewSeekTimer.current = setTimeout(() => {
-          const pv = previewVideoRef.current;
-          if (!pv || previewSeeking.current) return;
-          lastPreviewSeek.current = t;
-          previewSeeking.current = true;
-          pv.currentTime = t;
-          setTimeout(() => { previewSeeking.current = false; }, 400);
-        }, 50);
-      }
-      return;
     }
+    // Always seek HLS preview for sharper/forward frames
     if (!previewReady || !previewVideoRef.current) return;
     if (Math.abs(lastPreviewSeek.current - t) < 0.5) return;
     if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
-    previewSeekTimer.current = setTimeout(() => {
-      const pv = previewVideoRef.current;
-      if (!pv) return;
-      lastPreviewSeek.current = t;
-      previewSeeking.current = true;
-      setPreviewHasFrame(false);
-      pv.currentTime = t;
-      setTimeout(() => { previewSeeking.current = false; }, 500);
-    }, 0);
+    previewSeeking.current = false;
+    const pv = previewVideoRef.current;
+    lastPreviewSeek.current = t;
+    previewSeeking.current = true;
+    if (!best) setPreviewHasFrame(false);
+    pv.currentTime = t;
+    setTimeout(() => { previewSeeking.current = false; }, 300);
   };
 
   const handleSeekBarTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
