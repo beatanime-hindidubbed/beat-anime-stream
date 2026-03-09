@@ -902,6 +902,10 @@ export default function VideoPlayer({
 
   const handleContainerTouchEnd = (e: React.TouchEvent) => {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    // Mark that a touch just ended — prevents onClick from double-toggling
+    touchJustEnded.current = true;
+    setTimeout(() => { touchJustEnded.current = false; }, 300);
+
     if (longPressActive) {
       const v = videoRef.current;
       if (v) v.playbackRate = speed;
@@ -918,9 +922,15 @@ export default function VideoPlayer({
     tapCount.current++;
     if (doubleTapTimer.current) clearTimeout(doubleTapTimer.current);
     doubleTapTimer.current = setTimeout(() => {
-      if (tapCount.current === 1) togglePlay();
+      if (tapCount.current === 1) {
+        const v = videoRef.current;
+        if (!v) return;
+        if (v.paused) { wasPlayingRef.current = true; v.play().catch(() => {}); setPlaying(true); flashCenter("play"); }
+        else          { wasPlayingRef.current = false; v.pause(); setPlaying(false); flashCenter("pause"); }
+        flashWatermark();
+      }
       tapCount.current = 0;
-    }, 220); // Reduced from 280ms for snappier response
+    }, 220);
     if (tapCount.current >= 2) {
       tapCount.current = 0;
       if (doubleTapTimer.current) clearTimeout(doubleTapTimer.current);
