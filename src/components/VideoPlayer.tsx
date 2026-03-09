@@ -537,6 +537,37 @@ export default function VideoPlayer({
 
   // ── Seek bar touch ────────────────────────────────────────────────────
   const seekPreviewToTime = (t: number) => {
+    // Try frame cache first — instant, no network
+    const rounded = Math.round(t);
+    const cache = frameCacheRef.current;
+    // Find nearest cached frame within 5s
+    let best: ImageBitmap | null = null;
+    let bestDist = 6;
+    for (const [time, bmp] of cache) {
+      const dist = Math.abs(time - rounded);
+      if (dist < bestDist) { best = bmp; bestDist = dist; }
+    }
+    if (best) {
+      const canvas = previewCanvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext("2d");
+        if (ctx) { ctx.drawImage(best, 0, 0, canvas.width, canvas.height); setPreviewHasFrame(true); }
+      }
+      // Still seek HLS in background for a sharper frame
+      if (bestDist > 2 && previewReady && previewVideoRef.current) {
+        if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
+        previewSeekTimer.current = setTimeout(() => {
+          const pv = previewVideoRef.current;
+          if (!pv || previewSeeking.current) return;
+          lastPreviewSeek.current = t;
+          previewSeeking.current = true;
+          pv.currentTime = t;
+          setTimeout(() => { previewSeeking.current = false; }, 400);
+        }, 50);
+      }
+      return;
+    }
+    // No cache hit — fall back to HLS preview seek
     if (!previewReady || !previewVideoRef.current) return;
     if (Math.abs(lastPreviewSeek.current - t) < 0.3) return;
     if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
@@ -548,7 +579,7 @@ export default function VideoPlayer({
       setPreviewHasFrame(false);
       pv.currentTime = t;
       setTimeout(() => { previewSeeking.current = false; }, 400);
-    }, 20);
+    }, 0); // no debounce for faster response
   };
 
   const handleSeekBarTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
