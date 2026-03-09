@@ -1786,7 +1786,7 @@ function DatabaseManager() {
       const from = pageNum * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
       const { data: rows, error: err, count } = await supabase
-        .from(tableName)
+        .from(tableName as any)
         .select("*", { count: "exact" })
         .range(from, to)
         .order("created_at", { ascending: false });
@@ -1809,7 +1809,7 @@ function DatabaseManager() {
   const deleteRow = async (id: string) => {
     if (!confirm("Delete this row? This cannot be undone.")) return;
     try {
-      await supabase.from(selectedTable).delete().eq("id", id);
+      await supabase.from(selectedTable as any).delete().eq("id", id);
       fetchTableData(selectedTable, page);
     } catch (e: any) {
       alert("Failed to delete: " + e.message);
