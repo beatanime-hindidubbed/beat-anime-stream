@@ -95,7 +95,7 @@ const FONT_STYLES: { key: FontStyle; label: string; desc: string; preview: strin
   { key: "cinematic", label: "Cinematic", desc: "Bebas Neue + Inter", preview: "Aa" },
 ];
 
-type TabKey = "stats" | "branding" | "effects" | "sandbox" | "ads" | "api" | "users" | "policy" | "premium" | "chat" | "comments" | "player" | "banlist" | "logs" | "database";
+type TabKey = "stats" | "branding" | "effects" | "sandbox" | "ads" | "api" | "users" | "policy" | "premium" | "chat" | "comments" | "player" | "banlist" | "logs" | "database" | "regions";
 
 export default function AdminDashboard() {
   const { user, isAdmin, isModerator, loading: authLoading, logout } = useSupabaseAuth();
