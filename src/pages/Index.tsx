@@ -114,6 +114,9 @@ export default function Index() {
           </AnimeSection>
         )}
 
+        {/* Regional Popular */}
+        {user && <RegionalPopularSection />}
+
         {/* Personalized For You */}
         {forYouAnimes.length > 0 && (
           <AnimeSection
