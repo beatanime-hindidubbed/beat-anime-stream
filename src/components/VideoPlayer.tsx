@@ -1033,8 +1033,8 @@ export default function VideoPlayer({
           ref={videoRef}
           className="w-full h-full"
           onTimeUpdate={handleTimeUpdate}
-          onPlay={() => { setPlaying(true); wasPlayingRef.current = true; }}
-          onPause={() => { setPlaying(false); wasPlayingRef.current = false; }}
+          onPlay={() => { setPlaying(true); if (!isSeeking.current) wasPlayingRef.current = true; }}
+          onPause={() => { setPlaying(false); /* Do NOT reset wasPlayingRef here — it breaks seek resume on mobile */ }}
           onEnded={() => { setPlaying(false); wasPlayingRef.current = false; onEnded?.(); }}
           onClick={togglePlay}
           crossOrigin="anonymous"
