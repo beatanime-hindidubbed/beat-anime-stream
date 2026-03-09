@@ -90,6 +90,8 @@ export default function HindiVideoPlayer({
   const previewSeekTimer = useRef<ReturnType<typeof setTimeout>>();
   const lastPreviewSeek  = useRef<number>(-999);
   const previewSeeking   = useRef(false);
+  const frameCacheRef = useRef<Map<number, ImageBitmap>>(new Map());
+  const lastCaptureTime = useRef<number>(-999);
 
   const encodedSrc = useRef(src ? obfuscate(src) : "");
   const getUrl     = useRef(src ? makeAccessor(encodedSrc.current) : () => "");
