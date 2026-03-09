@@ -377,6 +377,56 @@ export default function HindiVideoPlayer({
     };
   }, []);
 
+  // Periodically capture frames from main video for instant preview cache
+  useEffect(() => {
+    if (isIframe) return;
+    const v = videoRef.current;
+    if (!v) return;
+    const CAPTURE_INTERVAL = 3;
+    const captureFrame = () => {
+      if (v.paused || v.ended || !v.videoWidth) return;
+      const t = Math.round(v.currentTime);
+      if (Math.abs(t - lastCaptureTime.current) < CAPTURE_INTERVAL) return;
+      lastCaptureTime.current = t;
+      try {
+        const oc = new OffscreenCanvas(80, 45);
+        const ctx = oc.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(v, 0, 0, 80, 45);
+          createImageBitmap(oc).then(bmp => {
+            frameCacheRef.current.set(t, bmp);
+            if (frameCacheRef.current.size > 200) {
+              const first = frameCacheRef.current.keys().next().value;
+              if (first !== undefined) frameCacheRef.current.delete(first);
+            }
+          }).catch(() => {});
+        }
+      } catch {
+        const tc = document.createElement("canvas");
+        tc.width = 80; tc.height = 45;
+        const ctx = tc.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(v, 0, 0, 80, 45);
+          createImageBitmap(tc).then(bmp => {
+            frameCacheRef.current.set(t, bmp);
+            if (frameCacheRef.current.size > 200) {
+              const first = frameCacheRef.current.keys().next().value;
+              if (first !== undefined) frameCacheRef.current.delete(first);
+            }
+          }).catch(() => {});
+        }
+      }
+    };
+    const interval = setInterval(captureFrame, 500);
+    return () => clearInterval(interval);
+  }, [isIframe]);
+
+  // Clear frame cache on src change
+  useEffect(() => {
+    frameCacheRef.current.clear();
+    lastCaptureTime.current = -999;
+  }, [src]);
+
   // Buffering events
   useEffect(() => {
     if (isIframe) return;
