@@ -1655,10 +1655,24 @@ export default function AdminDashboard() {
                             )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <span className={`px-2.5 py-1 rounded-md text-xs font-medium ${ur.role === "admin" ? "bg-accent/20 text-accent" : ur.role === "moderator" ? "bg-primary/20 text-primary" : "bg-secondary text-secondary-foreground"}`}>
-                            {ur.role}
-                          </span>
+                        <div className="flex items-center gap-2">
+                          {ur.user_id !== user?.id ? (
+                            <select
+                              value={ur.role}
+                              onChange={async (e) => {
+                                const newRole = e.target.value;
+                                await supabase.from("user_roles").update({ role: newRole as any }).eq("id", ur.id);
+                                setUserRoles(prev => prev.map(r => r.id === ur.id ? { ...r, role: newRole } : r));
+                              }}
+                              className="h-8 px-2 rounded-md text-xs font-medium border border-border bg-secondary text-foreground focus:ring-1 focus:ring-primary focus:outline-none"
+                            >
+                              {ROLES.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
+                            </select>
+                          ) : (
+                            <span className={`px-2.5 py-1 rounded-md text-xs font-medium ${ur.role === "admin" ? "bg-accent/20 text-accent" : ur.role === "moderator" ? "bg-primary/20 text-primary" : "bg-secondary text-secondary-foreground"}`}>
+                              {ur.role}
+                            </span>
+                          )}
                           {ur.user_id !== user?.id && (
                             <button onClick={() => removeUserRole(ur.id)} className="p-1.5 rounded-lg hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors">
                               <UserMinus className="w-4 h-4" />
