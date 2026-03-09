@@ -321,7 +321,7 @@ export default function VideoPlayer({
       previewHlsRef.current = hls;
       return () => { hls.destroy(); previewHlsRef.current = null; setPreviewReady(false); };
     }
-  }, [src, canHover]);
+  }, [src]);
 
   // Draw preview frame to canvas
   useEffect(() => {
