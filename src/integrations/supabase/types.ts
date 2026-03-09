@@ -312,6 +312,8 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
+          country_code: string | null
+          country_name: string | null
           created_at: string
           id: string
           premium_until: string | null
@@ -320,6 +322,8 @@ export type Database = {
         }
         Insert: {
           avatar_url?: string | null
+          country_code?: string | null
+          country_name?: string | null
           created_at?: string
           id?: string
           premium_until?: string | null
@@ -328,6 +332,8 @@ export type Database = {
         }
         Update: {
           avatar_url?: string | null
+          country_code?: string | null
+          country_name?: string | null
           created_at?: string
           id?: string
           premium_until?: string | null
@@ -354,6 +360,42 @@ export type Database = {
           created_at?: string
           id?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      regional_views: {
+        Row: {
+          anime_id: string
+          anime_name: string
+          anime_poster: string | null
+          country_code: string
+          country_name: string
+          created_at: string
+          id: string
+          user_id: string
+          view_date: string
+        }
+        Insert: {
+          anime_id: string
+          anime_name: string
+          anime_poster?: string | null
+          country_code: string
+          country_name: string
+          created_at?: string
+          id?: string
+          user_id: string
+          view_date?: string
+        }
+        Update: {
+          anime_id?: string
+          anime_name?: string
+          anime_poster?: string | null
+          country_code?: string
+          country_name?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+          view_date?: string
         }
         Relationships: []
       }
