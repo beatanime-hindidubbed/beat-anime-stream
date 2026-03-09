@@ -90,6 +90,8 @@ export default function HindiVideoPlayer({
   const previewSeekTimer = useRef<ReturnType<typeof setTimeout>>();
   const lastPreviewSeek  = useRef<number>(-999);
   const previewSeeking   = useRef(false);
+  const frameCacheRef = useRef<Map<number, ImageBitmap>>(new Map());
+  const lastCaptureTime = useRef<number>(-999);
 
   const encodedSrc = useRef(src ? obfuscate(src) : "");
   const getUrl     = useRef(src ? makeAccessor(encodedSrc.current) : () => "");
@@ -375,6 +377,56 @@ export default function HindiVideoPlayer({
     };
   }, []);
 
+  // Periodically capture frames from main video for instant preview cache
+  useEffect(() => {
+    if (isIframe) return;
+    const v = videoRef.current;
+    if (!v) return;
+    const CAPTURE_INTERVAL = 3;
+    const captureFrame = () => {
+      if (v.paused || v.ended || !v.videoWidth) return;
+      const t = Math.round(v.currentTime);
+      if (Math.abs(t - lastCaptureTime.current) < CAPTURE_INTERVAL) return;
+      lastCaptureTime.current = t;
+      try {
+        const oc = new OffscreenCanvas(80, 45);
+        const ctx = oc.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(v, 0, 0, 80, 45);
+          createImageBitmap(oc).then(bmp => {
+            frameCacheRef.current.set(t, bmp);
+            if (frameCacheRef.current.size > 200) {
+              const first = frameCacheRef.current.keys().next().value;
+              if (first !== undefined) frameCacheRef.current.delete(first);
+            }
+          }).catch(() => {});
+        }
+      } catch {
+        const tc = document.createElement("canvas");
+        tc.width = 80; tc.height = 45;
+        const ctx = tc.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(v, 0, 0, 80, 45);
+          createImageBitmap(tc).then(bmp => {
+            frameCacheRef.current.set(t, bmp);
+            if (frameCacheRef.current.size > 200) {
+              const first = frameCacheRef.current.keys().next().value;
+              if (first !== undefined) frameCacheRef.current.delete(first);
+            }
+          }).catch(() => {});
+        }
+      }
+    };
+    const interval = setInterval(captureFrame, 500);
+    return () => clearInterval(interval);
+  }, [isIframe]);
+
+  // Clear frame cache on src change
+  useEffect(() => {
+    frameCacheRef.current.clear();
+    lastCaptureTime.current = -999;
+  }, [src]);
+
   // Buffering events
   useEffect(() => {
     if (isIframe) return;
@@ -503,6 +555,33 @@ export default function HindiVideoPlayer({
 
   // ── Seek bar touch ────────────────────────────────────────────────────
   const seekPreviewToTime = (t: number) => {
+    const rounded = Math.round(t);
+    const cache = frameCacheRef.current;
+    let best: ImageBitmap | null = null;
+    let bestDist = 6;
+    for (const [time, bmp] of cache) {
+      const dist = Math.abs(time - rounded);
+      if (dist < bestDist) { best = bmp; bestDist = dist; }
+    }
+    if (best) {
+      const canvas = previewCanvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext("2d");
+        if (ctx) { ctx.drawImage(best, 0, 0, canvas.width, canvas.height); setPreviewHasFrame(true); }
+      }
+      if (bestDist > 2 && previewReady && previewVideoRef.current) {
+        if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
+        previewSeekTimer.current = setTimeout(() => {
+          const pv = previewVideoRef.current;
+          if (!pv || previewSeeking.current) return;
+          lastPreviewSeek.current = t;
+          previewSeeking.current = true;
+          pv.currentTime = t;
+          setTimeout(() => { previewSeeking.current = false; }, 400);
+        }, 50);
+      }
+      return;
+    }
     if (!previewReady || !previewVideoRef.current) return;
     if (Math.abs(lastPreviewSeek.current - t) < 0.5) return;
     if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
@@ -514,7 +593,7 @@ export default function HindiVideoPlayer({
       setPreviewHasFrame(false);
       pv.currentTime = t;
       setTimeout(() => { previewSeeking.current = false; }, 500);
-    }, previewSeeking.current ? 30 : 0);
+    }, 0);
   };
 
   const handleSeekBarTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
@@ -572,18 +651,7 @@ export default function HindiVideoPlayer({
     const t    = pct * duration;
     setHoverTime(t);
     setHoverPct(pct * 100);
-
-    if (!previewReady || !previewVideoRef.current) return;
-    if (Math.abs(lastPreviewSeek.current - t) < 0.5) return;
-    if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
-    previewSeekTimer.current = setTimeout(() => {
-      const pv = previewVideoRef.current;
-      if (!pv) return;
-      lastPreviewSeek.current = t;
-      previewSeeking.current  = true;
-      pv.currentTime = t;
-      setTimeout(() => { previewSeeking.current = false; }, 500);
-    }, previewSeeking.current ? 30 : 0);
+    seekPreviewToTime(t);
   };
 
   const handleProgressLeave = () => {

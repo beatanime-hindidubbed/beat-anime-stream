@@ -70,6 +70,9 @@ export default function VideoPlayer({
   const previewSeekTimer = useRef<ReturnType<typeof setTimeout>>();
   const lastPreviewSeek  = useRef<number>(-999);
   const previewSeeking   = useRef(false);
+  // Frame cache: capture frames from main video for instant previews
+  const frameCacheRef = useRef<Map<number, ImageBitmap>>(new Map());
+  const lastCaptureTime = useRef<number>(-999);
 
   // Secure URL accessors
   const encodedSrc = useRef(obfuscate(src));
@@ -338,7 +341,6 @@ export default function VideoPlayer({
       const ctx = canvas.getContext("2d");
       if (ctx) { ctx.drawImage(preview, 0, 0, canvas.width, canvas.height); setPreviewHasFrame(true); }
     };
-    // Also handle errors — reset seeking flag so it doesn't get stuck
     const onError = () => { previewSeeking.current = false; };
     const onStalled = () => { previewSeeking.current = false; };
     preview.addEventListener("seeked", onSeeked);
@@ -350,6 +352,58 @@ export default function VideoPlayer({
       preview.removeEventListener("stalled", onStalled);
     };
   }, []);
+
+  // Periodically capture frames from main video for instant preview cache
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const CAPTURE_INTERVAL = 3; // capture every 3 seconds of video time
+    const captureFrame = () => {
+      if (v.paused || v.ended || !v.videoWidth) return;
+      const t = Math.round(v.currentTime);
+      if (Math.abs(t - lastCaptureTime.current) < CAPTURE_INTERVAL) return;
+      lastCaptureTime.current = t;
+      // Use OffscreenCanvas for faster capture
+      try {
+        const oc = new OffscreenCanvas(80, 45);
+        const ctx = oc.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(v, 0, 0, 80, 45);
+          createImageBitmap(oc).then(bmp => {
+            frameCacheRef.current.set(t, bmp);
+            // Limit cache to ~200 entries (~10 min of video)
+            if (frameCacheRef.current.size > 200) {
+              const first = frameCacheRef.current.keys().next().value;
+              if (first !== undefined) frameCacheRef.current.delete(first);
+            }
+          }).catch(() => {});
+        }
+      } catch {
+        // OffscreenCanvas not supported, use regular canvas
+        const tc = document.createElement("canvas");
+        tc.width = 80; tc.height = 45;
+        const ctx = tc.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(v, 0, 0, 80, 45);
+          createImageBitmap(tc).then(bmp => {
+            frameCacheRef.current.set(t, bmp);
+            if (frameCacheRef.current.size > 200) {
+              const first = frameCacheRef.current.keys().next().value;
+              if (first !== undefined) frameCacheRef.current.delete(first);
+            }
+          }).catch(() => {});
+        }
+      }
+    };
+    const interval = setInterval(captureFrame, 500); // check every 500ms
+    return () => clearInterval(interval);
+  }, []);
+
+  // Clear frame cache on src change
+  useEffect(() => {
+    frameCacheRef.current.clear();
+    lastCaptureTime.current = -999;
+  }, [src]);
 
   // Buffering events
   useEffect(() => {
@@ -483,6 +537,37 @@ export default function VideoPlayer({
 
   // ── Seek bar touch ────────────────────────────────────────────────────
   const seekPreviewToTime = (t: number) => {
+    // Try frame cache first — instant, no network
+    const rounded = Math.round(t);
+    const cache = frameCacheRef.current;
+    // Find nearest cached frame within 5s
+    let best: ImageBitmap | null = null;
+    let bestDist = 6;
+    for (const [time, bmp] of cache) {
+      const dist = Math.abs(time - rounded);
+      if (dist < bestDist) { best = bmp; bestDist = dist; }
+    }
+    if (best) {
+      const canvas = previewCanvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext("2d");
+        if (ctx) { ctx.drawImage(best, 0, 0, canvas.width, canvas.height); setPreviewHasFrame(true); }
+      }
+      // Still seek HLS in background for a sharper frame
+      if (bestDist > 2 && previewReady && previewVideoRef.current) {
+        if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
+        previewSeekTimer.current = setTimeout(() => {
+          const pv = previewVideoRef.current;
+          if (!pv || previewSeeking.current) return;
+          lastPreviewSeek.current = t;
+          previewSeeking.current = true;
+          pv.currentTime = t;
+          setTimeout(() => { previewSeeking.current = false; }, 400);
+        }, 50);
+      }
+      return;
+    }
+    // No cache hit — fall back to HLS preview seek
     if (!previewReady || !previewVideoRef.current) return;
     if (Math.abs(lastPreviewSeek.current - t) < 0.3) return;
     if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
@@ -494,7 +579,7 @@ export default function VideoPlayer({
       setPreviewHasFrame(false);
       pv.currentTime = t;
       setTimeout(() => { previewSeeking.current = false; }, 400);
-    }, 20);
+    }, 0); // no debounce for faster response
   };
 
   const handleSeekBarTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
@@ -555,24 +640,7 @@ export default function VideoPlayer({
     const t    = pct * duration;
     setHoverTime(t);
     setHoverPct(pct * 100);
-
-    if (!previewVideoRef.current) return;
-    // Skip seeking if preview HLS not ready yet — but still show time tooltip
-    if (!previewReady) return;
-    if (Math.abs(lastPreviewSeek.current - t) < 0.3) return;
-    // Always reset seeking after a timeout to prevent stuck state
-    if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
-    // Use 0ms delay always — the safety timeout handles stuck states
-    previewSeekTimer.current = setTimeout(() => {
-      const pv = previewVideoRef.current;
-      if (!pv || previewSeeking.current) return;
-      lastPreviewSeek.current = t;
-      previewSeeking.current  = true;
-      setPreviewHasFrame(false);
-      pv.currentTime = t;
-      // Safety: auto-reset seeking flag after 400ms if seeked event never fires
-      setTimeout(() => { previewSeeking.current = false; }, 400);
-    }, 20);
+    seekPreviewToTime(t);
   };
 
   const handleProgressLeave = () => {
