@@ -608,18 +608,31 @@ export default function VideoPlayer({
         if (ctx) { ctx.drawImage(best, 0, 0, canvas.width, canvas.height); setPreviewHasFrame(true); }
       }
     }
-    // Always seek HLS preview for sharper/forward frames (even if cache hit)
-    if (!previewReady || !previewVideoRef.current) return;
+    // Seek next available preview video from pool for sharper/forward frames
+    if (!previewReady) return;
     if (Math.abs(lastPreviewSeek.current - t) < 0.5) return;
-    if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
-    // Force-reset seeking flag so we don't get stuck
-    previewSeeking.current = false;
-    const pv = previewVideoRef.current;
     lastPreviewSeek.current = t;
-    previewSeeking.current = true;
-    if (!best) setPreviewHasFrame(false); // only flash blank if no cache
-    pv.currentTime = t;
-    setTimeout(() => { previewSeeking.current = false; }, 300);
+    // Find a non-seeking pool member (round-robin)
+    for (let attempt = 0; attempt < PREVIEW_POOL_SIZE; attempt++) {
+      const idx = (previewRoundRobin.current + attempt) % PREVIEW_POOL_SIZE;
+      const pv = previewVideoRefs.current[idx];
+      if (pv && !previewSeeking.current[idx]) {
+        previewRoundRobin.current = idx + 1;
+        previewSeeking.current[idx] = true;
+        if (!best) setPreviewHasFrame(false);
+        pv.currentTime = t;
+        setTimeout(() => { previewSeeking.current[idx] = false; }, 300);
+        return;
+      }
+    }
+    // All busy — force the first one
+    const pv = previewVideoRefs.current[0];
+    if (pv) {
+      previewSeeking.current[0] = true;
+      if (!best) setPreviewHasFrame(false);
+      pv.currentTime = t;
+      setTimeout(() => { previewSeeking.current[0] = false; }, 300);
+    }
   };
 
   const handleSeekBarTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
