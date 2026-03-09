@@ -1266,9 +1266,21 @@ export default function HindiVideoPlayer({
                       }} />
                     </div>
                   </div>
-                  <div className="absolute rounded-full pointer-events-none opacity-0 group-hover/progress:opacity-100 transition-all duration-150"
-                    style={{ width: "14px", height: "14px", left: `${progress}%`, top: "50%", transform: "translateX(-50%) translateY(-50%)",
-                      background: "white", boxShadow: "0 0 0 3px hsl(var(--primary) / 0.4), 0 2px 8px rgba(0,0,0,0.8)" }} />
+                  {/* Thumb — appears on hover (desktop) / while scrubbing (mobile) */}
+                  <div
+                    className={`absolute rounded-full pointer-events-none transition-all duration-150 ${
+                      canHover ? "opacity-0 group-hover/progress:opacity-100" : hoverTime !== null ? "opacity-100" : "opacity-0"
+                    }`}
+                    style={{
+                      width: "14px",
+                      height: "14px",
+                      left: `${progress}%`,
+                      top: "50%",
+                      transform: "translateX(-50%) translateY(-50%)",
+                      background: "white",
+                      boxShadow: "0 0 0 3px hsl(var(--primary) / 0.4), 0 2px 8px rgba(0,0,0,0.8)",
+                    }}
+                  />
 
                   {/* Preview thumbnail */}
                   {hoverTime !== null && (
