@@ -63,16 +63,22 @@ export default function VideoPlayer({
   const hlsRef       = useRef<Hls | null>(null);
   const wrapperRef   = useRef<HTMLDivElement>(null);
 
-  // Preview thumbnail
-  const previewVideoRef  = useRef<HTMLVideoElement>(null);
-  const previewHlsRef    = useRef<Hls | null>(null);
+  // Preview thumbnail — pool of 3 preview videos for parallel seeking
+  const PREVIEW_POOL_SIZE = 3;
+  const previewVideoRefs = useRef<(HTMLVideoElement | null)[]>(Array(3).fill(null));
+  const previewHlsRefs   = useRef<(Hls | null)[]>(Array(3).fill(null));
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const previewSeekTimer = useRef<ReturnType<typeof setTimeout>>();
   const lastPreviewSeek  = useRef<number>(-999);
-  const previewSeeking   = useRef(false);
-  // Frame cache: capture frames from main video for instant previews
+  const previewSeeking   = useRef<boolean[]>([false, false, false]);
+  const previewRoundRobin = useRef(0);
+  // Frame cache: capture frames from main + predictive pre-fetch for instant previews
   const frameCacheRef = useRef<Map<number, ImageBitmap>>(new Map());
   const lastCaptureTime = useRef<number>(-999);
+  const prefetchTimer = useRef<ReturnType<typeof setTimeout>>();
+  // Legacy compat refs
+  const previewVideoRef = useRef<HTMLVideoElement | null>(null);
+  const previewHlsRef = useRef<Hls | null>(null);
 
   // Secure URL accessors
   const encodedSrc = useRef(obfuscate(src));
