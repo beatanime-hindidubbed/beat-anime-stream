@@ -716,6 +716,8 @@ export default function HindiVideoPlayer({
     e.stopPropagation();
     touchOnSeekBar.current = true;
     isDraggingSeekBar.current = true;
+    resetHideTimer();
+    setPreviewHasFrame(false);
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
     if (instantPreviewRAF.current) cancelAnimationFrame(instantPreviewRAF.current);
     touchMoved.current = true;
@@ -726,6 +728,9 @@ export default function HindiVideoPlayer({
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width));
     const targetTime = pct * duration;
+    dragTargetTimeRef.current = targetTime;
+    setScrubTime(targetTime);
+    setCurrent(targetTime);
     v.currentTime = targetTime;
     setHoverTime(targetTime);
     setHoverPct(pct * 100);
