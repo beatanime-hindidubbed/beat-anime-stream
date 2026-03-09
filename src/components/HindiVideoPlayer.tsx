@@ -346,7 +346,7 @@ export default function HindiVideoPlayer({
 
     loadEnglishPreview();
     return () => { cancelled = true; if (previewHlsRef.current) { previewHlsRef.current.destroy(); previewHlsRef.current = null; } setPreviewReady(false); };
-  }, [episodeId, canHover, isIframe]);
+  }, [episodeId, isIframe]);
 
   // Draw preview frame to canvas
   useEffect(() => {
