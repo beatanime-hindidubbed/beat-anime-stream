@@ -765,15 +765,20 @@ export default function HindiVideoPlayer({
     e.stopPropagation();
     touchOnSeekBar.current = false;
     isDraggingSeekBar.current = false;
+    dragTargetTimeRef.current = null;
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
     if (instantPreviewRAF.current) cancelAnimationFrame(instantPreviewRAF.current);
     setHoverTime(null);
+    setScrubTime(null);
     const v = videoRef.current;
     if (!v || !duration) return;
     const touch = e.changedTouches[0];
     if (touch) {
       const rect = e.currentTarget.getBoundingClientRect();
-      v.currentTime = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width)) * duration;
+      const pct = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
+      const targetTime = pct * duration;
+      setCurrent(targetTime);
+      v.currentTime = targetTime;
     }
     if (wasPlayingRef.current && v.paused) v.play();
   };
