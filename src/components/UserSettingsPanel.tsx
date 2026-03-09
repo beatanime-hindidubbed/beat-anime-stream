@@ -53,9 +53,25 @@ export default function UserSettingsPanel() {
   const [open, setOpen] = useState(false);
   const [prefs, setPrefs] = useState<UserPrefs>(getPrefs);
 
-  if (!user) return null;
-
   const isLoggedIn = !!user;
+
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  if (!user) return null;
 
   const update = (partial: Partial<UserPrefs>) => {
     const next = { ...prefs, ...partial };
