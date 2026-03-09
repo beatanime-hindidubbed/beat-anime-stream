@@ -107,6 +107,7 @@ export default function VideoPlayer({
   const [qualityLevels, setQualityLevels] = useState<{ height: number; bitrate: number }[]>([]);
   const [currentQuality, setCurrentQuality] = useState<number>(-1);
   const [hoverTime, setHoverTime]   = useState<number | null>(null);
+  const [scrubTime, setScrubTime]   = useState<number | null>(null); // UI sync while dragging
   const [hoverPct, setHoverPct]     = useState(0);
   const [previewHasFrame, setPreviewHasFrame] = useState(false);
   const [previewReady, setPreviewReady] = useState(false);

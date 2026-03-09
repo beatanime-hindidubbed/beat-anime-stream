@@ -124,6 +124,7 @@ export default function HindiVideoPlayer({
   const [currentQuality, setCurrentQuality] = useState<number>(-1);
   // Preview thumbnail state (feature parity)
   const [hoverTime, setHoverTime]   = useState<number | null>(null);
+  const [scrubTime, setScrubTime]   = useState<number | null>(null); // UI sync while dragging
   const [hoverPct, setHoverPct]     = useState(0);
   const [previewHasFrame, setPreviewHasFrame] = useState(false);
   const [previewReady, setPreviewReady] = useState(false);
