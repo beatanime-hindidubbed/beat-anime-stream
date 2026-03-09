@@ -651,18 +651,7 @@ export default function HindiVideoPlayer({
     const t    = pct * duration;
     setHoverTime(t);
     setHoverPct(pct * 100);
-
-    if (!previewReady || !previewVideoRef.current) return;
-    if (Math.abs(lastPreviewSeek.current - t) < 0.5) return;
-    if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
-    previewSeekTimer.current = setTimeout(() => {
-      const pv = previewVideoRef.current;
-      if (!pv) return;
-      lastPreviewSeek.current = t;
-      previewSeeking.current  = true;
-      pv.currentTime = t;
-      setTimeout(() => { previewSeeking.current = false; }, 500);
-    }, previewSeeking.current ? 30 : 0);
+    seekPreviewToTime(t);
   };
 
   const handleProgressLeave = () => {
