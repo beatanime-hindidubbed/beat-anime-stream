@@ -901,6 +901,9 @@ export default function HindiVideoPlayer({
 
   const handleContainerTouchEnd = (e: React.TouchEvent) => {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    touchJustEnded.current = true;
+    setTimeout(() => { touchJustEnded.current = false; }, 300);
+
     if (longPressActive) {
       const v = videoRef.current;
       if (v) v.playbackRate = speed;
@@ -914,7 +917,16 @@ export default function HindiVideoPlayer({
     const x = e.changedTouches[0].clientX - rect.left;
     tapCount.current++;
     if (doubleTapTimer.current) clearTimeout(doubleTapTimer.current);
-    doubleTapTimer.current = setTimeout(() => { if (tapCount.current === 1) togglePlay(); tapCount.current = 0; }, 220);
+    doubleTapTimer.current = setTimeout(() => {
+      if (tapCount.current === 1) {
+        const v = videoRef.current;
+        if (!v) return;
+        if (v.paused) { wasPlayingRef.current = true; v.play().catch(() => {}); setPlaying(true); flashCenter("play"); }
+        else          { wasPlayingRef.current = false; v.pause(); setPlaying(false); flashCenter("pause"); }
+        flashWatermark();
+      }
+      tapCount.current = 0;
+    }, 220);
     if (tapCount.current >= 2) {
       tapCount.current = 0;
       if (doubleTapTimer.current) clearTimeout(doubleTapTimer.current);
