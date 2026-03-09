@@ -740,16 +740,20 @@ export default function HindiVideoPlayer({
   const handleSeekBarTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
+    resetHideTimer();
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
     const v = videoRef.current;
     if (!v || !duration) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width));
     const targetTime = pct * duration;
-    
-    // Use RAF for smoother 60fps preview updates during drag
+
+    // Use RAF for smoother 60fps UI + preview updates during drag
     if (instantPreviewRAF.current) cancelAnimationFrame(instantPreviewRAF.current);
     instantPreviewRAF.current = requestAnimationFrame(() => {
+      dragTargetTimeRef.current = targetTime;
+      setScrubTime(targetTime);
+      setCurrent(targetTime);
       v.currentTime = targetTime;
       setHoverTime(targetTime);
       setHoverPct(pct * 100);
