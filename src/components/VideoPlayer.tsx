@@ -297,9 +297,8 @@ export default function VideoPlayer({
     }
   }, [src, startTime]);
 
-  // ── Preview HLS (desktop only) ────────────────────────────────────────
+  // ── Preview HLS (desktop + mobile drag) ─────────────────────────────
   useEffect(() => {
-    if (!canHover) return;
     const preview = previewVideoRef.current;
     let realSrc: string;
     try { realSrc = getUrl.current(); } catch { return; }
