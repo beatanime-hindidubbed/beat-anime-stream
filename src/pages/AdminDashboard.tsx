@@ -1761,34 +1761,174 @@ export default function AdminDashboard() {
 
         {/* ── Database ── */}
         {tab === "database" && isAdmin && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-                <Database className="w-5 h-5 text-primary" /> Database Manager
-              </h2>
-              <a
-                href={`https://supabase.com/dashboard/project/${import.meta.env.VITE_SUPABASE_PROJECT_ID}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90"
-              >
-                <ExternalLink className="w-3 h-3" /> Open Full Dashboard
-              </a>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Full database management embedded below. You can view tables, edit rows, run queries, and manage your entire backend directly.
-            </p>
-            <div className="rounded-xl border border-border overflow-hidden bg-card" style={{ height: "calc(100vh - 200px)", minHeight: "600px" }}>
-              <iframe
-                src={`https://supabase.com/dashboard/project/${import.meta.env.VITE_SUPABASE_PROJECT_ID}/editor`}
-                className="w-full h-full border-0"
-                title="Database Manager"
-                allow="clipboard-read; clipboard-write"
-              />
-            </div>
-          </motion.div>
+          <DatabaseManager />
         )}
       </div>
     </div>
+  );
+}
+
+// Native Database Manager Component
+function DatabaseManager() {
+  const TABLES = ["profiles", "user_roles", "comments", "chat_messages", "chat_bans", "anime_reviews", "continue_watching", "premium_codes", "ads", "site_settings", "admin_logs", "rate_limits"];
+  const [selectedTable, setSelectedTable] = useState<string>("profiles");
+  const [data, setData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const PAGE_SIZE = 25;
+
+  const fetchTableData = async (tableName: string, pageNum = 0) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const from = pageNum * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+      const { data: rows, error: err, count } = await supabase
+        .from(tableName)
+        .select("*", { count: "exact" })
+        .range(from, to)
+        .order("created_at", { ascending: false });
+      
+      if (err) throw err;
+      setData(rows || []);
+      setTotalCount(count || 0);
+    } catch (e: any) {
+      setError(e.message || "Failed to fetch data");
+      setData([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTableData(selectedTable, page);
+  }, [selectedTable, page]);
+
+  const deleteRow = async (id: string) => {
+    if (!confirm("Delete this row? This cannot be undone.")) return;
+    try {
+      await supabase.from(selectedTable).delete().eq("id", id);
+      fetchTableData(selectedTable, page);
+    } catch (e: any) {
+      alert("Failed to delete: " + e.message);
+    }
+  };
+
+  const columns = data.length > 0 ? Object.keys(data[0]) : [];
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+          <Database className="w-5 h-5 text-primary" /> Database Manager
+        </h2>
+        <a
+          href={`https://supabase.com/dashboard/project/${import.meta.env.VITE_SUPABASE_PROJECT_ID}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90"
+        >
+          <ExternalLink className="w-3 h-3" /> Full Dashboard
+        </a>
+      </div>
+
+      {/* Table selector */}
+      <div className="flex flex-wrap gap-1.5">
+        {TABLES.map(t => (
+          <button
+            key={t}
+            onClick={() => { setSelectedTable(t); setPage(0); }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              selectedTable === t ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
+            }`}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+
+      {/* Stats */}
+      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+        <span>Table: <span className="text-foreground font-medium">{selectedTable}</span></span>
+        <span>Rows: <span className="text-foreground font-medium">{totalCount}</span></span>
+        <span>Page: <span className="text-foreground font-medium">{page + 1}/{totalPages || 1}</span></span>
+        <button onClick={() => fetchTableData(selectedTable, page)} className="text-primary hover:underline flex items-center gap-1">
+          <RefreshCw className="w-3 h-3" /> Refresh
+        </button>
+      </div>
+
+      {/* Data table */}
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-6 h-6 animate-spin text-primary" />
+        </div>
+      ) : error ? (
+        <div className="text-center py-12 text-destructive">
+          <AlertTriangle className="w-8 h-8 mx-auto mb-2" />
+          <p>{error}</p>
+        </div>
+      ) : data.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground">No data in this table</div>
+      ) : (
+        <div className="rounded-xl border border-border overflow-hidden bg-card">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-secondary/50">
+                <tr>
+                  {columns.map(col => (
+                    <th key={col} className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">{col}</th>
+                  ))}
+                  <th className="px-3 py-2 text-left font-medium text-muted-foreground">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((row, idx) => (
+                  <tr key={row.id || idx} className="border-t border-border hover:bg-secondary/30">
+                    {columns.map(col => (
+                      <td key={col} className="px-3 py-2 whitespace-nowrap max-w-[200px] truncate text-foreground" title={String(row[col] ?? "")}>
+                        {row[col] === null ? <span className="text-muted-foreground/50">null</span> : 
+                         typeof row[col] === "object" ? JSON.stringify(row[col]).slice(0, 50) : 
+                         String(row[col]).slice(0, 100)}
+                      </td>
+                    ))}
+                    <td className="px-3 py-2">
+                      <button onClick={() => deleteRow(row.id)} className="text-destructive hover:text-destructive/80">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2">
+          <button
+            onClick={() => setPage(p => Math.max(0, p - 1))}
+            disabled={page === 0}
+            className="px-3 py-1.5 rounded-lg bg-secondary text-secondary-foreground text-xs disabled:opacity-50"
+          >
+            Previous
+          </button>
+          <span className="text-xs text-muted-foreground">
+            Page {page + 1} of {totalPages}
+          </span>
+          <button
+            onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+            disabled={page >= totalPages - 1}
+            className="px-3 py-1.5 rounded-lg bg-secondary text-secondary-foreground text-xs disabled:opacity-50"
+          >
+            Next
+          </button>
+        </div>
+      )}
+    </motion.div>
   );
 }
