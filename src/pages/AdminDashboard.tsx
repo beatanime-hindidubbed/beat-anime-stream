@@ -11,7 +11,7 @@ import {
   Users, Shield, UserPlus, UserMinus, Palette, Type, FileText,
   Crown, Copy, Clock, Zap, Server, RefreshCw, MessageCircle, Ban, VolumeX,
   AlertTriangle, MonitorPlay, Link2, ScrollText, EyeOff, Sparkles, ExternalLink,
-  MessageSquare, TrendingUp, Eye
+  MessageSquare, TrendingUp, Eye, Database
 } from "lucide-react";
 
 interface Ad {
@@ -95,7 +95,7 @@ const FONT_STYLES: { key: FontStyle; label: string; desc: string; preview: strin
   { key: "cinematic", label: "Cinematic", desc: "Bebas Neue + Inter", preview: "Aa" },
 ];
 
-type TabKey = "stats" | "branding" | "effects" | "sandbox" | "ads" | "api" | "users" | "policy" | "premium" | "chat" | "comments" | "player" | "banlist" | "logs";
+type TabKey = "stats" | "branding" | "effects" | "sandbox" | "ads" | "api" | "users" | "policy" | "premium" | "chat" | "comments" | "player" | "banlist" | "logs" | "database";
 
 export default function AdminDashboard() {
   const { user, isAdmin, isModerator, loading: authLoading, logout } = useSupabaseAuth();
@@ -432,6 +432,7 @@ export default function AdminDashboard() {
     { key: "users" as const, label: "Users", icon: Users },
     { key: "api" as const, label: "API", icon: Activity },
     { key: "logs" as const, label: "Logs", icon: ScrollText },
+    { key: "database" as const, label: "Database", icon: Database },
   ];
 
   // Moderators only see limited tabs
@@ -1754,6 +1755,36 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               ))}
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── Database ── */}
+        {tab === "database" && isAdmin && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                <Database className="w-5 h-5 text-primary" /> Database Manager
+              </h2>
+              <a
+                href={`https://supabase.com/dashboard/project/${import.meta.env.VITE_SUPABASE_PROJECT_ID}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90"
+              >
+                <ExternalLink className="w-3 h-3" /> Open Full Dashboard
+              </a>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Full database management embedded below. You can view tables, edit rows, run queries, and manage your entire backend directly.
+            </p>
+            <div className="rounded-xl border border-border overflow-hidden bg-card" style={{ height: "calc(100vh - 200px)", minHeight: "600px" }}>
+              <iframe
+                src={`https://supabase.com/dashboard/project/${import.meta.env.VITE_SUPABASE_PROJECT_ID}/editor`}
+                className="w-full h-full border-0"
+                title="Database Manager"
+                allow="clipboard-read; clipboard-write"
+              />
             </div>
           </motion.div>
         )}

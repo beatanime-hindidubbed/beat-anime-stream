@@ -16,6 +16,7 @@ import { getWorkingStream, StreamResult, HIANIME_SERVERS } from "@/lib/streaming
 import { getCachedStream, setCachedStream } from "@/lib/streamCache";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { ChevronLeft, ChevronRight, List, Loader2, Server, RefreshCw, Globe, ChevronDown, MessageSquare } from "lucide-react";
+import { toast } from "sonner";
 
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -319,10 +320,18 @@ export default function WatchPage() {
         if (firstHLS) {
           switchHindiSource(firstHLS);
         } else {
-          setStreamError("all_failed");
+          // No Hindi sources — auto-fallback to English
+          if (!cancelled) {
+            toast.warning("Hindi Dub not available for this episode. Switching to English...", { duration: 5000 });
+            setCategory("eng");
+          }
         }
       } catch (err: any) {
-        if (!cancelled) setStreamError(err.message || "all_failed");
+        if (!cancelled) {
+          // Auto-fallback to English on Hindi failure
+          toast.warning("Hindi Dub not available for this episode. Switching to English...", { duration: 5000 });
+          setCategory("eng");
+        }
       } finally {
         if (!cancelled) { setStreamLoading(false); setRetryMessage(""); }
       }
