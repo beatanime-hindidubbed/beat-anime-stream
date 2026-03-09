@@ -70,6 +70,9 @@ export default function VideoPlayer({
   const previewSeekTimer = useRef<ReturnType<typeof setTimeout>>();
   const lastPreviewSeek  = useRef<number>(-999);
   const previewSeeking   = useRef(false);
+  // Frame cache: capture frames from main video for instant previews
+  const frameCacheRef = useRef<Map<number, ImageBitmap>>(new Map());
+  const lastCaptureTime = useRef<number>(-999);
 
   // Secure URL accessors
   const encodedSrc = useRef(obfuscate(src));
