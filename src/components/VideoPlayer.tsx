@@ -711,6 +711,7 @@ export default function VideoPlayer({
     e.stopPropagation();
     touchOnSeekBar.current = true;
     isDraggingSeekBar.current = true;
+    isSeeking.current = true;
     resetHideTimer();
     setPreviewHasFrame(false);
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
@@ -719,7 +720,7 @@ export default function VideoPlayer({
     wasPlayingRef.current = playing;
     const v = videoRef.current;
     if (!v || !duration) return;
-    if (wasPlayingRef.current) v.pause();
+    if (playing) v.pause();
     const rect = e.currentTarget.getBoundingClientRect();
     const touch = e.touches[0];
     const pct = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
