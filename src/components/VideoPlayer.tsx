@@ -591,27 +591,70 @@ export default function VideoPlayer({
   };
 
   // ── Seek bar touch ────────────────────────────────────────────────────
-  const seekPreviewToTime = (t: number) => {
+  // Track active dragging for instant preview mode
+  const isDraggingSeekBar = useRef(false);
+  const lastInstantPreviewTime = useRef(0);
+  const instantPreviewRAF = useRef<number>();
+
+  // Instant preview: capture frame from main video at current seek position (fastest method)
+  const captureInstantPreview = useCallback((targetTime: number) => {
+    const v = videoRef.current;
+    const canvas = previewCanvasRef.current;
+    if (!v || !canvas || !v.videoWidth) return false;
+    
+    // If main video is near target time, capture directly (instant!)
+    if (Math.abs(v.currentTime - targetTime) < 3) {
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+        setPreviewHasFrame(true);
+        return true;
+      }
+    }
+    return false;
+  }, []);
+
+  const seekPreviewToTime = useCallback((t: number, forceImmediate = false) => {
     const rounded = Math.round(t);
     const cache = frameCacheRef.current;
-    // Find nearest cached frame within 5s
+    const canvas = previewCanvasRef.current;
+    
+    // FAST PATH: During dragging, use instant capture from main video
+    if (isDraggingSeekBar.current && captureInstantPreview(t)) {
+      // Successfully captured from main video - still trigger background HLS seek
+      if (previewReady && Math.abs(lastPreviewSeek.current - t) >= 2) {
+        lastPreviewSeek.current = t;
+        const idx = previewRoundRobin.current % PREVIEW_POOL_SIZE;
+        const pv = previewVideoRefs.current[idx];
+        if (pv && !previewSeeking.current[idx]) {
+          previewRoundRobin.current++;
+          previewSeeking.current[idx] = true;
+          pv.currentTime = t;
+          setTimeout(() => { previewSeeking.current[idx] = false; }, 150);
+        }
+      }
+      return;
+    }
+    
+    // Find nearest cached frame within 3s for instant display
     let best: ImageBitmap | null = null;
-    let bestDist = 6;
+    let bestDist = 4;
     for (const [time, bmp] of cache) {
       const dist = Math.abs(time - rounded);
       if (dist < bestDist) { best = bmp; bestDist = dist; }
     }
-    if (best) {
-      const canvas = previewCanvasRef.current;
-      if (canvas) {
-        const ctx = canvas.getContext("2d");
-        if (ctx) { ctx.drawImage(best, 0, 0, canvas.width, canvas.height); setPreviewHasFrame(true); }
-      }
+    
+    if (best && canvas) {
+      const ctx = canvas.getContext("2d");
+      if (ctx) { ctx.drawImage(best, 0, 0, canvas.width, canvas.height); setPreviewHasFrame(true); }
     }
-    // Seek next available preview video from pool for sharper/forward frames
+    
+    // HLS pool seeking - skip debounce during drag or force mode
     if (!previewReady) return;
-    if (Math.abs(lastPreviewSeek.current - t) < 0.5) return;
+    const minGap = forceImmediate || isDraggingSeekBar.current ? 0.2 : 0.5;
+    if (Math.abs(lastPreviewSeek.current - t) < minGap) return;
     lastPreviewSeek.current = t;
+    
     // Find a non-seeking pool member (round-robin)
     for (let attempt = 0; attempt < PREVIEW_POOL_SIZE; attempt++) {
       const idx = (previewRoundRobin.current + attempt) % PREVIEW_POOL_SIZE;
@@ -621,19 +664,19 @@ export default function VideoPlayer({
         previewSeeking.current[idx] = true;
         if (!best) setPreviewHasFrame(false);
         pv.currentTime = t;
-        setTimeout(() => { previewSeeking.current[idx] = false; }, 300);
+        setTimeout(() => { previewSeeking.current[idx] = false; }, 120);
         return;
       }
     }
-    // All busy — force the first one
+    // All busy — force the first one with very short timeout
     const pv = previewVideoRefs.current[0];
     if (pv) {
       previewSeeking.current[0] = true;
       if (!best) setPreviewHasFrame(false);
       pv.currentTime = t;
-      setTimeout(() => { previewSeeking.current[0] = false; }, 300);
+      setTimeout(() => { previewSeeking.current[0] = false; }, 80);
     }
-  };
+  }, [previewReady, captureInstantPreview]);
 
   const handleSeekBarTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     e.preventDefault();
