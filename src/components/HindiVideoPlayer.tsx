@@ -890,8 +890,10 @@ export default function HindiVideoPlayer({
           className="absolute -inset-8 w-[calc(100%+4rem)] h-[calc(100%+4rem)] opacity-40 blur-3xl scale-110 pointer-events-none -z-10 rounded-3xl" />
       )}
 
-      {/* Hidden preview video (desktop only, not for iframe) */}
-      {canHover && !isIframe && <video ref={previewVideoRef} className="hidden" muted playsInline preload="auto" />}
+      {/* Hidden preview video pool (3 parallel instances) */}
+      {!isIframe && [0, 1, 2].map(i => (
+        <video key={i} ref={el => { previewVideoRefs.current[i] = el; }} className="hidden" muted playsInline preload="auto" />
+      ))}
 
       <div
         ref={containerRef}
