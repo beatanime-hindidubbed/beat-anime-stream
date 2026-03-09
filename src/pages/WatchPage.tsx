@@ -320,10 +320,18 @@ export default function WatchPage() {
         if (firstHLS) {
           switchHindiSource(firstHLS);
         } else {
-          setStreamError("all_failed");
+          // No Hindi sources — auto-fallback to English
+          if (!cancelled) {
+            toast.warning("Hindi Dub not available for this episode. Switching to English...", { duration: 5000 });
+            setCategory("eng");
+          }
         }
       } catch (err: any) {
-        if (!cancelled) setStreamError(err.message || "all_failed");
+        if (!cancelled) {
+          // Auto-fallback to English on Hindi failure
+          toast.warning("Hindi Dub not available for this episode. Switching to English...", { duration: 5000 });
+          setCategory("eng");
+        }
       } finally {
         if (!cancelled) { setStreamLoading(false); setRetryMessage(""); }
       }
