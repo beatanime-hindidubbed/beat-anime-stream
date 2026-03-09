@@ -880,7 +880,8 @@ export default function HindiVideoPlayer({
   };
 
   const subtitleTracks = tracks?.filter(t => t.kind === "captions" || t.kind === "subtitles") || [];
-  const progress    = duration ? (currentTime / duration) * 100 : 0;
+  const displayTime = scrubTime ?? currentTime;
+  const progress    = duration ? (displayTime / duration) * 100 : 0;
   const bufferedPct = duration ? (buffered   / duration) * 100 : 0;
   const volumeFill  = muted ? 0 : volume * 100;
 
