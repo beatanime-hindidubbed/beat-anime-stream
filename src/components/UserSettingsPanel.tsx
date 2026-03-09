@@ -55,18 +55,6 @@ export default function UserSettingsPanel() {
 
   const isLoggedIn = !!user;
 
-  const update = (partial: Partial<UserPrefs>) => {
-    const next = { ...prefs, ...partial };
-    setPrefs(next);
-    savePrefs(next);
-  };
-
-  const clearContinueWatching = () => {
-    localStorage.setItem("beat_continue", JSON.stringify([]));
-  };
-
-  const tgGroup = settings.telegramGroup || "https://t.me/beat_discussion_group";
-
   useEffect(() => {
     if (!open) return;
     const previousOverflow = document.body.style.overflow;
@@ -82,6 +70,20 @@ export default function UserSettingsPanel() {
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [open]);
+
+  if (!user) return null;
+
+  const update = (partial: Partial<UserPrefs>) => {
+    const next = { ...prefs, ...partial };
+    setPrefs(next);
+    savePrefs(next);
+  };
+
+  const clearContinueWatching = () => {
+    localStorage.setItem("beat_continue", JSON.stringify([]));
+  };
+
+  const tgGroup = settings.telegramGroup || "https://t.me/beat_discussion_group";
 
   return (
     <>
