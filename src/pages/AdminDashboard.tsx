@@ -1554,24 +1554,24 @@ export default function AdminDashboard() {
               return (
                 <div className="flex flex-wrap gap-2 items-center">
                   <select
-                    value={(window as any).__userFilterRole || "all"}
-                    onChange={e => { (window as any).__userFilterRole = e.target.value; setUserRoles([...userRoles]); }}
+                    value={userFilterRole}
+                    onChange={e => setUserFilterRole(e.target.value)}
                     className="h-8 px-2 rounded-lg bg-secondary text-foreground text-xs border border-border focus:ring-1 focus:ring-primary focus:outline-none"
                   >
                     <option value="all">All Roles</option>
                     {roles_list.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
                   </select>
                   <select
-                    value={(window as any).__userFilterCountry || "all"}
-                    onChange={e => { (window as any).__userFilterCountry = e.target.value; setUserRoles([...userRoles]); }}
+                    value={userFilterCountry}
+                    onChange={e => setUserFilterCountry(e.target.value)}
                     className="h-8 px-2 rounded-lg bg-secondary text-foreground text-xs border border-border focus:ring-1 focus:ring-primary focus:outline-none"
                   >
                     <option value="all">All Countries</option>
                     {countries.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                   <select
-                    value={(window as any).__userSortBy || "role"}
-                    onChange={e => { (window as any).__userSortBy = e.target.value; setUserRoles([...userRoles]); }}
+                    value={userSortBy}
+                    onChange={e => setUserSortBy(e.target.value)}
                     className="h-8 px-2 rounded-lg bg-secondary text-foreground text-xs border border-border focus:ring-1 focus:ring-primary focus:outline-none"
                   >
                     <option value="role">Sort: Role</option>
@@ -1584,9 +1584,9 @@ export default function AdminDashboard() {
 
             <div className="space-y-3">
               {(() => {
-                const roleFilter = (window as any).__userFilterRole || "all";
-                const countryFilter = (window as any).__userFilterCountry || "all";
-                const sortBy = (window as any).__userSortBy || "role";
+                const roleFilter = userFilterRole;
+                const countryFilter = userFilterCountry;
+                const sortBy = userSortBy;
 
                 let filtered = userRoles.filter(ur => {
                   if (roleFilter !== "all" && ur.role !== roleFilter) return false;
