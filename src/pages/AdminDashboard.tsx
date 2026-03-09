@@ -1760,6 +1760,11 @@ export default function AdminDashboard() {
           </motion.div>
         )}
 
+        {/* ── Regions ── */}
+        {tab === "regions" && isAdmin && (
+          <RegionsPanel />
+        )}
+
         {/* ── Database ── */}
         {tab === "database" && isAdmin && (
           <DatabaseManager />
