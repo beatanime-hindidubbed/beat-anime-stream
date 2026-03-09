@@ -297,9 +297,8 @@ export default function VideoPlayer({
     }
   }, [src, startTime]);
 
-  // ── Preview HLS (desktop only) ────────────────────────────────────────
+  // ── Preview HLS (desktop + mobile drag) ─────────────────────────────
   useEffect(() => {
-    if (!canHover) return;
     const preview = previewVideoRef.current;
     let realSrc: string;
     try { realSrc = getUrl.current(); } catch { return; }
@@ -322,7 +321,7 @@ export default function VideoPlayer({
       previewHlsRef.current = hls;
       return () => { hls.destroy(); previewHlsRef.current = null; setPreviewReady(false); };
     }
-  }, [src, canHover]);
+  }, [src]);
 
   // Draw preview frame to canvas
   useEffect(() => {
@@ -479,6 +478,21 @@ export default function VideoPlayer({
   };
 
   // ── Seek bar touch ────────────────────────────────────────────────────
+  const seekPreviewToTime = (t: number) => {
+    if (!previewReady || !previewVideoRef.current) return;
+    if (Math.abs(lastPreviewSeek.current - t) < 0.3) return;
+    if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
+    previewSeekTimer.current = setTimeout(() => {
+      const pv = previewVideoRef.current;
+      if (!pv || previewSeeking.current) return;
+      lastPreviewSeek.current = t;
+      previewSeeking.current = true;
+      setPreviewHasFrame(false);
+      pv.currentTime = t;
+      setTimeout(() => { previewSeeking.current = false; }, 400);
+    }, 20);
+  };
+
   const handleSeekBarTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
@@ -493,6 +507,9 @@ export default function VideoPlayer({
     const touch = e.touches[0];
     const pct = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
     v.currentTime = pct * duration;
+    setHoverTime(pct * duration);
+    setHoverPct(pct * 100);
+    seekPreviewToTime(pct * duration);
   };
 
   const handleSeekBarTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
@@ -505,12 +522,16 @@ export default function VideoPlayer({
     const touch = e.touches[0];
     const pct = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
     v.currentTime = pct * duration;
+    setHoverTime(pct * duration);
+    setHoverPct(pct * 100);
+    seekPreviewToTime(pct * duration);
   };
 
   const handleSeekBarTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
     e.stopPropagation();
     touchOnSeekBar.current = false;
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    setHoverTime(null);
     const v = videoRef.current;
     if (!v || !duration) return;
     const touch = e.changedTouches[0];
@@ -691,7 +712,8 @@ export default function VideoPlayer({
     return lvl.height ? `${lvl.height}p` : `${Math.round(lvl.bitrate / 1000)}k`;
   };
 
-  const PREVIEW_W = 160;
+  const PREVIEW_W = isMobile ? 100 : 160;
+  const PREVIEW_H = isMobile ? 56 : 90;
   const previewLeft = `clamp(${PREVIEW_W / 2}px, ${hoverPct}%, calc(100% - ${PREVIEW_W / 2}px))`;
 
   const settingsPositionClass = "absolute bottom-14 sm:bottom-20 right-2 sm:right-3 z-40";
@@ -1071,12 +1093,10 @@ export default function VideoPlayer({
                   style={{ left: previewLeft }}
                 >
                   <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-px h-4 sm:h-6 bg-white/40" style={{ bottom: "-16px" }} />
-                  {!isMobile && (
-                    <div className={`rounded-lg sm:rounded-xl overflow-hidden border border-white/20 shadow-2xl bg-black/90 transition-opacity duration-75 ${previewHasFrame ? "opacity-100" : "opacity-40"}`}
-                      style={{ boxShadow: "0 12px 32px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,255,255,0.1)" }}>
-                      <canvas ref={previewCanvasRef} width={160} height={90} className="block" />
-                    </div>
-                  )}
+                  <div className={`rounded-lg overflow-hidden border border-white/20 shadow-2xl bg-black/90 transition-opacity duration-75 ${previewHasFrame ? "opacity-100" : "opacity-40"}`}
+                    style={{ boxShadow: "0 12px 32px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,255,255,0.1)" }}>
+                    <canvas ref={previewCanvasRef} width={PREVIEW_W} height={PREVIEW_H} className="block" />
+                  </div>
                   <span className="text-[9px] sm:text-[11px] text-white font-bold px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg bg-black/90 shadow tabular-nums border border-white/10">
                     {fmt(hoverTime)}
                   </span>
