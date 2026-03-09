@@ -152,6 +152,8 @@ export default function HindiVideoPlayer({
   const touchMoved      = useRef(false);
   const touchOnSeekBar  = useRef(false);
   const wasPlayingRef   = useRef(false);
+  const isSeeking       = useRef(false);
+  const touchJustEnded  = useRef(false);
 
   // iframeSrc with no src = iframe mode
   const isIframe = !!iframeSrc && !src;
