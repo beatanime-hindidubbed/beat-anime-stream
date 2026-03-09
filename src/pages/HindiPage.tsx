@@ -86,7 +86,7 @@ export default function HindiPage() {
     if (reset) seenIds.current.clear();
 
     try {
-      const results: AnimeItem[] = [];
+      const candidates: AnimeItem[] = [];
 
       if (pg === 1) {
         const searches = await Promise.allSettled([
@@ -109,11 +109,11 @@ export default function HindiPage() {
               a.episodes.dub >= MIN_DUB_EPISODES
             ) {
               seenIds.current.add(a.id);
-              results.push(a);
+              candidates.push(a);
             }
           });
         }
-        results.sort((a, b) => (b.episodes?.dub || 0) - (a.episodes?.dub || 0));
+        candidates.sort((a, b) => (b.episodes?.dub || 0) - (a.episodes?.dub || 0));
       } else {
         const [catData, searchData] = await Promise.allSettled([
           api.getCategory("most-popular", pg),
@@ -126,19 +126,24 @@ export default function HindiPage() {
         allItems.forEach((a: AnimeItem) => {
           if (!seenIds.current.has(a.id) && !failedIds.current.has(a.id) && typeof a.episodes?.dub === "number" && a.episodes.dub >= MIN_DUB_EPISODES) {
             seenIds.current.add(a.id);
-            results.push(a);
+            candidates.push(a);
           }
         });
         setHasMore(allItems.length >= 10);
       }
 
-      setAnimes(prev => reset ? results : [...prev, ...results]);
+      // Immediately add already-verified anime
+      const alreadyVerified = candidates.filter(a => verifiedIds.current.has(a.id));
+      if (alreadyVerified.length > 0) {
+        setAnimes(prev => reset ? alreadyVerified : [...prev, ...alreadyVerified]);
+      } else if (reset) {
+        setAnimes([]);
+      }
 
-      // Background verify Hindi availability for non-verified items
-      const toVerify = results.filter(a => !verifiedIds.current.has(a.id) && !failedIds.current.has(a.id));
+      // Verify remaining candidates and add only if Hindi available
+      const toVerify = candidates.filter(a => !verifiedIds.current.has(a.id) && !failedIds.current.has(a.id));
       if (toVerify.length > 0) {
-        // Fire and forget - verify in batches
-        Promise.allSettled(toVerify.map(async (a) => {
+        await Promise.allSettled(toVerify.map(async (a) => {
           try {
             const infoData = await api.getAnimeInfo(a.id);
             const mi = infoData?.anime?.moreInfo || {};
@@ -149,10 +154,13 @@ export default function HindiPage() {
             if (available) {
               verifiedIds.current.add(a.id);
               saveSet(VERIFIED_KEY, verifiedIds.current);
+              setAnimes(prev => {
+                if (prev.some(x => x.id === a.id)) return prev;
+                return [...prev, a];
+              });
             } else {
               failedIds.current.add(a.id);
               saveSet(FAILED_KEY, failedIds.current);
-              setAnimes(prev => prev.filter(x => x.id !== a.id));
             }
           } catch { /* skip */ }
         }));
