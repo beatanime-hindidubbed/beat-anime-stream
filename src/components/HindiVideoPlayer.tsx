@@ -923,7 +923,6 @@ export default function HindiVideoPlayer({
         if (!v) return;
         if (v.paused) { wasPlayingRef.current = true; v.play().catch(() => {}); setPlaying(true); flashCenter("play"); }
         else          { wasPlayingRef.current = false; v.pause(); setPlaying(false); flashCenter("pause"); }
-        }
       }
       tapCount.current = 0;
     }, 220);
