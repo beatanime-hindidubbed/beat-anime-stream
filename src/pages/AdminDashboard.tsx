@@ -409,7 +409,7 @@ export default function AdminDashboard() {
     setSaving(false); setBrandingSaved(true); setTimeout(() => setBrandingSaved(false), 2000);
   };
 
-  if (authLoading) return (
+  if (authLoading || !user || (!isAdmin && !isModerator)) return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <Loader2 className="w-8 h-8 animate-spin text-primary" />
     </div>

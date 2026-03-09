@@ -1294,9 +1294,11 @@ export default function VideoPlayer({
                 </div>
               </div>
 
-              {/* Thumb — appears on hover */}
+              {/* Thumb — appears on hover (desktop) / while scrubbing (mobile) */}
               <div
-                className="absolute rounded-full pointer-events-none opacity-0 group-hover/progress:opacity-100 transition-all duration-150"
+                className={`absolute rounded-full pointer-events-none transition-all duration-150 ${
+                  canHover ? "opacity-0 group-hover/progress:opacity-100" : hoverTime !== null ? "opacity-100" : "opacity-0"
+                }`}
                 style={{
                   width: "14px", height: "14px",
                   left: `${progress}%`,
