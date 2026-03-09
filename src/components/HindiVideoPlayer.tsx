@@ -349,14 +349,61 @@ export default function HindiVideoPlayer({
     }
   }, [src, startTime, isIframe]);
 
-  // ── Preview HLS pool — use ENGLISH HiAnime stream (3 parallel instances) ─
+  // ── Preview HLS pool — uses Hindi src directly (3 parallel instances) ──
+  // Priority: Hindi src (same stream, lowest quality level) → episodeId fallback
   const [previewReadyCount, setPreviewReadyCount] = useState(0);
   useEffect(() => {
-    if (isIframe || !episodeId) return;
+    if (isIframe) return;
     let cancelled = false;
     const destroyers: (() => void)[] = [];
 
-    const loadEnglishPreview = async () => {
+    const initPool = (poolSrc: string) => {
+      if (!Hls.isSupported() || !poolSrc || cancelled) return;
+      let readyCount = 0;
+      for (let i = 0; i < PREVIEW_POOL_SIZE; i++) {
+        const pv = previewVideoRefs.current[i];
+        if (!pv || cancelled) continue;
+        const hls = new Hls({
+          maxBufferLength: 3, maxMaxBufferLength: 6,
+          maxBufferSize: 2 * 1000 * 1000,
+          startPosition: -1, enableWorker: false, startLevel: 0,
+          capLevelToPlayerSize: true,
+          abrEwmaDefaultEstimate: 100000,
+          abrMaxWithRealBitrate: true,
+          xhrSetup: (xhr) => { xhr.withCredentials = false; },
+        });
+        hls.loadSource(poolSrc);
+        hls.attachMedia(pv);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          if (cancelled) { hls.destroy(); return; }
+          hls.currentLevel = 0;       // lowest quality = fastest seeking
+          hls.autoLevelCapping = 0;
+          pv.pause();
+          readyCount++;
+          if (readyCount >= PREVIEW_POOL_SIZE) setPreviewReady(true);
+          setPreviewReadyCount(readyCount);
+        });
+        previewHlsRefs.current[i] = hls;
+        destroyers.push(() => { hls.destroy(); previewHlsRefs.current[i] = null; });
+      }
+    };
+
+    const setup = async () => {
+      // ── Path 1: Hindi src available — reuse same proxied stream ──────────
+      if (src) {
+        let realSrc: string;
+        try { realSrc = getUrl.current(); } catch { return; }
+        if (!realSrc || cancelled) return;
+        const proxyBase = getHindiProxy();
+        const proxiedSrc = realSrc.includes("/hindiapi/proxy")
+          ? realSrc
+          : proxyBase + "?url=" + encodeURIComponent(realSrc);
+        initPool(proxiedSrc);
+        return;
+      }
+
+      // ── Path 2: No Hindi src — fallback to English HiAnime via episodeId ─
+      if (!episodeId) return;
       try {
         const apiBase = getNextApi();
         const res = await fetch(
@@ -366,46 +413,21 @@ export default function HindiVideoPlayer({
         const data = await res.json();
         const rawUrl = data?.data?.sources?.[0]?.url;
         if (!rawUrl || cancelled) return;
-
         const proxiedUrl = `${apiBase}/hindiapi/proxy?url=${encodeURIComponent(rawUrl)}&referer=${encodeURIComponent("https://megacloud.blog/")}`;
-
-        if (Hls.isSupported()) {
-          let readyCount = 0;
-          for (let i = 0; i < PREVIEW_POOL_SIZE; i++) {
-            const pv = previewVideoRefs.current[i];
-            if (!pv || cancelled) continue;
-            const hls = new Hls({
-              maxBufferLength: 3, maxMaxBufferLength: 6,
-              maxBufferSize: 2 * 1000 * 1000,
-              startPosition: -1, enableWorker: false, startLevel: 0,
-              capLevelToPlayerSize: true,
-              abrEwmaDefaultEstimate: 100000,
-              abrMaxWithRealBitrate: true,
-              xhrSetup: (xhr) => { xhr.withCredentials = false; },
-            });
-            hls.loadSource(proxiedUrl);
-            hls.attachMedia(pv);
-            hls.on(Hls.Events.MANIFEST_PARSED, () => {
-              if (cancelled) { hls.destroy(); return; }
-              hls.currentLevel = 0;
-              hls.autoLevelCapping = 0;
-              pv.pause();
-              readyCount++;
-              if (readyCount >= PREVIEW_POOL_SIZE) setPreviewReady(true);
-              setPreviewReadyCount(readyCount);
-            });
-            previewHlsRefs.current[i] = hls;
-            destroyers.push(() => { hls.destroy(); previewHlsRefs.current[i] = null; });
-          }
-          previewVideoRef.current = previewVideoRefs.current[0];
-          previewHlsRef.current = previewHlsRefs.current[0];
-        }
+        initPool(proxiedUrl);
       } catch { /* silent */ }
     };
 
-    loadEnglishPreview();
-    return () => { cancelled = true; destroyers.forEach(d => d()); setPreviewReady(false); setPreviewReadyCount(0); };
-  }, [episodeId, isIframe]);
+    // Small delay to let main HLS loader resolve the proxied URL first
+    const t = setTimeout(setup, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+      destroyers.forEach(d => d());
+      setPreviewReady(false);
+      setPreviewReadyCount(0);
+    };
+  }, [src, episodeId, isIframe]);
 
   // Draw preview frame to canvas from ANY pool video
   useEffect(() => {
