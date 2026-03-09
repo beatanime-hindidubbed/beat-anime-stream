@@ -11,7 +11,7 @@ import {
   Users, Shield, UserPlus, UserMinus, Palette, Type, FileText,
   Crown, Copy, Clock, Zap, Server, RefreshCw, MessageCircle, Ban, VolumeX,
   AlertTriangle, MonitorPlay, Link2, ScrollText, EyeOff, Sparkles, ExternalLink,
-  MessageSquare, TrendingUp, Eye
+  MessageSquare, TrendingUp, Eye, Database
 } from "lucide-react";
 
 interface Ad {
