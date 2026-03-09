@@ -778,7 +778,13 @@ export default function VideoPlayer({
       setCurrent(targetTime);
       v.currentTime = targetTime;
     }
-    if (wasPlayingRef.current && v.paused) v.play();
+    // Resume playback if it was playing before the seek
+    const shouldResume = wasPlayingRef.current;
+    isSeeking.current = false;
+    if (shouldResume) {
+      v.play().catch(() => {});
+      setPlaying(true);
+    }
   };
 
    // ── Preview thumbnail hover (desktop/laptop hover devices) ─────────────
