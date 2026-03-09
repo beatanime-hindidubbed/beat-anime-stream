@@ -478,6 +478,21 @@ export default function VideoPlayer({
   };
 
   // ── Seek bar touch ────────────────────────────────────────────────────
+  const seekPreviewToTime = (t: number) => {
+    if (!previewReady || !previewVideoRef.current) return;
+    if (Math.abs(lastPreviewSeek.current - t) < 0.3) return;
+    if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
+    previewSeekTimer.current = setTimeout(() => {
+      const pv = previewVideoRef.current;
+      if (!pv || previewSeeking.current) return;
+      lastPreviewSeek.current = t;
+      previewSeeking.current = true;
+      setPreviewHasFrame(false);
+      pv.currentTime = t;
+      setTimeout(() => { previewSeeking.current = false; }, 400);
+    }, 20);
+  };
+
   const handleSeekBarTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
@@ -492,6 +507,9 @@ export default function VideoPlayer({
     const touch = e.touches[0];
     const pct = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
     v.currentTime = pct * duration;
+    setHoverTime(pct * duration);
+    setHoverPct(pct * 100);
+    seekPreviewToTime(pct * duration);
   };
 
   const handleSeekBarTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
@@ -504,12 +522,16 @@ export default function VideoPlayer({
     const touch = e.touches[0];
     const pct = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
     v.currentTime = pct * duration;
+    setHoverTime(pct * duration);
+    setHoverPct(pct * 100);
+    seekPreviewToTime(pct * duration);
   };
 
   const handleSeekBarTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
     e.stopPropagation();
     touchOnSeekBar.current = false;
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    setHoverTime(null);
     const v = videoRef.current;
     if (!v || !duration) return;
     const touch = e.changedTouches[0];
