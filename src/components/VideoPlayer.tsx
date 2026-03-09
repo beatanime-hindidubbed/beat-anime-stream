@@ -642,7 +642,6 @@ export default function VideoPlayer({
     setHoverPct(pct * 100);
     seekPreviewToTime(t);
   };
-  };
 
   const handleProgressLeave = () => {
     setHoverTime(null);
