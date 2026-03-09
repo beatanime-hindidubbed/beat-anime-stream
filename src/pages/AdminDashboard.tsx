@@ -1559,7 +1559,19 @@ export default function AdminDashboard() {
                             <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-accent/20 text-accent">PREMIUM</span>
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground font-mono">{ur.user_id.slice(0, 8)}...</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-xs text-muted-foreground font-mono">{ur.user_id.slice(0, 8)}...</p>
+                          {ur.country_code && (
+                            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-secondary text-[10px] text-muted-foreground">
+                              <MapPin className="w-2.5 h-2.5" />
+                              {({"IN":"🇮🇳","US":"🇺🇸","GB":"🇬🇧","CA":"🇨🇦","AU":"🇦🇺","DE":"🇩🇪","FR":"🇫🇷","JP":"🇯🇵","BR":"🇧🇷","PH":"🇵🇭","ID":"🇮🇩","PK":"🇵🇰","BD":"🇧🇩","NP":"🇳🇵","AE":"🇦🇪","SA":"🇸🇦"} as Record<string,string>)[ur.country_code] || "🌍"}{" "}
+                              {ur.country_name || ur.country_code}
+                            </span>
+                          )}
+                          {!ur.country_code && (
+                            <span className="text-[10px] text-muted-foreground/50">Region unknown</span>
+                          )}
+                        </div>
                         {isPremium && ur.premium_until && (
                           <p className="text-[10px] text-accent/70">
                             Premium until {new Date(ur.premium_until).toLocaleDateString()}
