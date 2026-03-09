@@ -148,6 +148,10 @@ export default function VideoPlayer({
   const touchOnSeekBar  = useRef(false);
   // Track last playing state before fullscreen / visibility changes
   const wasPlayingRef   = useRef(false);
+  // Guard: true while seeking via touch — prevents onPause from clobbering wasPlayingRef
+  const isSeeking       = useRef(false);
+  // Guard: true after a touch interaction — prevents onClick from double-toggling
+  const touchJustEnded  = useRef(false);
 
   // ── Audio boost via Web Audio API ─────────────────────────────────────
   useEffect(() => {
