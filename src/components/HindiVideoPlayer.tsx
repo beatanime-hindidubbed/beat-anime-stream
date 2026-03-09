@@ -124,6 +124,7 @@ export default function HindiVideoPlayer({
   const [currentQuality, setCurrentQuality] = useState<number>(-1);
   // Preview thumbnail state (feature parity)
   const [hoverTime, setHoverTime]   = useState<number | null>(null);
+  const [scrubTime, setScrubTime]   = useState<number | null>(null); // UI sync while dragging
   const [hoverPct, setHoverPct]     = useState(0);
   const [previewHasFrame, setPreviewHasFrame] = useState(false);
   const [previewReady, setPreviewReady] = useState(false);
@@ -604,7 +605,7 @@ export default function HindiVideoPlayer({
   // ── Seek bar touch ────────────────────────────────────────────────────
   // Track active dragging for instant preview mode
   const isDraggingSeekBar = useRef(false);
-  const lastInstantPreviewTime = useRef(0);
+  const dragTargetTimeRef = useRef<number | null>(null);
   const instantPreviewRAF = useRef<number>();
 
   // Instant preview: capture frame from main video at current seek position (fastest method)
@@ -612,7 +613,7 @@ export default function HindiVideoPlayer({
     const v = videoRef.current;
     const canvas = previewCanvasRef.current;
     if (!v || !canvas || !v.videoWidth) return false;
-    
+
     // If main video is near target time, capture directly (instant!)
     if (Math.abs(v.currentTime - targetTime) < 3) {
       const ctx = canvas.getContext("2d");
@@ -623,6 +624,27 @@ export default function HindiVideoPlayer({
       }
     }
     return false;
+  }, []);
+
+  // Ensure mobile preview updates AFTER the seek completes (fixes blank frames on iOS)
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const onSeeked = () => {
+      if (!isDraggingSeekBar.current) return;
+      const canvas = previewCanvasRef.current;
+      if (!canvas || !v.videoWidth) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      try {
+        ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+        setPreviewHasFrame(true);
+      } catch {
+        // ignore
+      }
+    };
+    v.addEventListener("seeked", onSeeked);
+    return () => v.removeEventListener("seeked", onSeeked);
   }, []);
 
   const seekPreviewToTime = useCallback((t: number, forceImmediate = false) => {
@@ -694,6 +716,8 @@ export default function HindiVideoPlayer({
     e.stopPropagation();
     touchOnSeekBar.current = true;
     isDraggingSeekBar.current = true;
+    resetHideTimer();
+    setPreviewHasFrame(false);
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
     if (instantPreviewRAF.current) cancelAnimationFrame(instantPreviewRAF.current);
     touchMoved.current = true;
@@ -704,6 +728,9 @@ export default function HindiVideoPlayer({
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width));
     const targetTime = pct * duration;
+    dragTargetTimeRef.current = targetTime;
+    setScrubTime(targetTime);
+    setCurrent(targetTime);
     v.currentTime = targetTime;
     setHoverTime(targetTime);
     setHoverPct(pct * 100);
@@ -713,16 +740,20 @@ export default function HindiVideoPlayer({
   const handleSeekBarTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
+    resetHideTimer();
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
     const v = videoRef.current;
     if (!v || !duration) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width));
     const targetTime = pct * duration;
-    
-    // Use RAF for smoother 60fps preview updates during drag
+
+    // Use RAF for smoother 60fps UI + preview updates during drag
     if (instantPreviewRAF.current) cancelAnimationFrame(instantPreviewRAF.current);
     instantPreviewRAF.current = requestAnimationFrame(() => {
+      dragTargetTimeRef.current = targetTime;
+      setScrubTime(targetTime);
+      setCurrent(targetTime);
       v.currentTime = targetTime;
       setHoverTime(targetTime);
       setHoverPct(pct * 100);
@@ -734,15 +765,20 @@ export default function HindiVideoPlayer({
     e.stopPropagation();
     touchOnSeekBar.current = false;
     isDraggingSeekBar.current = false;
+    dragTargetTimeRef.current = null;
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
     if (instantPreviewRAF.current) cancelAnimationFrame(instantPreviewRAF.current);
     setHoverTime(null);
+    setScrubTime(null);
     const v = videoRef.current;
     if (!v || !duration) return;
     const touch = e.changedTouches[0];
     if (touch) {
       const rect = e.currentTarget.getBoundingClientRect();
-      v.currentTime = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width)) * duration;
+      const pct = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
+      const targetTime = pct * duration;
+      setCurrent(targetTime);
+      v.currentTime = targetTime;
     }
     if (wasPlayingRef.current && v.paused) v.play();
   };
@@ -760,7 +796,9 @@ export default function HindiVideoPlayer({
 
   const handleProgressLeave = () => {
     setHoverTime(null);
+    setScrubTime(null);
     isDraggingSeekBar.current = false;
+    dragTargetTimeRef.current = null;
     if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
     if (instantPreviewRAF.current) cancelAnimationFrame(instantPreviewRAF.current);
   };
@@ -879,7 +917,8 @@ export default function HindiVideoPlayer({
   };
 
   const subtitleTracks = tracks?.filter(t => t.kind === "captions" || t.kind === "subtitles") || [];
-  const progress    = duration ? (currentTime / duration) * 100 : 0;
+  const displayTime = scrubTime ?? currentTime;
+  const progress    = duration ? (displayTime / duration) * 100 : 0;
   const bufferedPct = duration ? (buffered   / duration) * 100 : 0;
   const volumeFill  = muted ? 0 : volume * 100;
 
@@ -1227,9 +1266,21 @@ export default function HindiVideoPlayer({
                       }} />
                     </div>
                   </div>
-                  <div className="absolute rounded-full pointer-events-none opacity-0 group-hover/progress:opacity-100 transition-all duration-150"
-                    style={{ width: "14px", height: "14px", left: `${progress}%`, top: "50%", transform: "translateX(-50%) translateY(-50%)",
-                      background: "white", boxShadow: "0 0 0 3px hsl(var(--primary) / 0.4), 0 2px 8px rgba(0,0,0,0.8)" }} />
+                  {/* Thumb — appears on hover (desktop) / while scrubbing (mobile) */}
+                  <div
+                    className={`absolute rounded-full pointer-events-none transition-all duration-150 ${
+                      canHover ? "opacity-0 group-hover/progress:opacity-100" : hoverTime !== null ? "opacity-100" : "opacity-0"
+                    }`}
+                    style={{
+                      width: "14px",
+                      height: "14px",
+                      left: `${progress}%`,
+                      top: "50%",
+                      transform: "translateX(-50%) translateY(-50%)",
+                      background: "white",
+                      boxShadow: "0 0 0 3px hsl(var(--primary) / 0.4), 0 2px 8px rgba(0,0,0,0.8)",
+                    }}
+                  />
 
                   {/* Preview thumbnail */}
                   {hoverTime !== null && (
