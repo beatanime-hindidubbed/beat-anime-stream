@@ -705,6 +705,8 @@ export default function VideoPlayer({
     e.stopPropagation();
     touchOnSeekBar.current = true;
     isDraggingSeekBar.current = true;
+    resetHideTimer();
+    setPreviewHasFrame(false);
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
     if (instantPreviewRAF.current) cancelAnimationFrame(instantPreviewRAF.current);
     touchMoved.current = true;
@@ -716,6 +718,9 @@ export default function VideoPlayer({
     const touch = e.touches[0];
     const pct = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
     const targetTime = pct * duration;
+    dragTargetTimeRef.current = targetTime;
+    setScrubTime(targetTime);
+    setCurrent(targetTime);
     v.currentTime = targetTime;
     setHoverTime(targetTime);
     setHoverPct(pct * 100);
