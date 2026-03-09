@@ -148,6 +148,10 @@ export default function VideoPlayer({
   const touchOnSeekBar  = useRef(false);
   // Track last playing state before fullscreen / visibility changes
   const wasPlayingRef   = useRef(false);
+  // Guard: true while seeking via touch — prevents onPause from clobbering wasPlayingRef
+  const isSeeking       = useRef(false);
+  // Guard: true after a touch interaction — prevents onClick from double-toggling
+  const touchJustEnded  = useRef(false);
 
   // ── Audio boost via Web Audio API ─────────────────────────────────────
   useEffect(() => {
@@ -560,13 +564,15 @@ export default function VideoPlayer({
     setShowSkipOutro(!!outro && v.currentTime >= outro.start && v.currentTime < outro.end);
   }, [intro, outro, onTimeUpdate]);
 
-  const togglePlay = () => {
+  const togglePlay = useCallback(() => {
     const v = videoRef.current;
     if (!v) return;
-    if (v.paused) { wasPlayingRef.current = true; v.play(); setPlaying(true); flashCenter("play"); }
+    // Prevent click from firing right after touch events on mobile
+    if (touchJustEnded.current) { touchJustEnded.current = false; return; }
+    if (v.paused) { wasPlayingRef.current = true; v.play().catch(() => {}); setPlaying(true); flashCenter("play"); }
     else          { wasPlayingRef.current = false; v.pause(); setPlaying(false); flashCenter("pause"); }
     flashWatermark();
-  };
+  }, []);
 
   const toggleMute = () => {
     const v = videoRef.current;
@@ -705,6 +711,7 @@ export default function VideoPlayer({
     e.stopPropagation();
     touchOnSeekBar.current = true;
     isDraggingSeekBar.current = true;
+    isSeeking.current = true;
     resetHideTimer();
     setPreviewHasFrame(false);
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
@@ -713,7 +720,7 @@ export default function VideoPlayer({
     wasPlayingRef.current = playing;
     const v = videoRef.current;
     if (!v || !duration) return;
-    if (wasPlayingRef.current) v.pause();
+    if (playing) v.pause();
     const rect = e.currentTarget.getBoundingClientRect();
     const touch = e.touches[0];
     const pct = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
@@ -771,7 +778,13 @@ export default function VideoPlayer({
       setCurrent(targetTime);
       v.currentTime = targetTime;
     }
-    if (wasPlayingRef.current && v.paused) v.play();
+    // Resume playback if it was playing before the seek
+    const shouldResume = wasPlayingRef.current;
+    isSeeking.current = false;
+    if (shouldResume) {
+      v.play().catch(() => {});
+      setPlaying(true);
+    }
   };
 
    // ── Preview thumbnail hover (desktop/laptop hover devices) ─────────────
@@ -889,6 +902,10 @@ export default function VideoPlayer({
 
   const handleContainerTouchEnd = (e: React.TouchEvent) => {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    // Mark that a touch just ended — prevents onClick from double-toggling
+    touchJustEnded.current = true;
+    setTimeout(() => { touchJustEnded.current = false; }, 300);
+
     if (longPressActive) {
       const v = videoRef.current;
       if (v) v.playbackRate = speed;
@@ -905,9 +922,15 @@ export default function VideoPlayer({
     tapCount.current++;
     if (doubleTapTimer.current) clearTimeout(doubleTapTimer.current);
     doubleTapTimer.current = setTimeout(() => {
-      if (tapCount.current === 1) togglePlay();
+      if (tapCount.current === 1) {
+        const v = videoRef.current;
+        if (!v) return;
+        if (v.paused) { wasPlayingRef.current = true; v.play().catch(() => {}); setPlaying(true); flashCenter("play"); }
+        else          { wasPlayingRef.current = false; v.pause(); setPlaying(false); flashCenter("pause"); }
+        flashWatermark();
+      }
       tapCount.current = 0;
-    }, 220); // Reduced from 280ms for snappier response
+    }, 220);
     if (tapCount.current >= 2) {
       tapCount.current = 0;
       if (doubleTapTimer.current) clearTimeout(doubleTapTimer.current);
@@ -1020,8 +1043,8 @@ export default function VideoPlayer({
           ref={videoRef}
           className="w-full h-full"
           onTimeUpdate={handleTimeUpdate}
-          onPlay={() => { setPlaying(true); wasPlayingRef.current = true; }}
-          onPause={() => { setPlaying(false); wasPlayingRef.current = false; }}
+          onPlay={() => { setPlaying(true); if (!isSeeking.current) wasPlayingRef.current = true; }}
+          onPause={() => { setPlaying(false); /* Do NOT reset wasPlayingRef here — it breaks seek resume on mobile */ }}
           onEnded={() => { setPlaying(false); wasPlayingRef.current = false; onEnded?.(); }}
           onClick={togglePlay}
           crossOrigin="anonymous"

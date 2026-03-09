@@ -152,6 +152,8 @@ export default function HindiVideoPlayer({
   const touchMoved      = useRef(false);
   const touchOnSeekBar  = useRef(false);
   const wasPlayingRef   = useRef(false);
+  const isSeeking       = useRef(false);
+  const touchJustEnded  = useRef(false);
 
   // iframeSrc with no src = iframe mode
   const isIframe = !!iframeSrc && !src;
@@ -716,6 +718,7 @@ export default function HindiVideoPlayer({
     e.stopPropagation();
     touchOnSeekBar.current = true;
     isDraggingSeekBar.current = true;
+    isSeeking.current = true;
     resetHideTimer();
     setPreviewHasFrame(false);
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
@@ -724,7 +727,7 @@ export default function HindiVideoPlayer({
     wasPlayingRef.current = playing;
     const v = videoRef.current;
     if (!v || !duration) return;
-    if (wasPlayingRef.current) v.pause();
+    if (playing) v.pause();
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width));
     const targetTime = pct * duration;
@@ -780,7 +783,12 @@ export default function HindiVideoPlayer({
       setCurrent(targetTime);
       v.currentTime = targetTime;
     }
-    if (wasPlayingRef.current && v.paused) v.play();
+    const shouldResume = wasPlayingRef.current;
+    isSeeking.current = false;
+    if (shouldResume) {
+      v.play().catch(() => {});
+      setPlaying(true);
+    }
   };
 
   // ── Preview thumbnail hover (desktop/laptop hover devices) ────────────
@@ -893,6 +901,9 @@ export default function HindiVideoPlayer({
 
   const handleContainerTouchEnd = (e: React.TouchEvent) => {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    touchJustEnded.current = true;
+    setTimeout(() => { touchJustEnded.current = false; }, 300);
+
     if (longPressActive) {
       const v = videoRef.current;
       if (v) v.playbackRate = speed;
@@ -906,7 +917,15 @@ export default function HindiVideoPlayer({
     const x = e.changedTouches[0].clientX - rect.left;
     tapCount.current++;
     if (doubleTapTimer.current) clearTimeout(doubleTapTimer.current);
-    doubleTapTimer.current = setTimeout(() => { if (tapCount.current === 1) togglePlay(); tapCount.current = 0; }, 220);
+    doubleTapTimer.current = setTimeout(() => {
+      if (tapCount.current === 1) {
+        const v = videoRef.current;
+        if (!v) return;
+        if (v.paused) { wasPlayingRef.current = true; v.play().catch(() => {}); setPlaying(true); flashCenter("play"); }
+        else          { wasPlayingRef.current = false; v.pause(); setPlaying(false); flashCenter("pause"); }
+      }
+      tapCount.current = 0;
+    }, 220);
     if (tapCount.current >= 2) {
       tapCount.current = 0;
       if (doubleTapTimer.current) clearTimeout(doubleTapTimer.current);
@@ -1024,8 +1043,8 @@ export default function HindiVideoPlayer({
               ref={videoRef}
               className="w-full h-full"
               onTimeUpdate={handleTimeUpdate}
-              onPlay={() => { setPlaying(true); wasPlayingRef.current = true; }}
-              onPause={() => { setPlaying(false); wasPlayingRef.current = false; }}
+              onPlay={() => { setPlaying(true); if (!isSeeking.current) wasPlayingRef.current = true; }}
+              onPause={() => { setPlaying(false); }}
               onEnded={() => { setPlaying(false); wasPlayingRef.current = false; onEnded?.(); }}
               onClick={togglePlay}
               crossOrigin="anonymous"
