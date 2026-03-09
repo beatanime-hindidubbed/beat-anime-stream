@@ -1543,55 +1543,130 @@ export default function AdminDashboard() {
                 </button>
               </div>
             </div>
+
+            {/* Filter/Sort controls */}
+            {(() => {
+              const countries = [...new Set(userRoles.map(u => u.country_name || "Unknown").filter(Boolean))].sort();
+              const roles_list = [...new Set(userRoles.map(u => u.role))].sort();
+              return (
+                <div className="flex flex-wrap gap-2 items-center">
+                  <select
+                    value={(window as any).__userFilterRole || "all"}
+                    onChange={e => { (window as any).__userFilterRole = e.target.value; setUserRoles([...userRoles]); }}
+                    className="h-8 px-2 rounded-lg bg-secondary text-foreground text-xs border border-border focus:ring-1 focus:ring-primary focus:outline-none"
+                  >
+                    <option value="all">All Roles</option>
+                    {roles_list.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
+                  </select>
+                  <select
+                    value={(window as any).__userFilterCountry || "all"}
+                    onChange={e => { (window as any).__userFilterCountry = e.target.value; setUserRoles([...userRoles]); }}
+                    className="h-8 px-2 rounded-lg bg-secondary text-foreground text-xs border border-border focus:ring-1 focus:ring-primary focus:outline-none"
+                  >
+                    <option value="all">All Countries</option>
+                    {countries.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <select
+                    value={(window as any).__userSortBy || "role"}
+                    onChange={e => { (window as any).__userSortBy = e.target.value; setUserRoles([...userRoles]); }}
+                    className="h-8 px-2 rounded-lg bg-secondary text-foreground text-xs border border-border focus:ring-1 focus:ring-primary focus:outline-none"
+                  >
+                    <option value="role">Sort: Role</option>
+                    <option value="country">Sort: Country</option>
+                    <option value="name">Sort: Name</option>
+                  </select>
+                </div>
+              );
+            })()}
+
             <div className="space-y-3">
-              {userRoles.map(ur => {
-                const isPremium = ur.premium_until && new Date(ur.premium_until) > new Date();
-                return (
-                  <div key={ur.id} className="flex items-center justify-between p-4 rounded-xl bg-card border border-border">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-9 h-9 rounded-full flex items-center justify-center ${isPremium ? "bg-accent/20" : "bg-secondary"}`}>
-                        {isPremium ? <Crown className="w-4 h-4 text-accent" /> : <Shield className="w-4 h-4 text-primary" />}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-medium text-foreground">{ur.username}</p>
-                          {isPremium && (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-accent/20 text-accent">PREMIUM</span>
-                          )}
+              {(() => {
+                const roleFilter = (window as any).__userFilterRole || "all";
+                const countryFilter = (window as any).__userFilterCountry || "all";
+                const sortBy = (window as any).__userSortBy || "role";
+
+                let filtered = userRoles.filter(ur => {
+                  if (roleFilter !== "all" && ur.role !== roleFilter) return false;
+                  if (countryFilter !== "all" && (ur.country_name || "Unknown") !== countryFilter) return false;
+                  return true;
+                });
+
+                filtered.sort((a, b) => {
+                  if (sortBy === "country") return (a.country_name || "ZZZ").localeCompare(b.country_name || "ZZZ");
+                  if (sortBy === "name") return (a.username || "").localeCompare(b.username || "");
+                  const roleOrder: Record<string, number> = { admin: 0, moderator: 1, user: 2 };
+                  return (roleOrder[a.role] ?? 3) - (roleOrder[b.role] ?? 3);
+                });
+
+                // Group header logic for country sort
+                let lastGroup = "";
+
+                return filtered.map(ur => {
+                  const isPremium = ur.premium_until && new Date(ur.premium_until) > new Date();
+                  let groupHeader: string | null = null;
+                  if (sortBy === "country") {
+                    const group = ur.country_name || "Unknown";
+                    if (group !== lastGroup) { groupHeader = group; lastGroup = group; }
+                  }
+                  return (
+                    <div key={ur.id}>
+                      {groupHeader && (
+                        <div className="flex items-center gap-2 pt-3 pb-1">
+                          <MapPin className="w-3.5 h-3.5 text-primary" />
+                          <span className="text-xs font-bold text-primary">{groupHeader}</span>
+                          <div className="flex-1 h-px bg-border" />
+                          <span className="text-[10px] text-muted-foreground">
+                            {filtered.filter(u => (u.country_name || "Unknown") === groupHeader).length} users
+                          </span>
                         </div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-xs text-muted-foreground font-mono">{ur.user_id.slice(0, 8)}...</p>
-                          {ur.country_code && (
-                            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-secondary text-[10px] text-muted-foreground">
-                              <MapPin className="w-2.5 h-2.5" />
-                              {({"IN":"🇮🇳","US":"🇺🇸","GB":"🇬🇧","CA":"🇨🇦","AU":"🇦🇺","DE":"🇩🇪","FR":"🇫🇷","JP":"🇯🇵","BR":"🇧🇷","PH":"🇵🇭","ID":"🇮🇩","PK":"🇵🇰","BD":"🇧🇩","NP":"🇳🇵","AE":"🇦🇪","SA":"🇸🇦"} as Record<string,string>)[ur.country_code] || "🌍"}{" "}
-                              {ur.country_name || ur.country_code}
-                            </span>
-                          )}
-                          {!ur.country_code && (
-                            <span className="text-[10px] text-muted-foreground/50">Region unknown</span>
-                          )}
-                        </div>
-                        {isPremium && ur.premium_until && (
-                          <p className="text-[10px] text-accent/70">
-                            Premium until {new Date(ur.premium_until).toLocaleDateString()}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className={`px-2.5 py-1 rounded-md text-xs font-medium ${ur.role === "admin" ? "bg-accent/20 text-accent" : ur.role === "moderator" ? "bg-primary/20 text-primary" : "bg-secondary text-secondary-foreground"}`}>
-                        {ur.role}
-                      </span>
-                      {ur.user_id !== user?.id && (
-                        <button onClick={() => removeUserRole(ur.id)} className="p-1.5 rounded-lg hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors">
-                          <UserMinus className="w-4 h-4" />
-                        </button>
                       )}
+                      <div className="flex items-center justify-between p-4 rounded-xl bg-card border border-border">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-9 h-9 rounded-full flex items-center justify-center ${isPremium ? "bg-accent/20" : "bg-secondary"}`}>
+                            {isPremium ? <Crown className="w-4 h-4 text-accent" /> : <Shield className="w-4 h-4 text-primary" />}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-medium text-foreground">{ur.username}</p>
+                              {isPremium && (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-accent/20 text-accent">PREMIUM</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-xs text-muted-foreground font-mono">{ur.user_id.slice(0, 8)}...</p>
+                              {ur.country_code && (
+                                <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-secondary text-[10px] text-muted-foreground">
+                                  <MapPin className="w-2.5 h-2.5" />
+                                  {({"IN":"🇮🇳","US":"🇺🇸","GB":"🇬🇧","CA":"🇨🇦","AU":"🇦🇺","DE":"🇩🇪","FR":"🇫🇷","JP":"🇯🇵","BR":"🇧🇷","PH":"🇵🇭","ID":"🇮🇩","PK":"🇵🇰","BD":"🇧🇩","NP":"🇳🇵","AE":"🇦🇪","SA":"🇸🇦"} as Record<string,string>)[ur.country_code] || "🌍"}{" "}
+                                  {ur.country_name || ur.country_code}
+                                </span>
+                              )}
+                              {!ur.country_code && (
+                                <span className="text-[10px] text-muted-foreground/50">Region unknown</span>
+                              )}
+                            </div>
+                            {isPremium && ur.premium_until && (
+                              <p className="text-[10px] text-accent/70">
+                                Premium until {new Date(ur.premium_until).toLocaleDateString()}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className={`px-2.5 py-1 rounded-md text-xs font-medium ${ur.role === "admin" ? "bg-accent/20 text-accent" : ur.role === "moderator" ? "bg-primary/20 text-primary" : "bg-secondary text-secondary-foreground"}`}>
+                            {ur.role}
+                          </span>
+                          {ur.user_id !== user?.id && (
+                            <button onClick={() => removeUserRole(ur.id)} className="p-1.5 rounded-lg hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors">
+                              <UserMinus className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                });
+              })()}
             </div>
           </motion.div>
         )}
