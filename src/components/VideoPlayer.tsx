@@ -787,7 +787,9 @@ export default function VideoPlayer({
 
   const handleProgressLeave = () => {
     setHoverTime(null);
+    setScrubTime(null);
     isDraggingSeekBar.current = false;
+    dragTargetTimeRef.current = null;
     if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
     if (instantPreviewRAF.current) cancelAnimationFrame(instantPreviewRAF.current);
   };
