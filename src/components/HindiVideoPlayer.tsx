@@ -602,26 +602,71 @@ export default function HindiVideoPlayer({
   };
 
   // ── Seek bar touch ────────────────────────────────────────────────────
-  const seekPreviewToTime = (t: number) => {
+  // Track active dragging for instant preview mode
+  const isDraggingSeekBar = useRef(false);
+  const lastInstantPreviewTime = useRef(0);
+  const instantPreviewRAF = useRef<number>();
+
+  // Instant preview: capture frame from main video at current seek position (fastest method)
+  const captureInstantPreview = useCallback((targetTime: number) => {
+    const v = videoRef.current;
+    const canvas = previewCanvasRef.current;
+    if (!v || !canvas || !v.videoWidth) return false;
+    
+    // If main video is near target time, capture directly (instant!)
+    if (Math.abs(v.currentTime - targetTime) < 3) {
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+        setPreviewHasFrame(true);
+        return true;
+      }
+    }
+    return false;
+  }, []);
+
+  const seekPreviewToTime = useCallback((t: number, forceImmediate = false) => {
     const rounded = Math.round(t);
     const cache = frameCacheRef.current;
+    const canvas = previewCanvasRef.current;
+    
+    // FAST PATH: During dragging, use instant capture from main video
+    if (isDraggingSeekBar.current && captureInstantPreview(t)) {
+      // Successfully captured from main video - still trigger background HLS seek
+      if (previewReady && Math.abs(lastPreviewSeek.current - t) >= 2) {
+        lastPreviewSeek.current = t;
+        const idx = previewRoundRobin.current % PREVIEW_POOL_SIZE;
+        const pv = previewVideoRefs.current[idx];
+        if (pv && !previewSeeking.current[idx]) {
+          previewRoundRobin.current++;
+          previewSeeking.current[idx] = true;
+          pv.currentTime = t;
+          setTimeout(() => { previewSeeking.current[idx] = false; }, 150);
+        }
+      }
+      return;
+    }
+    
+    // Find nearest cached frame within 3s for instant display
     let best: ImageBitmap | null = null;
-    let bestDist = 6;
+    let bestDist = 4;
     for (const [time, bmp] of cache) {
       const dist = Math.abs(time - rounded);
       if (dist < bestDist) { best = bmp; bestDist = dist; }
     }
-    if (best) {
-      const canvas = previewCanvasRef.current;
-      if (canvas) {
-        const ctx = canvas.getContext("2d");
-        if (ctx) { ctx.drawImage(best, 0, 0, canvas.width, canvas.height); setPreviewHasFrame(true); }
-      }
+    
+    if (best && canvas) {
+      const ctx = canvas.getContext("2d");
+      if (ctx) { ctx.drawImage(best, 0, 0, canvas.width, canvas.height); setPreviewHasFrame(true); }
     }
-    // Seek next available preview video from pool
+    
+    // HLS pool seeking - skip debounce during drag or force mode
     if (!previewReady) return;
-    if (Math.abs(lastPreviewSeek.current - t) < 0.5) return;
+    const minGap = forceImmediate || isDraggingSeekBar.current ? 0.2 : 0.5;
+    if (Math.abs(lastPreviewSeek.current - t) < minGap) return;
     lastPreviewSeek.current = t;
+    
+    // Find a non-seeking pool member (round-robin)
     for (let attempt = 0; attempt < PREVIEW_POOL_SIZE; attempt++) {
       const idx = (previewRoundRobin.current + attempt) % PREVIEW_POOL_SIZE;
       const pv = previewVideoRefs.current[idx];
@@ -630,24 +675,27 @@ export default function HindiVideoPlayer({
         previewSeeking.current[idx] = true;
         if (!best) setPreviewHasFrame(false);
         pv.currentTime = t;
-        setTimeout(() => { previewSeeking.current[idx] = false; }, 300);
+        setTimeout(() => { previewSeeking.current[idx] = false; }, 120);
         return;
       }
     }
+    // All busy — force the first one with very short timeout
     const pv = previewVideoRefs.current[0];
     if (pv) {
       previewSeeking.current[0] = true;
       if (!best) setPreviewHasFrame(false);
       pv.currentTime = t;
-      setTimeout(() => { previewSeeking.current[0] = false; }, 300);
+      setTimeout(() => { previewSeeking.current[0] = false; }, 80);
     }
-  };
+  }, [previewReady, captureInstantPreview]);
 
   const handleSeekBarTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     touchOnSeekBar.current = true;
+    isDraggingSeekBar.current = true;
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    if (instantPreviewRAF.current) cancelAnimationFrame(instantPreviewRAF.current);
     touchMoved.current = true;
     wasPlayingRef.current = playing;
     const v = videoRef.current;
@@ -655,10 +703,11 @@ export default function HindiVideoPlayer({
     if (wasPlayingRef.current) v.pause();
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width));
-    v.currentTime = pct * duration;
-    setHoverTime(pct * duration);
+    const targetTime = pct * duration;
+    v.currentTime = targetTime;
+    setHoverTime(targetTime);
     setHoverPct(pct * 100);
-    seekPreviewToTime(pct * duration);
+    seekPreviewToTime(targetTime, true);
   };
 
   const handleSeekBarTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
@@ -669,16 +718,24 @@ export default function HindiVideoPlayer({
     if (!v || !duration) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width));
-    v.currentTime = pct * duration;
-    setHoverTime(pct * duration);
-    setHoverPct(pct * 100);
-    seekPreviewToTime(pct * duration);
+    const targetTime = pct * duration;
+    
+    // Use RAF for smoother 60fps preview updates during drag
+    if (instantPreviewRAF.current) cancelAnimationFrame(instantPreviewRAF.current);
+    instantPreviewRAF.current = requestAnimationFrame(() => {
+      v.currentTime = targetTime;
+      setHoverTime(targetTime);
+      setHoverPct(pct * 100);
+      seekPreviewToTime(targetTime, true);
+    });
   };
 
   const handleSeekBarTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
     e.stopPropagation();
     touchOnSeekBar.current = false;
+    isDraggingSeekBar.current = false;
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    if (instantPreviewRAF.current) cancelAnimationFrame(instantPreviewRAF.current);
     setHoverTime(null);
     const v = videoRef.current;
     if (!v || !duration) return;
@@ -692,7 +749,7 @@ export default function HindiVideoPlayer({
 
   // ── Preview thumbnail hover (desktop/laptop hover devices) ────────────
   const handleProgressHover = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!duration || !canHover) return;
+    if (!duration) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const pct  = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     const t    = pct * duration;
@@ -703,7 +760,9 @@ export default function HindiVideoPlayer({
 
   const handleProgressLeave = () => {
     setHoverTime(null);
+    isDraggingSeekBar.current = false;
     if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
+    if (instantPreviewRAF.current) cancelAnimationFrame(instantPreviewRAF.current);
   };
 
   const toggleFullscreen = () => {
