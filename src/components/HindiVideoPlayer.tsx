@@ -670,25 +670,30 @@ export default function HindiVideoPlayer({
   const dragTargetTimeRef = useRef<number | null>(null);
   const instantPreviewRAF = useRef<number>();
 
-  // Instant preview: capture frame from main video at current seek position (fastest method)
-  const captureInstantPreview = useCallback((targetTime: number) => {
-    const v = videoRef.current;
-    const canvas = previewCanvasRef.current;
-    if (!v || !canvas || !v.videoWidth) return false;
-
-    // If main video is near target time, capture directly (instant!)
-    if (Math.abs(v.currentTime - targetTime) < 3) {
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
-        setPreviewHasFrame(true);
-        return true;
+  // ── Drag RAF loop: blit main video → preview canvas at 60fps during drag ─
+  // This is the instant-load trick. The browser has a decoded frame in the
+  // video element immediately after each seek; we paint it every RAF during
+  // drag so the preview canvas updates without waiting for the HLS pool.
+  const dragRAFId = useRef<number>();
+  const startDragRAF = useCallback(() => {
+    const loop = () => {
+      const v = videoRef.current;
+      const canvas = previewCanvasRef.current;
+      if (!v || !canvas || !isDraggingSeekBar.current) { dragRAFId.current = undefined; return; }
+      if (v.videoWidth > 0 && v.readyState >= 2) {
+        const ctx = canvas.getContext("2d");
+        if (ctx) { ctx.drawImage(v, 0, 0, canvas.width, canvas.height); setPreviewHasFrame(true); }
       }
-    }
-    return false;
+      dragRAFId.current = requestAnimationFrame(loop);
+    };
+    if (dragRAFId.current) cancelAnimationFrame(dragRAFId.current);
+    dragRAFId.current = requestAnimationFrame(loop);
+  }, []);
+  const stopDragRAF = useCallback(() => {
+    if (dragRAFId.current) { cancelAnimationFrame(dragRAFId.current); dragRAFId.current = undefined; }
   }, []);
 
-  // Ensure mobile preview updates AFTER the seek completes (fixes blank frames on iOS)
+  // Belt-and-suspenders: also capture on seeked for iOS / slower devices
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
@@ -697,16 +702,20 @@ export default function HindiVideoPlayer({
       const canvas = previewCanvasRef.current;
       if (!canvas || !v.videoWidth) return;
       const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      try {
-        ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
-        setPreviewHasFrame(true);
-      } catch {
-        // ignore
-      }
+      try { if (ctx) { ctx.drawImage(v, 0, 0, canvas.width, canvas.height); setPreviewHasFrame(true); } } catch {}
     };
     v.addEventListener("seeked", onSeeked);
     return () => v.removeEventListener("seeked", onSeeked);
+  }, []);
+
+  // captureInstantPreview — draws unconditionally from main video (no time-distance check)
+  const captureInstantPreview = useCallback((_targetTime: number) => {
+    const v = videoRef.current;
+    const canvas = previewCanvasRef.current;
+    if (!v || !canvas || !v.videoWidth || v.readyState < 2) return false;
+    const ctx = canvas.getContext("2d");
+    if (ctx) { ctx.drawImage(v, 0, 0, canvas.width, canvas.height); setPreviewHasFrame(true); return true; }
+    return false;
   }, []);
 
   const seekPreviewToTime = useCallback((t: number, forceImmediate = false) => {
@@ -779,6 +788,7 @@ export default function HindiVideoPlayer({
     touchOnSeekBar.current = true;
     isDraggingSeekBar.current = true;
     isSeeking.current = true;
+    startDragRAF(); // instant frame capture loop
     resetHideTimer();
     setPreviewHasFrame(false);
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
@@ -828,6 +838,7 @@ export default function HindiVideoPlayer({
     e.stopPropagation();
     touchOnSeekBar.current = false;
     isDraggingSeekBar.current = false;
+    stopDragRAF(); // stop instant frame capture loop
     dragTargetTimeRef.current = null;
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
     if (instantPreviewRAF.current) cancelAnimationFrame(instantPreviewRAF.current);
@@ -866,6 +877,7 @@ export default function HindiVideoPlayer({
     setHoverTime(null);
     setScrubTime(null);
     isDraggingSeekBar.current = false;
+    stopDragRAF();
     dragTargetTimeRef.current = null;
     if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
     if (instantPreviewRAF.current) cancelAnimationFrame(instantPreviewRAF.current);
