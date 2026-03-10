@@ -25,7 +25,12 @@ interface HindiSource {
   url: string;
 }
 
-async function fetchHindiSourcesFromAllApis(anilistId: string | undefined, malId: string | undefined, episodeNumber: number): Promise<HindiSource[]> {
+async function fetchHindiSourcesFromAllApis(
+  anilistId: string | undefined,
+  malId: string | undefined,
+  episodeNumber: number,
+  seasonNumber: number = 1
+): Promise<HindiSource[]> {
   if (!anilistId && !malId) throw new Error("No AniList/MAL ID");
   const paramName = anilistId ? "anilistId" : "malId";
   const paramValue = anilistId || malId;
@@ -36,7 +41,7 @@ async function fetchHindiSourcesFromAllApis(anilistId: string | undefined, malId
   const timeout = setTimeout(() => controller.abort(), 15000);
 
   const promises = apis.map(async (base) => {
-    const url = `${base}/hindiapi/episode?${paramName}=${paramValue}&season=1&episode=${episodeNumber}&type=series`;
+    const url = `${base}/hindiapi/episode?${paramName}=${paramValue}&season=${seasonNumber}&episode=${episodeNumber}&type=series`;
     const res = await fetch(url, { signal: controller.signal });
     const data = await res.json();
     if (!res.ok || data.status !== 200) throw new Error("Bad response");
@@ -58,7 +63,6 @@ async function fetchHindiSourcesFromAllApis(anilistId: string | undefined, malId
     return mapped;
   });
 
-  // Use allSettled + find first fulfilled (compatible with all targets)
   try {
     const results = await Promise.allSettled(promises);
     clearTimeout(timeout);
@@ -70,6 +74,49 @@ async function fetchHindiSourcesFromAllApis(anilistId: string | undefined, malId
     clearTimeout(timeout);
     throw new Error("No Hindi sources found");
   }
+}
+
+/**
+ * Detect the correct season number from the seasons array and the current animeId.
+ * This fixes the bug where Season 2 would fetch Season 1 episodes from the Hindi API.
+ */
+function detectSeasonNumber(seasons: any[], currentAnimeId: string): number {
+  if (!seasons || seasons.length === 0) return 1;
+
+  // Find which season the current animeId belongs to
+  const currentSeasonIdx = seasons.findIndex((s: any) => s.id === currentAnimeId);
+
+  if (currentSeasonIdx === -1) {
+    // Current anime not found in seasons list — try to find via isCurrent flag
+    const currentSeason = seasons.find((s: any) => s.isCurrent);
+    if (!currentSeason) return 1;
+
+    // Try to extract season number from title
+    const titleMatch = (currentSeason.title || currentSeason.name || "").match(/season\s*(\d+)/i);
+    if (titleMatch) return parseInt(titleMatch[1], 10);
+
+    // Count position among TV-type seasons
+    const tvSeasons = seasons.filter((s: any) => {
+      const t = (s.title || s.name || "").toLowerCase();
+      return t.includes("season") || (!t.includes("movie") && !t.includes("special") && !t.includes("ova"));
+    });
+    const idx = tvSeasons.findIndex((s: any) => s.isCurrent);
+    return idx >= 0 ? idx + 1 : 1;
+  }
+
+  // Found current anime in seasons — use its position
+  // Try to extract season number from the season title at that index
+  const season = seasons[currentSeasonIdx];
+  const titleMatch = (season.title || season.name || "").match(/season\s*(\d+)/i);
+  if (titleMatch) return parseInt(titleMatch[1], 10);
+
+  // Count only TV-type seasons up to and including this index
+  const tvSeasons = seasons.filter((s: any) => {
+    const t = (s.title || s.name || "").toLowerCase();
+    return t.includes("season") || (!t.includes("movie") && !t.includes("special") && !t.includes("ova"));
+  });
+  const tvIdx = tvSeasons.findIndex((s: any) => s.id === currentAnimeId);
+  return tvIdx >= 0 ? tvIdx + 1 : currentSeasonIdx + 1;
 }
 
 export default function HindiWatchPage() {
@@ -108,6 +155,10 @@ export default function HindiWatchPage() {
   const anilistId = (moreInfo as any).anilistid || (moreInfo as any).anilist_id || infoObj?.anilistId;
   const malId = (moreInfo as any).malid || (moreInfo as any).mal_id || infoObj?.malId;
 
+  // Detect correct season number based on current animeId and seasons list
+  const seasons = info?.seasons || [];
+  const seasonNumber = detectSeasonNumber(seasons, animeId || "");
+
   useEffect(() => {
     if (!info) return;
     let cancelled = false;
@@ -118,8 +169,8 @@ export default function HindiWatchPage() {
       setSources([]);
       setSelectedSource(null);
 
-      // Check cache first (1hr TTL)
-      const cacheKey = `hindi_${anilistId || malId}_${epNum}`;
+      // Cache key includes seasonNumber to avoid cross-season cache collisions
+      const cacheKey = `hindi_${anilistId || malId}_s${seasonNumber}_${epNum}`;
       const cached = getCachedStream<HindiSource[]>(cacheKey);
       if (cached && retryKey === 0) {
         setSources(cached);
@@ -131,7 +182,7 @@ export default function HindiWatchPage() {
       }
 
       try {
-        const srcs = await fetchHindiSourcesFromAllApis(anilistId, malId, epNum);
+        const srcs = await fetchHindiSourcesFromAllApis(anilistId, malId, epNum, seasonNumber);
         if (cancelled) return;
         setCachedStream(cacheKey, srcs);
         setSources(srcs);
@@ -144,7 +195,6 @@ export default function HindiWatchPage() {
         }
       } catch (err: any) {
         if (!cancelled) {
-          // Auto-fallback: redirect to English watch page
           toast.warning("Hindi Dub not available for this episode. Switching to English...", { duration: 5000 });
           navigate(`/watch/${animeId}?lang=eng`);
         }
@@ -155,7 +205,7 @@ export default function HindiWatchPage() {
 
     load();
     return () => { cancelled = true; };
-  }, [info, epNum, retryKey, anilistId, malId]);
+  }, [info, epNum, retryKey, anilistId, malId, seasonNumber]);
 
   // Fetch subtitles from English HiAnime endpoint
   useEffect(() => {
@@ -187,7 +237,6 @@ export default function HindiWatchPage() {
 
   const hindiHlsSrc = selectedSource?.isHLS ? selectedSource.url : null;
   const hindiIframeSrc = selectedSource && !selectedSource.isHLS ? selectedSource.url : null;
-
 
   const renderPlayer = () => {
     if (loading) {
@@ -244,6 +293,7 @@ export default function HindiWatchPage() {
           <span>
             Streaming via <span className="text-orange-400 font-medium">{selectedSource.displayName}</span>
             {" · "}<span className="text-orange-400 font-medium">🇮🇳 हिंदी DUB</span>
+            {seasons.length > 1 && <span className="ml-2 text-muted-foreground/60">Season {seasonNumber}</span>}
           </span>
         </div>
       )}
@@ -282,7 +332,6 @@ export default function HindiWatchPage() {
           </div>
         )}
 
-
         <button onClick={() => setShowEpList(!showEpList)}
           className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-secondary text-sm text-secondary-foreground hover:bg-secondary/80">
           <List className="w-4 h-4" /> Episodes
@@ -296,6 +345,9 @@ export default function HindiWatchPage() {
           Episode {epNum}{currentEp?.title ? ` — ${currentEp.title}` : ""}
         </h2>
         <span className="text-xs text-orange-400 font-medium">🇮🇳 Hindi Dubbed</span>
+        {seasons.length > 1 && (
+          <span className="ml-3 text-xs text-muted-foreground">Season {seasonNumber}</span>
+        )}
       </div>
 
       {/* Episode list */}
