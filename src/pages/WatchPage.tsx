@@ -69,7 +69,47 @@ const ALLOWED_HINDI_PROVIDERS: Record<string, string> = {
   "EarnVids": "Server 2 Embedded",
 };
 
-async function fetchHindiSources(animeInfo: any, episodeNumber: number): Promise<HindiSource[]> {
+/**
+ * Detect correct season number from seasons array and current animeId.
+ * Fixes bug where Season 2 fetches Season 1 episodes from Hindi API.
+ */
+function detectSeasonNumber(seasons: any[], currentAnimeId: string): number {
+  if (!seasons || seasons.length === 0) return 1;
+
+  // Find which index in seasons array matches the current animeId
+  const currentSeasonIdx = seasons.findIndex((s: any) => s.id === currentAnimeId);
+
+  if (currentSeasonIdx === -1) {
+    // Current anime not found by id — try isCurrent flag
+    const currentSeason = seasons.find((s: any) => s.isCurrent);
+    if (!currentSeason) return 1;
+
+    const titleMatch = (currentSeason.title || currentSeason.name || "").match(/season\s*(\d+)/i);
+    if (titleMatch) return parseInt(titleMatch[1], 10);
+
+    const tvSeasons = seasons.filter((s: any) => {
+      const t = (s.title || s.name || "").toLowerCase();
+      return t.includes("season") || (!t.includes("movie") && !t.includes("special") && !t.includes("ova"));
+    });
+    const idx = tvSeasons.findIndex((s: any) => s.isCurrent);
+    return idx >= 0 ? idx + 1 : 1;
+  }
+
+  // Found by id — extract from title or use positional index
+  const season = seasons[currentSeasonIdx];
+  const titleMatch = (season.title || season.name || "").match(/season\s*(\d+)/i);
+  if (titleMatch) return parseInt(titleMatch[1], 10);
+
+  // Count TV-type seasons only up to this index
+  const tvSeasons = seasons.filter((s: any) => {
+    const t = (s.title || s.name || "").toLowerCase();
+    return t.includes("season") || (!t.includes("movie") && !t.includes("special") && !t.includes("ova"));
+  });
+  const tvIdx = tvSeasons.findIndex((s: any) => s.id === currentAnimeId);
+  return tvIdx >= 0 ? tvIdx + 1 : currentSeasonIdx + 1;
+}
+
+async function fetchHindiSources(animeInfo: any, episodeNumber: number, currentAnimeId: string): Promise<HindiSource[]> {
   const moreInfo = animeInfo?.anime?.moreInfo || animeInfo?.moreInfo || {};
   const info = animeInfo?.anime?.info || {};
 
@@ -81,27 +121,9 @@ async function fetchHindiSources(animeInfo: any, episodeNumber: number): Promise
   const paramName = anilistId ? "anilistId" : "malId";
   const paramValue = anilistId || malId;
 
-  // Detect season number from seasons array instead of hardcoding 1
-  let seasonNumber = 1;
+  // Use the fixed season detection logic
   const seasons = animeInfo?.seasons || [];
-  if (seasons.length > 0) {
-    const currentSeason = seasons.find((s: any) => s.isCurrent);
-    if (currentSeason) {
-      // Try to extract season number from title (e.g. "Season 3 (Part 1)")
-      const titleMatch = (currentSeason.title || currentSeason.name || "").match(/season\s*(\d+)/i);
-      if (titleMatch) {
-        seasonNumber = parseInt(titleMatch[1], 10);
-      } else {
-        // Fallback: count TV-type seasons (exclude movies/specials) up to current
-        const tvSeasons = seasons.filter((s: any) => {
-          const t = (s.title || s.name || "").toLowerCase();
-          return t.includes("season") || (!t.includes("movie") && !t.includes("special") && !t.includes("ova"));
-        });
-        const idx = tvSeasons.findIndex((s: any) => s.isCurrent);
-        if (idx >= 0) seasonNumber = idx + 1;
-      }
-    }
-  }
+  const seasonNumber = detectSeasonNumber(seasons, currentAnimeId);
 
   const url = `${HINDI_API_BASE}/hindiapi/episode?${paramName}=${paramValue}&season=${seasonNumber}&episode=${episodeNumber}&type=series`;
   const data = await raceHindiFetch(url);
@@ -156,7 +178,7 @@ export default function WatchPage() {
   const [retryKey, setRetryKey] = useState(0);
   const [retryMessage, setRetryMessage] = useState("");
 
-  // Hindi state — same as original
+  // Hindi state
   const [hindiSources, setHindiSources] = useState<HindiSource[]>([]);
   const [selectedHindiSource, setSelectedHindiSource] = useState<HindiSource | null>(null);
   const [hindiHlsSrc, setHindiHlsSrc] = useState<string | null>(null);
@@ -166,9 +188,7 @@ export default function WatchPage() {
   const playerAnchorRef = useRef<HTMLDivElement>(null);
   const playerWrapperRef = useRef<HTMLDivElement>(null);
   const [showPip, setShowPip] = useState(false);
-  const [mobileCompact, setMobileCompact] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
-  const touchStartY = useRef<number | null>(null);
   const { settings } = useSiteSettings();
 
   const animeId = fullEpisodeId.split("?")[0];
@@ -188,7 +208,7 @@ export default function WatchPage() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // PiP: decide visibility from anchor position (prevents fixed-player flicker)
+  // PiP: decide visibility from anchor position
   useEffect(() => {
     const updatePip = () => {
       const anchor = playerAnchorRef.current;
@@ -227,7 +247,6 @@ export default function WatchPage() {
       el.style.border = "1px solid hsl(var(--border))";
       el.style.cursor = "pointer";
       el.style.maxHeight = "";
-      // Disable all interactions inside the mini player (no controls)
       const inner = el.querySelector("div, video, iframe");
       if (inner) (inner as HTMLElement).style.pointerEvents = "none";
     } else {
@@ -241,7 +260,6 @@ export default function WatchPage() {
       el.style.boxShadow = "";
       el.style.border = "";
       el.style.cursor = "";
-      // Re-enable interactions
       const inner = el.querySelector("div, video, iframe");
       if (inner) (inner as HTMLElement).style.pointerEvents = "";
     }
@@ -289,7 +307,7 @@ export default function WatchPage() {
     trackView({ id: animeId, name: animeName, poster: animePoster });
   }, [info, animeId, animeName, animePoster, trackView]);
 
-  // Switch between Hindi sources — same logic as original switchHindiSource
+  // Switch between Hindi sources
   const switchHindiSource = (src: HindiSource) => {
     setSelectedHindiSource(src);
     setStreamResult(null);
@@ -298,12 +316,11 @@ export default function WatchPage() {
     if (src.isHLS) {
       setHindiHlsSrc(src.url);
     } else {
-      // Embed source — passed to HindiVideoPlayer which renders WITHOUT sandbox
       setHindiIframeSrc(src.url);
     }
   };
 
-  // ── Hindi stream loader — identical logic to original ─────────────────
+  // ── Hindi stream loader ─────────────────────────────────────────────
   useEffect(() => {
     if (category !== "dub" || !info || !currentEp) return;
     let cancelled = false;
@@ -319,17 +336,16 @@ export default function WatchPage() {
       setRetryMessage("Fetching Hindi sources...");
 
       try {
-        const sources = await fetchHindiSources(info, currentEp.number || 1);
+        // Pass animeId so season detection works correctly
+        const sources = await fetchHindiSources(info, currentEp.number || 1, animeId);
         if (cancelled) return;
 
         setHindiSources(sources);
 
-        // Same as tester HTML: prefer first HLS source
         const firstHLS = sources.find((s) => s.isHLS) || sources[0];
         if (firstHLS) {
           switchHindiSource(firstHLS);
         } else {
-          // No Hindi sources — auto-fallback to English
           if (!cancelled) {
             toast.warning("Hindi Dub not available for this episode. Switching to English...", { duration: 5000 });
             setCategory("eng");
@@ -337,7 +353,6 @@ export default function WatchPage() {
         }
       } catch (err: any) {
         if (!cancelled) {
-          // Auto-fallback to English on Hindi failure
           toast.warning("Hindi Dub not available for this episode. Switching to English...", { duration: 5000 });
           setCategory("eng");
         }
@@ -348,7 +363,7 @@ export default function WatchPage() {
 
     load();
     return () => { cancelled = true; };
-  }, [category, info, currentEp, retryKey]);
+  }, [category, info, currentEp, retryKey, animeId]);
 
   // ── HiAnime (sub/engdub/raw) stream loader ─────────────────────────
   const [engMode, setEngMode] = useState<"sub" | "dub">("sub");
@@ -377,7 +392,6 @@ export default function WatchPage() {
         return;
       }
 
-      // For "eng", try sub first then dub; for "raw" use sub
       const categoriesToTry = category === "eng" ? ["sub", "dub"] : ["sub"];
 
       for (const apiCat of categoriesToTry) {
@@ -425,7 +439,6 @@ export default function WatchPage() {
   const currentLang = LANGUAGES.find((l) => l.code === category) || LANGUAGES[0];
   const engLabel = category === "eng" ? (engMode === "dub" ? "ENG DUB" : "ENG SUB") : "";
 
-  // ── Build episode navigation links preserving lang param ──────────────
   const buildEpLink = (ep: { episodeId?: string }) => {
     if (!ep.episodeId) return "#";
     if (category !== "sub") return `/watch/${ep.episodeId}?lang=${category}`;
@@ -557,7 +570,6 @@ export default function WatchPage() {
       </div>
       {/* Spacer so content doesn't jump when player is fixed */}
       {showPip && <div className="mb-2" style={{ aspectRatio: "16/9" }} />}
-
 
       {/* Stream info */}
       {(streamResult || hindiHlsSrc || hindiIframeSrc) && (
@@ -716,7 +728,7 @@ export default function WatchPage() {
         </div>
       )}
 
-      {/* Comments — collapsed by default, just before recommendations */}
+      {/* Comments — collapsed by default */}
       {episodeId && (
         <div className="mt-6 mb-2 border border-border rounded-lg overflow-hidden">
           <button
