@@ -7,7 +7,7 @@ import {
   Camera, Repeat, Volume1, SlidersHorizontal
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
-import PlayerWatermark from "@/components/PlayerWatermark"; // ← A. Added import
+import PlayerWatermark from "@/components/PlayerWatermark";
 
 interface Track {
   file: string;
@@ -122,7 +122,7 @@ export default function VideoPlayer({
   const audioSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   // Mini player (YouTube-style scroll follow)
   const [miniPlayer, setMiniPlayer] = useState(false);
-  // ── B. Added watermark state and timer ──────────────────────────────────
+  // Watermark state and timer
   const [showWatermarkIcon, setShowWatermarkIcon] = useState(false);
   const watermarkIconTimer = useRef<ReturnType<typeof setTimeout>>();
 
@@ -131,7 +131,6 @@ export default function VideoPlayer({
     if (watermarkIconTimer.current) clearTimeout(watermarkIconTimer.current);
     watermarkIconTimer.current = setTimeout(() => setShowWatermarkIcon(false), 3000);
   };
-  // ────────────────────────────────────────────────────────────────────────
 
   // Timer refs
   const hideTimer       = useRef<ReturnType<typeof setTimeout>>();
@@ -270,38 +269,56 @@ export default function VideoPlayer({
     };
   }, []);
 
-  // ── Main HLS ──────────────────────────────────────────────────────────────
+  // ── Main HLS with Bug #1 fix (startPosition:0, TV detection, error recovery) ──
   useEffect(() => {
     const video = videoRef.current;
     let realSrc: string;
     try { realSrc = getUrl.current(); } catch { return; }
     if (!video || !realSrc) return;
 
+    // TV detection
+    const isTV = window.screen.width >= 1920 ||
+      /SmartTV|Tizen|WebOS|HbbTV|VIDAA|NetCast/i.test(navigator.userAgent);
+
     if (Hls.isSupported()) {
       const hls = new Hls({
-        maxBufferLength: 180, maxMaxBufferLength: 300,
-        startPosition: startTime || -1, enableWorker: true,
-        lowLatencyMode: false, abrEwmaDefaultEstimate: 500000,
-        abrBandWidthFactor: 0.95, abrBandWidthUpFactor: 0.7,
+        startPosition: startTime || 0,                 // FIXED: -1 → 0
+        maxBufferSize: isTV ? 120 * 1000 * 1000 : 60 * 1000 * 1000,
+        maxBufferLength: isTV ? 60 : 30,
+        maxMaxBufferLength: isTV ? 120 : 60,
+        manifestLoadingMaxRetry: isTV ? 5 : 3,
+        fragLoadingMaxRetry: isTV ? 6 : 3,
+        levelLoadingMaxRetry: isTV ? 5 : 3,
+        enableWorker: true,
+        lowLatencyMode: false,
+        abrEwmaDefaultEstimate: 500000,
+        abrBandWidthFactor: 0.95,
+        abrBandWidthUpFactor: 0.7,
         xhrSetup: (xhr) => { xhr.withCredentials = false; },
       });
+
       hls.loadSource(realSrc);
       hls.attachMedia(video);
+
+      // Error recovery (added)
+      hls.on(Hls.Events.ERROR, (_e, data) => {
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+          hls.recoverMediaError();
+        }
+        if (data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR) {
+          hls.recoverMediaError();
+        }
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR && !data.fatal) {
+          hls.startLoad();
+        }
+      });
+
       hls.on(Hls.Events.MANIFEST_PARSED, (_e, data) => {
         video.play().catch(() => {});
         setQualityLevels(data.levels.map(l => ({ height: l.height, bitrate: l.bitrate })));
         setCurrentQuality(-1);
       });
-      // FIX: handle HLS errors gracefully
-      hls.on(Hls.Events.ERROR, (_e, data) => {
-        if (data.fatal) {
-          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-            hls.startLoad();
-          } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-            hls.recoverMediaError();
-          }
-        }
-      });
+
       hlsRef.current = hls;
       return () => { hls.destroy(); hlsRef.current = null; };
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
@@ -311,7 +328,7 @@ export default function VideoPlayer({
     }
   }, [src, startTime]);
 
-  // ── Preview HLS pool (3 parallel instances for fast seeking) ──────────
+  // ── Preview HLS pool (3 parallel instances) ────────────────────────────
   const [previewReadyCount, setPreviewReadyCount] = useState(0);
   useEffect(() => {
     let realSrc: string;
@@ -567,8 +584,11 @@ export default function VideoPlayer({
   const togglePlay = useCallback(() => {
     const v = videoRef.current;
     if (!v) return;
-    // Prevent click from firing right after touch events on mobile
-    if (touchJustEnded.current) { touchJustEnded.current = false; return; }
+    // ── FIX: Prevent click from firing right after touch events on mobile ──
+    if (touchJustEnded.current) {
+      touchJustEnded.current = false;
+      return;
+    }
     if (v.paused) { wasPlayingRef.current = true; v.play().catch(() => {}); setPlaying(true); flashCenter("play"); }
     else          { wasPlayingRef.current = false; v.pause(); setPlaying(false); flashCenter("pause"); }
     flashWatermark();
@@ -578,7 +598,7 @@ export default function VideoPlayer({
     const v = videoRef.current;
     if (!v) return;
     v.muted = !v.muted; setMuted(v.muted);
-    flashWatermark(); // ← C. Added
+    flashWatermark();
   };
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -594,7 +614,7 @@ export default function VideoPlayer({
     if (!v || !duration) return;
     const rect = e.currentTarget.getBoundingClientRect();
     v.currentTime = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) * duration;
-    flashWatermark(); // ← C. Added
+    flashWatermark();
   };
 
   // ── Seek bar touch ────────────────────────────────────────────────────
@@ -787,7 +807,7 @@ export default function VideoPlayer({
     }
   };
 
-   // ── Preview thumbnail hover (desktop/laptop hover devices) ─────────────
+  // ── Preview thumbnail hover (desktop/laptop hover devices) ─────────────
   const handleProgressHover = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!duration) return;
     const rect = e.currentTarget.getBoundingClientRect();
@@ -864,6 +884,7 @@ export default function VideoPlayer({
     v.addEventListener("loadedmetadata", onTrackLoad);
     return () => v.removeEventListener("loadedmetadata", onTrackLoad);
   }, [isMobile, src, tracks]);
+
   const fmt = (s: number) => {
     if (!s || isNaN(s)) return "0:00";
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = Math.floor(s % 60);
@@ -902,7 +923,7 @@ export default function VideoPlayer({
 
   const handleContainerTouchEnd = (e: React.TouchEvent) => {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
-    // Mark that a touch just ended — prevents onClick from double-toggling
+    // ── FIX: mark that a touch just ended — prevents onClick from double-toggling ──
     touchJustEnded.current = true;
     setTimeout(() => { touchJustEnded.current = false; }, 300);
 
@@ -937,7 +958,7 @@ export default function VideoPlayer({
       const v = videoRef.current;
       if      (x < rect.width / 3)     { v.currentTime = Math.max(0, v.currentTime - 10);          flashCenter("rw"); }
       else if (x > rect.width * 2 / 3) { v.currentTime = Math.min(v.duration, v.currentTime + 10); flashCenter("ff"); }
-      flashWatermark(); // ← C. Added inside double-tap block
+      flashWatermark(); // ← inside double-tap block
     }
   };
 
@@ -1473,7 +1494,7 @@ export default function VideoPlayer({
             </div>
           </div>
         </div>
-        {/* ── D. Added watermark component ─────────────────────────────── */}
+        {/* ── Watermark component ─────────────────────────────── */}
         <PlayerWatermark showIcon={showWatermarkIcon} />
       </div>
     </div>
