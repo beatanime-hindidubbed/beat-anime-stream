@@ -3,14 +3,18 @@ import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
+import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import HindiVideoPlayer from "@/components/HindiVideoPlayer";
-
 import BackButton from "@/components/BackButton";
 import { getApiPool, getNextApi, proxyUrl as makeProxyUrl } from "@/lib/streaming";
 import { getCachedStream, setCachedStream } from "@/lib/streamCache";
-import { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight, List, Loader2, Server, RefreshCw } from "lucide-react";
+import { useState, useEffect, lazy, Suspense } from "react";
+import { ChevronLeft, ChevronRight, List, Loader2, Server, RefreshCw, MessageSquare, ChevronDown } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
+import AnimeCard from "@/components/AnimeCard";
+import { RegionalPopularWidget } from "@/components/RegionalPopular";
+
+const CommentSection = lazy(() => import("@/components/CommentSection"));
 
 // Only allow these providers, mapped to friendly names
 const ALLOWED_PROVIDERS: Record<string, string> = {
@@ -124,6 +128,7 @@ export default function HindiWatchPage() {
   const { animeId, episodeNumber } = useParams<{ animeId: string; episodeNumber: string }>();
   const epNum = parseInt(episodeNumber || "1", 10);
   const { settings } = useSiteSettings();
+  const { user } = useSupabaseAuth();
 
   const [sources, setSources] = useState<HindiSource[]>([]);
   const [selectedSource, setSelectedSource] = useState<HindiSource | null>(null);
@@ -132,6 +137,7 @@ export default function HindiWatchPage() {
   const [retryKey, setRetryKey] = useState(0);
   const [showEpList, setShowEpList] = useState(false);
   const [subtitleTracks, setSubtitleTracks] = useState<{ file: string; label?: string; kind?: string; default?: boolean }[]>([]);
+  const [commentsExpanded, setCommentsExpanded] = useState(false);
 
   const { data: info } = useQuery({
     queryKey: ["info", animeId],
@@ -158,6 +164,9 @@ export default function HindiWatchPage() {
   // Detect correct season number based on current animeId and seasons list
   const seasons = info?.seasons || [];
   const seasonNumber = detectSeasonNumber(seasons, animeId || "");
+
+  // Recommended anime
+  const recommended = info?.recommendedAnimes || info?.relatedAnimes || [];
 
   useEffect(() => {
     if (!info) return;
@@ -267,10 +276,30 @@ export default function HindiWatchPage() {
     }
 
     if (hindiHlsSrc) {
-      return <HindiVideoPlayer src={hindiHlsSrc} tracks={subtitleTracks} episodeId={currentEp?.episodeId} onEnded={() => navigate(`/hindi/watch/${animeId}/${epNum + 1}`)} />;
+      return (
+        <HindiVideoPlayer
+          src={hindiHlsSrc}
+          tracks={subtitleTracks}
+          episodeId={currentEp?.episodeId}
+          onEnded={() => navigate(`/hindi/watch/${animeId}/${epNum + 1}`)}
+          animeName={animeName}
+          episodeNumber={epNum}
+          episodeTitle={currentEp?.title}
+        />
+      );
     }
     if (hindiIframeSrc) {
-      return <HindiVideoPlayer iframeSrc={hindiIframeSrc} tracks={subtitleTracks} episodeId={currentEp?.episodeId} onEnded={() => navigate(`/hindi/watch/${animeId}/${epNum + 1}`)} />;
+      return (
+        <HindiVideoPlayer
+          iframeSrc={hindiIframeSrc}
+          tracks={subtitleTracks}
+          episodeId={currentEp?.episodeId}
+          onEnded={() => navigate(`/hindi/watch/${animeId}/${epNum + 1}`)}
+          animeName={animeName}
+          episodeNumber={epNum}
+          episodeTitle={currentEp?.title}
+        />
+      );
     }
 
     return (
@@ -285,6 +314,11 @@ export default function HindiWatchPage() {
       <BackButton />
 
       <div className="mb-4">{renderPlayer()}</div>
+
+      {/* "Now Watching" line (like WatchPage) */}
+      <p className="text-xs text-muted-foreground mt-1">
+        ▶ Now Watching: Episode {epNum}{currentEp?.title ? ` — ${currentEp.title}` : ""}
+      </p>
 
       {/* Stream info */}
       {selectedSource && (
@@ -372,6 +406,56 @@ export default function HindiWatchPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Comments section (collapsible) – like WatchPage */}
+      {episodeId && (
+        <div className="mt-6 mb-2 border border-border rounded-lg overflow-hidden">
+          <button
+            onClick={() => setCommentsExpanded(!commentsExpanded)}
+            className="w-full flex items-center justify-between px-4 py-3 bg-card hover:bg-secondary/50 transition-colors"
+          >
+            <span className="font-display text-sm font-bold text-foreground flex items-center gap-2">
+              <MessageSquare className="w-4 h-4 text-primary" />
+              Comments
+            </span>
+            <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${commentsExpanded ? "rotate-180" : ""}`} />
+          </button>
+          <AnimatePresence>
+            {commentsExpanded && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div className="px-4 pb-4">
+                  <Suspense fallback={<div className="py-8 text-center text-muted-foreground text-sm">Loading comments...</div>}>
+                    <CommentSection episodeId={`${animeId}?ep=${epNum}`} animeId={animeId} />
+                  </Suspense>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
+
+      {/* Recommended + Regional sidebar */}
+      {(recommended.length > 0 || user) && (
+        <div className="mt-8 flex flex-col lg:flex-row gap-6">
+          {recommended.length > 0 && (
+            <div className="flex-1">
+              <h2 className="font-display text-xl font-bold text-foreground mb-4">You might also like</h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {recommended.slice(0, 12).map((a, i) => (
+                  <AnimeCard key={a.id} anime={a} index={i} />
+                ))}
+              </div>
+            </div>
+          )}
+          {user && <RegionalPopularWidget className="lg:w-64 flex-shrink-0" />}
+        </div>
+      )}
     </div>
   );
 }
