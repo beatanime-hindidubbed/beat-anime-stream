@@ -104,11 +104,13 @@ export default function Navbar() {
       <div className="container flex items-center justify-between h-14 sm:h-16 gap-2 sm:gap-4">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2 shrink-0">
-          <div className="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center">
-            <span className="font-display font-bold text-primary-foreground text-sm">
-              {settings.siteIcon || "B"}
-            </span>
-          </div>
+          {/* ── LOGO IMAGE — replace /logo.png with your actual file in /public ── */}
+          <img
+            src="/logo.png"
+            alt={settings.siteName || "Beat Anistream"}
+            className="w-8 h-8 rounded-lg object-contain"
+            draggable={false}
+          />
           <span className="font-display font-bold text-base sm:text-lg hidden xs:block">
             <span className="text-gradient">{settings.siteName || "Beat Anistream"}</span>
           </span>
@@ -178,7 +180,7 @@ export default function Navbar() {
                   <div
                     key={s.id}
                     onMouseDown={(e) => {
-                      e.preventDefault(); // prevents blur from firing first
+                      e.preventDefault();
                       navigate(`/anime/${s.id}`);
                       setShowSuggestions(false);
                       setQuery('');
