@@ -307,8 +307,7 @@ export default function HindiVideoPlayer({
     };
   }, []);
 
-  // ── HLS loader ────────────────────────────────────────────────────────
-  // Hindi CDN URLs need specific Referer headers — always proxy them
+  // ── HLS loader with Bug #1 fix (startPosition:0, TV detection, error recovery) ──
   useEffect(() => {
     if (isIframe || !src) return;
     const video = videoRef.current;
@@ -320,26 +319,44 @@ export default function HindiVideoPlayer({
     const proxyBase = getHindiProxy();
     const proxiedSrc = realSrc.includes("/hindiapi/proxy") ? realSrc : proxyBase + "?url=" + encodeURIComponent(realSrc);
 
+    // TV detection
+    const isTV = window.screen.width >= 1920 ||
+      /SmartTV|Tizen|WebOS|HbbTV|VIDAA|NetCast/i.test(navigator.userAgent);
+
     if (Hls.isSupported()) {
       const hls = new Hls({
+        startPosition: startTime || 0,               // FIXED: -1 → 0
+        maxBufferSize: isTV ? 120 * 1000 * 1000 : 60 * 1000 * 1000,
+        maxBufferLength: isTV ? 60 : 30,
+        maxMaxBufferLength: isTV ? 120 : 60,
+        manifestLoadingMaxRetry: isTV ? 5 : 3,
+        fragLoadingMaxRetry: isTV ? 6 : 3,
+        levelLoadingMaxRetry: isTV ? 5 : 3,
         xhrSetup: (xhr) => { xhr.withCredentials = false; },
-        maxBufferSize: 60 * 1000 * 1000,
-        maxBufferLength: 180,
-        startPosition: startTime || -1,
       });
+
       hls.loadSource(proxiedSrc);
       hls.attachMedia(video);
+
+      // Error recovery (added)
+      hls.on(Hls.Events.ERROR, (_e, data) => {
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+          hls.recoverMediaError();
+        }
+        if (data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR) {
+          hls.recoverMediaError();
+        }
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR && !data.fatal) {
+          hls.startLoad();
+        }
+      });
+
       hls.on(Hls.Events.MANIFEST_PARSED, (_e, data) => {
         video.play().catch(() => {});
         setQualityLevels(data.levels.map(l => ({ height: l.height, bitrate: l.bitrate })));
         setCurrentQuality(-1);
       });
-      hls.on(Hls.Events.ERROR, (_e, data) => {
-        if (data.fatal) {
-          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
-          else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
-        }
-      });
+
       hlsRef.current = hls;
       return () => { hls.destroy(); hlsRef.current = null; };
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
@@ -638,7 +655,10 @@ export default function HindiVideoPlayer({
     const v = videoRef.current;
     if (!v) return;
     // ── FIX: Guard against touch event double-fire ──
-    if (touchJustEnded.current) { touchJustEnded.current = false; return; }
+    if (touchJustEnded.current) {
+      touchJustEnded.current = false;
+      return;
+    }
     if (v.paused) { wasPlayingRef.current = true; v.play().catch(() => {}); setPlaying(true); flashCenter("play"); }
     else          { wasPlayingRef.current = false; v.pause(); setPlaying(false); flashCenter("pause"); }
   };
