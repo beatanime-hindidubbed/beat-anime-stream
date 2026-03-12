@@ -32,6 +32,10 @@ interface Props {
   /** HiAnime episode ID for English preview thumbnails */
   episodeId?: string;
   disableInternalMiniPlayer?: boolean;
+  // Feature 7 – episode title overlay
+  animeName?: string;
+  episodeNumber?: number;
+  episodeTitle?: string;
 }
 
 const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
@@ -76,6 +80,7 @@ export default function HindiVideoPlayer({
   tracks, intro, outro, onTimeUpdate, onEnded,
   startTime, ambientMode = false, autoPlayNext = true, onAutoPlayToggle,
   episodeId, disableInternalMiniPlayer = false,
+  animeName, episodeNumber, episodeTitle,                     // ← NEW
 }: Props) {
   const videoRef     = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1154,6 +1159,21 @@ export default function HindiVideoPlayer({
             {/* Watermark on HLS player */}
             <PlayerWatermark showIcon />
 
+            {/* ── Feature 7: Episode title overlay ────────────────────────── */}
+            {(animeName || episodeNumber || episodeTitle) && (
+              <div
+                className={`absolute top-0 inset-x-0 z-30 pointer-events-none
+                  bg-gradient-to-b from-black/80 via-black/20 to-transparent px-4 py-3
+                  transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}
+              >
+                <p className="text-white text-xs sm:text-sm font-medium drop-shadow-lg truncate">
+                  {animeName}
+                  {episodeNumber ? ` — Episode ${episodeNumber}` : ''}
+                  {episodeTitle ? `: ${episodeTitle}` : ''}
+                </p>
+              </div>
+            )}
+
             {/* Center flash icon */}
             <AnimatePresence>
               {showCenterIcon && (
@@ -1206,7 +1226,7 @@ export default function HindiVideoPlayer({
               {showSkipIntro && (
                 <motion.button key="skip-intro" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
                   onClick={() => { if (videoRef.current && intro) videoRef.current.currentTime = intro.end; }}
-                  className="absolute bottom-32 sm:bottom-24 right-3 sm:right-4 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold hover:scale-105 active:scale-95 transition-transform z-20 flex items-center gap-2 shadow-lg">
+                  className="absolute bottom-40 sm:bottom-24 right-3 sm:right-4 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold hover:scale-105 active:scale-95 transition-transform z-20 flex items-center gap-2 shadow-lg">
                   <SkipForward className="w-4 h-4" /> Skip Intro
                 </motion.button>
               )}
@@ -1215,7 +1235,7 @@ export default function HindiVideoPlayer({
               {showSkipOutro && (
                 <motion.button key="skip-outro" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
                   onClick={() => { if (videoRef.current && outro) videoRef.current.currentTime = outro.end; }}
-                  className="absolute bottom-32 sm:bottom-24 right-3 sm:right-4 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold hover:scale-105 active:scale-95 transition-transform z-20 flex items-center gap-2 shadow-lg">
+                  className="absolute bottom-40 sm:bottom-24 right-3 sm:right-4 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold hover:scale-105 active:scale-95 transition-transform z-20 flex items-center gap-2 shadow-lg">
                   <SkipForward className="w-4 h-4" /> Skip Outro
                 </motion.button>
               )}
