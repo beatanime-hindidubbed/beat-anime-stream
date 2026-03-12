@@ -1176,12 +1176,13 @@ export default function VideoPlayer({
       const v = videoRef.current;
       if (!v) return;
       setActiveTrackIdx(idx);
+      setCaptionsOn(true);
       for (let i = 0; i < v.textTracks.length; i++) {
-        v.textTracks[i].mode = captionsOn && i === idx ? "showing" : "hidden";
+        v.textTracks[i].mode = i === idx ? "showing" : "hidden";
       }
       setSettingsPanel("main");
     },
-    [captionsOn]
+    []
   );
 
   const resetHideTimer = useCallback(() => {
