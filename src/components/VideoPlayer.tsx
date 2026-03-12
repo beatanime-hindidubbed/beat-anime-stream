@@ -596,7 +596,9 @@ export default function VideoPlayer({
         if (pv && !previewSeeking.current[idx]) {
           previewSeeking.current[idx] = true;
           pv.currentTime = targets[i];
-          setTimeout(() => { previewSeeking.current[idx] = false; }, 800);
+          setTimeout(() => {
+            previewSeeking.current[idx] = false;
+          }, 800);
         }
       }
     };
@@ -830,15 +832,20 @@ export default function VideoPlayer({
   }, [speed, onNextEpisode, onPrevEpisode, onJumpToEpisode, navigate]);
 
   // ==========================================================================
-  // EFFECTS – TRACK MODE UPDATE (captions)
+  // EFFECTS – TRACK MODE UPDATE (captions) — FIXED
   // ==========================================================================
 
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
-    for (let i = 0; i < v.textTracks.length; i++) {
-      v.textTracks[i].mode = captionsOn && i === activeTrackIdx ? "showing" : "hidden";
-    }
+    const apply = () => {
+      for (let i = 0; i < v.textTracks.length; i++) {
+        v.textTracks[i].mode = captionsOn && i === activeTrackIdx ? "showing" : "hidden";
+      }
+    };
+    apply();
+    v.addEventListener("loadedmetadata", apply);
+    return () => v.removeEventListener("loadedmetadata", apply);
   }, [captionsOn, activeTrackIdx]);
 
   // ==========================================================================
@@ -1298,6 +1305,8 @@ export default function VideoPlayer({
   // RENDER
   // ==========================================================================
 
+  const settingsPositionClass = isMobile ? "absolute bottom-20 z-50" : "absolute bottom-16 z-50";
+
   return (
     <div ref={wrapperRef} className="relative">
       {/* Mini player */}
@@ -1526,7 +1535,7 @@ export default function VideoPlayer({
         {/* Settings panel */}
         {settingsOpen && (
           <div
-            className={`${settingsPositionClass} left-2 right-2 sm:left-auto sm:right-3 w-auto sm:w-48 max-w-[calc(100vw-1rem)] max-h-[min(35vh,200px)] sm:max-h-[min(50vh,320px)] overflow-y-auto overscroll-contain touch-pan-y bg-black/95 border border-white/10 rounded-lg sm:rounded-xl shadow-2xl text-[10px] sm:text-sm scrollbar-thin z-50`}
+            className={`${settingsPositionClass} left-2 right-2 sm:left-auto sm:right-3 w-auto sm:w-48 max-w-[calc(100vw-1rem)] max-h-[min(35vh,200px)] sm:max-h-[min(50vh,320px)] overflow-y-auto overscroll-contain touch-pan-y bg-black/95 border border-white/10 rounded-lg sm:rounded-xl shadow-2xl text-[10px] sm:text-sm scrollbar-thin`}
             onClick={e => e.stopPropagation()}
             onTouchMove={e => e.stopPropagation()}
           >
