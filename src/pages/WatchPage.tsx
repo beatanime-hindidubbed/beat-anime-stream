@@ -516,6 +516,9 @@ export default function WatchPage() {
           disableInternalMiniPlayer
           onTimeUpdate={handleTimeUpdate}
           onEnded={() => { if (nextEp) navigate(buildEpLink(nextEp)); }}
+          animeName={animeName}
+          episodeNumber={currentEp?.number}
+          episodeTitle={currentEp?.title}
         />
       );
     }
@@ -527,6 +530,9 @@ export default function WatchPage() {
           disableInternalMiniPlayer
           onTimeUpdate={handleTimeUpdate}
           onEnded={() => { if (nextEp) navigate(buildEpLink(nextEp)); }}
+          animeName={animeName}
+          episodeNumber={currentEp?.number}
+          episodeTitle={currentEp?.title}
         />
       );
     }
@@ -541,6 +547,9 @@ export default function WatchPage() {
           outro={streamResult.outro}
           onTimeUpdate={handleTimeUpdate}
           onEnded={() => { if (nextEp) navigate(buildEpLink(nextEp)); }}
+          animeName={animeName}
+          episodeNumber={currentEp?.number}
+          episodeTitle={currentEp?.title}
         />
       );
     }
