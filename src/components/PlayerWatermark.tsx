@@ -32,12 +32,12 @@ export default function PlayerWatermark({ showIcon = false }: Props) {
       style={{ opacity: 0.45, mixBlendMode: "screen" }}
     >
       {showIcon && (
-        <img
-          src="/logo.png"
-          alt="BeatAnime"
-          className="w-5 h-5 rounded-sm object-contain shadow"
-          draggable={false}
-        />
+        <div
+          className="w-5 h-5 rounded-sm bg-primary flex items-center justify-center shadow"
+          style={{ fontSize: "11px", fontWeight: 900, color: "#000", lineHeight: 1 }}
+        >
+          B
+        </div>
       )}
       <span
         style={{
