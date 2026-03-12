@@ -1448,7 +1448,6 @@ export default function HindiVideoPlayer({
     wrapperRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, []);
 
-  const settingsPositionClass = "absolute bottom-14 sm:bottom-20 right-2 sm:right-3 z-40";
   // ==========================================================================
   // RENDER
   // ==========================================================================
