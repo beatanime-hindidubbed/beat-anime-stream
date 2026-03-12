@@ -255,6 +255,13 @@ export default function HindiVideoPlayer({
   const [miniPlayer, setMiniPlayer] = useState(false);
   const [showWatermarkIcon, setShowWatermarkIcon] = useState(false);
 
+  // ==========================================================================
+  // ADDED STATE FOR RESOLVED INTRO/OUTRO/TRACKS FROM ENGLISH ENDPOINT
+  // ==========================================================================
+  const [resolvedIntro, setResolvedIntro] = useState<{ start: number; end: number } | undefined>(intro);
+  const [resolvedOutro, setResolvedOutro] = useState<{ start: number; end: number } | undefined>(outro);
+  const [resolvedTracks, setResolvedTracks] = useState<Track[]>(tracks || []);
+
   // Audio context for boost
   const audioCtxRef = useRef<AudioContext | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
@@ -265,8 +272,8 @@ export default function HindiVideoPlayer({
   // ==========================================================================
 
   const subtitleTracks = useMemo(
-    () => tracks?.filter(t => t.kind === "captions" || t.kind === "subtitles") || [],
-    [tracks]
+    () => resolvedTracks?.filter(t => t.kind === "captions" || t.kind === "subtitles") || [],
+    [resolvedTracks]
   );
 
   const displayTime = scrubTime ?? currentTime;
@@ -288,10 +295,10 @@ export default function HindiVideoPlayer({
   const PREVIEW_H = isMobile ? 68 : 90;
   const previewLeft = `clamp(${PREVIEW_W / 2}px, ${hoverPct}%, calc(100% - ${PREVIEW_W / 2}px))`;
 
-  const introStartPct = intro ? (intro.start / duration) * 100 : 0;
-  const introEndPct = intro ? (intro.end / duration) * 100 : 0;
-  const outroStartPct = outro ? (outro.start / duration) * 100 : 0;
-  const outroEndPct = outro ? (outro.end / duration) * 100 : 0;
+  const introStartPct = resolvedIntro ? (resolvedIntro.start / duration) * 100 : 0;
+  const introEndPct = resolvedIntro ? (resolvedIntro.end / duration) * 100 : 0;
+  const outroStartPct = resolvedOutro ? (resolvedOutro.start / duration) * 100 : 0;
+  const outroEndPct = resolvedOutro ? (resolvedOutro.end / duration) * 100 : 0;
 
   // ==========================================================================
   // EFFECTS – DEVICE DETECTION
@@ -306,6 +313,42 @@ export default function HindiVideoPlayer({
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
   }, []);
+
+  // ==========================================================================
+  // EFFECTS – FETCH INTRO/OUTRO/CAPTIONS METADATA FROM ENGLISH ENDPOINT
+  // ==========================================================================
+
+  useEffect(() => {
+    if (!episodeId || isIframe) return;
+    const fetchMeta = async () => {
+      try {
+        const apiBase = getNextApi();
+        const res = await fetch(
+          `${apiBase}/hianime/episode/sources?animeEpisodeId=${encodeURIComponent(episodeId)}&server=hd-2&category=sub`
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        // Only set if not already provided via props
+        if (!intro && data?.data?.intro) setResolvedIntro(data.data.intro);
+        if (!outro && data?.data?.outro) setResolvedOutro(data.data.outro);
+        if ((!tracks || tracks.length === 0) && data?.data?.tracks?.length) {
+          const proxyBase = getNextApi();
+          const mapped: Track[] = data.data.tracks
+            .filter((t: any) => t.kind !== "thumbnails" && t.lang !== "thumbnails")
+            .map((t: any) => ({
+              file: `${proxyBase}/hindiapi/proxy?url=${encodeURIComponent(t.url || t.file)}&referer=${encodeURIComponent("https://megacloud.blog/")}`,
+              label: t.label || t.lang || "Unknown",
+              kind: t.kind || "subtitles",
+              default: t.default || false,
+            }));
+          setResolvedTracks(mapped);
+        }
+      } catch {
+        /* silent */
+      }
+    };
+    fetchMeta();
+  }, [episodeId, isIframe, intro, outro, tracks]);
 
   // ==========================================================================
   // EFFECTS – MINI PLAYER
@@ -820,7 +863,7 @@ export default function HindiVideoPlayer({
     }
     v.addEventListener("loadedmetadata", onTrackLoad);
     return () => v.removeEventListener("loadedmetadata", onTrackLoad);
-  }, [isMobile, src, tracks, isIframe]);
+  }, [isMobile, src, resolvedTracks, isIframe]);
 
   // ==========================================================================
   // EFFECTS – KEYBOARD SHORTCUTS
@@ -936,15 +979,20 @@ export default function HindiVideoPlayer({
   }, [speed, onNextEpisode, onPrevEpisode, onJumpToEpisode, navigate, isIframe]);
 
   // ==========================================================================
-  // EFFECTS – TRACK MODE UPDATE (captions)
+  // EFFECTS – TRACK MODE UPDATE (captions) — FIXED
   // ==========================================================================
 
   useEffect(() => {
     const v = videoRef.current;
     if (!v || isIframe) return;
-    for (let i = 0; i < v.textTracks.length; i++) {
-      v.textTracks[i].mode = captionsOn && i === activeTrackIdx ? "showing" : "hidden";
-    }
+    const apply = () => {
+      for (let i = 0; i < v.textTracks.length; i++) {
+        v.textTracks[i].mode = captionsOn && i === activeTrackIdx ? "showing" : "hidden";
+      }
+    };
+    apply();
+    v.addEventListener("loadedmetadata", apply);
+    return () => v.removeEventListener("loadedmetadata", apply);
   }, [captionsOn, activeTrackIdx, isIframe]);
 
   // ==========================================================================
@@ -971,26 +1019,26 @@ export default function HindiVideoPlayer({
     onTimeUpdate?.(v.currentTime, v.duration);
     if (v.buffered.length > 0) setBuffered(v.buffered.end(v.buffered.length - 1));
 
-    const inIntro = !!intro && v.currentTime >= intro.start && v.currentTime < intro.end;
-    const inOutro = !!outro && v.currentTime >= outro.start && v.currentTime < outro.end;
+    const inIntro = !!resolvedIntro && v.currentTime >= resolvedIntro.start && v.currentTime < resolvedIntro.end;
+    const inOutro = !!resolvedOutro && v.currentTime >= resolvedOutro.start && v.currentTime < resolvedOutro.end;
     setShowSkipIntro(inIntro);
     setShowSkipOutro(inOutro);
 
     // Auto-skip intro/outro if enabled and not already triggered
     if (autoSkipIntro && !autoSkipTriggeredRef.current) {
-      if (inIntro && intro) {
+      if (inIntro && resolvedIntro) {
         autoSkipTriggeredRef.current = true;
-        v.currentTime = intro.end;
-      } else if (inOutro && outro) {
+        v.currentTime = resolvedIntro.end;
+      } else if (inOutro && resolvedOutro) {
         autoSkipTriggeredRef.current = true;
-        v.currentTime = outro.end;
+        v.currentTime = resolvedOutro.end;
       }
     }
     // Reset trigger when leaving intro/outro
     if (!inIntro && !inOutro) {
       autoSkipTriggeredRef.current = false;
     }
-  }, [intro, outro, onTimeUpdate, autoSkipIntro, isIframe]);
+  }, [resolvedIntro, resolvedOutro, onTimeUpdate, autoSkipIntro, isIframe]);
 
   const togglePlay = useCallback(() => {
     const v = videoRef.current;
@@ -1401,10 +1449,11 @@ export default function HindiVideoPlayer({
   }, []);
 
   const settingsPositionClass = "absolute bottom-14 sm:bottom-20 right-2 sm:right-3 z-40";
-  
   // ==========================================================================
   // RENDER
   // ==========================================================================
+
+  const settingsPositionClass = isMobile ? "absolute bottom-20 z-50" : "absolute bottom-16 z-50";
 
   return (
     <div ref={wrapperRef} className="relative">
@@ -1530,7 +1579,7 @@ export default function HindiVideoPlayer({
               controlsList="nodownload noremoteplayback"
               x-webkit-airplay="allow"
             >
-              {subtitleTracks.map((t, i) => (
+              {resolvedTracks.map((t, i) => (
                 <track
                   key={i}
                   src={t.file}
@@ -1624,7 +1673,7 @@ export default function HindiVideoPlayer({
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 20 }}
                   onClick={() => {
-                    if (videoRef.current && intro) videoRef.current.currentTime = intro.end;
+                    if (videoRef.current && resolvedIntro) videoRef.current.currentTime = resolvedIntro.end;
                   }}
                   className="absolute bottom-40 sm:bottom-24 right-3 sm:right-4 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold hover:scale-105 active:scale-95 transition-transform z-50 flex items-center gap-2 shadow-lg"
                 >
@@ -1640,7 +1689,7 @@ export default function HindiVideoPlayer({
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 20 }}
                   onClick={() => {
-                    if (videoRef.current && outro) videoRef.current.currentTime = outro.end;
+                    if (videoRef.current && resolvedOutro) videoRef.current.currentTime = resolvedOutro.end;
                   }}
                   className="absolute bottom-40 sm:bottom-24 right-3 sm:right-4 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold hover:scale-105 active:scale-95 transition-transform z-50 flex items-center gap-2 shadow-lg"
                 >
@@ -1652,7 +1701,7 @@ export default function HindiVideoPlayer({
             {/* Settings panel */}
             {settingsOpen && (
               <div
-                className={`${settingsPositionClass} left-2 right-2 sm:left-auto sm:right-3 w-auto sm:w-48 max-w-[calc(100vw-1rem)] max-h-[min(35vh,200px)] sm:max-h-[min(50vh,320px)] overflow-y-auto overscroll-contain touch-pan-y bg-black/95 border border-white/10 rounded-lg sm:rounded-xl shadow-2xl text-[10px] sm:text-sm scrollbar-thin z-50`}
+                className={`${settingsPositionClass} left-2 right-2 sm:left-auto sm:right-3 w-auto sm:w-48 max-w-[calc(100vw-1rem)] max-h-[min(35vh,200px)] sm:max-h-[min(50vh,320px)] overflow-y-auto overscroll-contain touch-pan-y bg-black/95 border border-white/10 rounded-lg sm:rounded-xl shadow-2xl text-[10px] sm:text-sm scrollbar-thin`}
                 onClick={e => e.stopPropagation()}
                 onTouchMove={e => e.stopPropagation()}
               >
@@ -1956,7 +2005,7 @@ export default function HindiVideoPlayer({
                       />
 
                       {/* Intro marker */}
-                      {intro && (
+                      {resolvedIntro && (
                         <div
                           className="absolute top-0 h-full bg-primary/40 rounded-full pointer-events-none"
                           style={{
@@ -1967,7 +2016,7 @@ export default function HindiVideoPlayer({
                       )}
 
                       {/* Outro marker */}
-                      {outro && (
+                      {resolvedOutro && (
                         <div
                           className="absolute top-0 h-full bg-accent/40 rounded-full pointer-events-none"
                           style={{
