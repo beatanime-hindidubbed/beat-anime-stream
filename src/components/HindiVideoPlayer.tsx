@@ -9,7 +9,6 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import PlayerWatermark from "./PlayerWatermark";
 import { getNextApi } from "@/lib/streaming";
-import { useNavigate } from "react-router-dom";
 
 interface Track {
   file: string;
@@ -33,17 +32,6 @@ interface Props {
   /** HiAnime episode ID for English preview thumbnails */
   episodeId?: string;
   disableInternalMiniPlayer?: boolean;
-  // Feature 7 – episode title overlay
-  animeName?: string;
-  episodeNumber?: number;
-  episodeTitle?: string;
-  // Feature 4 – keyboard shortcuts
-  onNextEpisode?: () => void;
-  onPrevEpisode?: () => void;
-  onJumpToEpisode?: (episodeNumber: number) => void;
-  // Auto-skip intro/outro
-  autoSkipIntro?: boolean;
-  onAutoSkipToggle?: (enabled: boolean) => void;
 }
 
 const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
@@ -88,11 +76,7 @@ export default function HindiVideoPlayer({
   tracks, intro, outro, onTimeUpdate, onEnded,
   startTime, ambientMode = false, autoPlayNext = true, onAutoPlayToggle,
   episodeId, disableInternalMiniPlayer = false,
-  animeName, episodeNumber, episodeTitle,
-  onNextEpisode, onPrevEpisode, onJumpToEpisode,
-  autoSkipIntro = false, onAutoSkipToggle,
 }: Props) {
-  const navigate = useNavigate();
   const videoRef     = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef    = useRef<HTMLCanvasElement>(null);
@@ -155,13 +139,6 @@ export default function HindiVideoPlayer({
   const gainNodeRef = useRef<GainNode | null>(null);
   const audioSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
 
-  // ── Digit buffering for episode jump ─────────────────────────────────────
-  const digitBuffer = useRef('');
-  const digitTimer = useRef<ReturnType<typeof setTimeout>>();
-
-  // Auto-skip intro/outro flag to prevent repeated skips
-  const autoSkipTriggeredRef = useRef(false);
-
   const hideTimer       = useRef<ReturnType<typeof setTimeout>>();
   const ambientFrameRef = useRef<number>();
   const centerIconTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -181,6 +158,7 @@ export default function HindiVideoPlayer({
   // ── FIX: Track fullscreen transition to prevent spurious pause handling ──
   const isFullscreenTransition = useRef(false);
   const fullscreenTransitionTimer = useRef<ReturnType<typeof setTimeout>>();
+  // ── FIX: Track if video was playing before fullscreen change ────────────
   const wasPlayingBeforeFullscreen = useRef(false);
 
   // iframeSrc with no src = iframe mode
@@ -286,30 +264,34 @@ export default function HindiVideoPlayer({
     return () => v.removeEventListener("contextmenu", prevent);
   }, []);
 
-  // ── Handle fullscreen state tracking with transition guard ─────────
+  // ── FIX: Handle fullscreen state tracking with transition guard ─────────
   useEffect(() => {
     const handler = () => {
       const isNowFullscreen = !!document.fullscreenElement;
 
+      // Mark that we are in a fullscreen transition
       isFullscreenTransition.current = true;
       if (fullscreenTransitionTimer.current) clearTimeout(fullscreenTransitionTimer.current);
 
       if (isNowFullscreen) {
+        // Entering fullscreen: save playing state
         wasPlayingBeforeFullscreen.current = wasPlayingRef.current;
       }
 
       setFullscreen(isNowFullscreen);
 
+      // After transition settles, restore playback if needed
       fullscreenTransitionTimer.current = setTimeout(() => {
         isFullscreenTransition.current = false;
         const v = videoRef.current;
         if (!v) return;
 
+        // If we were playing before fullscreen change, ensure video is still playing
         if (wasPlayingBeforeFullscreen.current && v.paused && !isSeeking.current) {
           v.play().catch(() => {});
           setPlaying(true);
         }
-      }, 800);
+      }, 800); // 800ms covers iOS/Android fullscreen animation delay
     };
 
     document.addEventListener("fullscreenchange", handler);
@@ -325,32 +307,6 @@ export default function HindiVideoPlayer({
     };
   }, []);
 
-  // ── Feature 6: Fullscreen continuous autoplay ───────────────────────────
-  const handleEndedWithFullscreen = useCallback(() => {
-    if (document.fullscreenElement) {
-      sessionStorage.setItem('beat_was_fullscreen', '1');
-    }
-    onEnded?.();
-  }, [onEnded]);
-
-  useEffect(() => {
-    const wasFullscreen = sessionStorage.getItem('beat_was_fullscreen');
-    if (!wasFullscreen) return;
-
-    sessionStorage.removeItem('beat_was_fullscreen');
-
-    const timeout = setTimeout(() => {
-      if (containerRef.current && !document.fullscreenElement) {
-        containerRef.current.requestFullscreen().catch(() => {
-          const el = containerRef.current as any;
-          if (el?.webkitRequestFullscreen) el.webkitRequestFullscreen();
-        });
-      }
-    }, 800);
-
-    return () => clearTimeout(timeout);
-  }, []);
-
   // ── HLS loader with Bug #1 fix (startPosition:0, TV detection, error recovery) ──
   useEffect(() => {
     if (isIframe || !src) return;
@@ -359,6 +315,7 @@ export default function HindiVideoPlayer({
     try { realSrc = getUrl.current(); } catch { return; }
     if (!video || !realSrc) return;
 
+    // Always proxy Hindi streams for correct headers
     const proxyBase = getHindiProxy();
     const proxiedSrc = realSrc.includes("/hindiapi/proxy") ? realSrc : proxyBase + "?url=" + encodeURIComponent(realSrc);
 
@@ -368,7 +325,7 @@ export default function HindiVideoPlayer({
 
     if (Hls.isSupported()) {
       const hls = new Hls({
-        startPosition: startTime || 0,
+        startPosition: startTime || 0,               // FIXED: -1 → 0
         maxBufferSize: isTV ? 120 * 1000 * 1000 : 60 * 1000 * 1000,
         maxBufferLength: isTV ? 60 : 30,
         maxMaxBufferLength: isTV ? 120 : 60,
@@ -381,6 +338,7 @@ export default function HindiVideoPlayer({
       hls.loadSource(proxiedSrc);
       hls.attachMedia(video);
 
+      // Error recovery (added)
       hls.on(Hls.Events.ERROR, (_e, data) => {
         if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
           hls.recoverMediaError();
@@ -409,6 +367,7 @@ export default function HindiVideoPlayer({
   }, [src, startTime, isIframe]);
 
   // ── Preview HLS pool — uses Hindi src directly (3 parallel instances) ──
+  // Priority: Hindi src (same stream, lowest quality level) → episodeId fallback
   const [previewReadyCount, setPreviewReadyCount] = useState(0);
   useEffect(() => {
     if (isIframe) return;
@@ -434,7 +393,7 @@ export default function HindiVideoPlayer({
         hls.attachMedia(pv);
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           if (cancelled) { hls.destroy(); return; }
-          hls.currentLevel = 0;
+          hls.currentLevel = 0;       // lowest quality = fastest seeking
           hls.autoLevelCapping = 0;
           pv.pause();
           readyCount++;
@@ -447,6 +406,7 @@ export default function HindiVideoPlayer({
     };
 
     const setup = async () => {
+      // ── Path 1: Hindi src available — reuse same proxied stream ──────────
       if (src) {
         let realSrc: string;
         try { realSrc = getUrl.current(); } catch { return; }
@@ -459,6 +419,7 @@ export default function HindiVideoPlayer({
         return;
       }
 
+      // ── Path 2: No Hindi src — fallback to English HiAnime via episodeId ─
       if (!episodeId) return;
       try {
         const apiBase = getNextApi();
@@ -474,6 +435,7 @@ export default function HindiVideoPlayer({
       } catch { /* silent */ }
     };
 
+    // Small delay to let main HLS loader resolve the proxied URL first
     const t = setTimeout(setup, 300);
     return () => {
       cancelled = true;
@@ -623,7 +585,7 @@ export default function HindiVideoPlayer({
     return () => { if (ambientFrameRef.current) cancelAnimationFrame(ambientFrameRef.current); };
   }, [ambientEnabled, isIframe]);
 
-  // ── Extended keyboard shortcuts (Feature 4) ──────────────────────────────
+  // ── Keyboard ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (isIframe) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -631,7 +593,6 @@ export default function HindiVideoPlayer({
       if (!v) return;
       const tag = (e.target as HTMLElement)?.tagName;
       if (["INPUT","TEXTAREA","SELECT"].includes(tag) || (e.target as HTMLElement)?.isContentEditable) return;
-
       if (e.code === "Space") {
         e.preventDefault();
         if (spaceHeld.current) return;
@@ -652,37 +613,7 @@ export default function HindiVideoPlayer({
       if (e.code === "ArrowDown")  { e.preventDefault(); v.volume = Math.max(0, v.volume - 0.1); setVolume(v.volume); }
       if (e.code === "KeyF") toggleFullscreen();
       if (e.code === "KeyM") toggleMute();
-
-      // Feature 4: N / P / Escape / Digit jump
-      if (e.code === "KeyN") {
-        e.preventDefault();
-        onNextEpisode?.();
-        return;
-      }
-      if (e.code === "KeyP") {
-        e.preventDefault();
-        onPrevEpisode?.();
-        return;
-      }
-      if (e.code === "Escape" || e.code === "Backspace") {
-        e.preventDefault();
-        navigate(-1);
-        return;
-      }
-
-      // Multi‑digit episode jump
-      if (e.key >= "0" && e.key <= "9") {
-        e.preventDefault();
-        digitBuffer.current += e.key;
-        clearTimeout(digitTimer.current);
-        digitTimer.current = setTimeout(() => {
-          const n = parseInt(digitBuffer.current, 10);
-          if (n > 0) onJumpToEpisode?.(n);
-          digitBuffer.current = '';
-        }, 1500);
-      }
     };
-
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.code !== "Space") return;
       const tag = (e.target as HTMLElement)?.tagName;
@@ -692,23 +623,16 @@ export default function HindiVideoPlayer({
       spaceHeld.current  = false;
       spaceWas2x.current = false;
       const v = videoRef.current;
-      if (was2x) {
-        if (v) v.playbackRate = speed;
-        setLongPressActive(false);
-      } else if (v) {
+      if (was2x) { if (v) v.playbackRate = speed; setLongPressActive(false); }
+      else if (v) {
         if (v.paused) { v.play(); setPlaying(true); flashCenter("play"); }
         else          { v.pause(); setPlaying(false); flashCenter("pause"); }
       }
     };
-
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup",   onKeyUp);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
-      if (digitTimer.current) clearTimeout(digitTimer.current);
-    };
-  }, [speed, onNextEpisode, onPrevEpisode, onJumpToEpisode, navigate, isIframe]);
+    return () => { window.removeEventListener("keydown", onKeyDown); window.removeEventListener("keyup", onKeyUp); };
+  }, [speed, isIframe]);
 
   const flashCenter = (icon: "play"|"pause"|"ff"|"rw"|"2x") => {
     setShowCenterIcon(icon);
@@ -723,31 +647,14 @@ export default function HindiVideoPlayer({
     setDuration(v.duration || 0);
     onTimeUpdate?.(v.currentTime, v.duration);
     if (v.buffered.length > 0) setBuffered(v.buffered.end(v.buffered.length - 1));
-
-    const inIntro = !!intro && v.currentTime >= intro.start && v.currentTime < intro.end;
-    const inOutro = !!outro && v.currentTime >= outro.start && v.currentTime < outro.end;
-    setShowSkipIntro(inIntro);
-    setShowSkipOutro(inOutro);
-
-    // Auto-skip intro/outro if enabled and not already triggered
-    if (autoSkipIntro && !autoSkipTriggeredRef.current) {
-      if (inIntro && intro) {
-        autoSkipTriggeredRef.current = true;
-        v.currentTime = intro.end;
-      } else if (inOutro && outro) {
-        autoSkipTriggeredRef.current = true;
-        v.currentTime = outro.end;
-      }
-    }
-    // Reset trigger when leaving intro/outro
-    if (!inIntro && !inOutro) {
-      autoSkipTriggeredRef.current = false;
-    }
-  }, [intro, outro, onTimeUpdate, autoSkipIntro]);
+    setShowSkipIntro(!!intro && v.currentTime >= intro.start && v.currentTime < intro.end);
+    setShowSkipOutro(!!outro && v.currentTime >= outro.start && v.currentTime < outro.end);
+  }, [intro, outro, onTimeUpdate]);
 
   const togglePlay = () => {
     const v = videoRef.current;
     if (!v) return;
+    // ── FIX: Guard against touch event double-fire ──
     if (touchJustEnded.current) {
       touchJustEnded.current = false;
       return;
@@ -778,14 +685,18 @@ export default function HindiVideoPlayer({
   };
 
   // ── Seek bar touch ────────────────────────────────────────────────────
+  // Track active dragging for instant preview mode
   const isDraggingSeekBar = useRef(false);
   const dragTargetTimeRef = useRef<number | null>(null);
   const instantPreviewRAF = useRef<number>();
 
+  // Instant preview: capture frame from main video at current seek position (fastest method)
   const captureInstantPreview = useCallback((targetTime: number) => {
     const v = videoRef.current;
     const canvas = previewCanvasRef.current;
     if (!v || !canvas || !v.videoWidth) return false;
+
+    // If main video is near target time, capture directly (instant!)
     if (Math.abs(v.currentTime - targetTime) < 3) {
       const ctx = canvas.getContext("2d");
       if (ctx) {
@@ -797,6 +708,7 @@ export default function HindiVideoPlayer({
     return false;
   }, []);
 
+  // Ensure mobile preview updates AFTER the seek completes (fixes blank frames on iOS)
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
@@ -809,7 +721,9 @@ export default function HindiVideoPlayer({
       try {
         ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
         setPreviewHasFrame(true);
-      } catch {}
+      } catch {
+        // ignore
+      }
     };
     v.addEventListener("seeked", onSeeked);
     return () => v.removeEventListener("seeked", onSeeked);
@@ -820,7 +734,9 @@ export default function HindiVideoPlayer({
     const cache = frameCacheRef.current;
     const canvas = previewCanvasRef.current;
     
+    // FAST PATH: During dragging, use instant capture from main video
     if (isDraggingSeekBar.current && captureInstantPreview(t)) {
+      // Successfully captured from main video - still trigger background HLS seek
       if (previewReady && Math.abs(lastPreviewSeek.current - t) >= 2) {
         lastPreviewSeek.current = t;
         const idx = previewRoundRobin.current % PREVIEW_POOL_SIZE;
@@ -835,6 +751,7 @@ export default function HindiVideoPlayer({
       return;
     }
     
+    // Find nearest cached frame within 3s for instant display
     let best: ImageBitmap | null = null;
     let bestDist = 4;
     for (const [time, bmp] of cache) {
@@ -847,11 +764,13 @@ export default function HindiVideoPlayer({
       if (ctx) { ctx.drawImage(best, 0, 0, canvas.width, canvas.height); setPreviewHasFrame(true); }
     }
     
+    // HLS pool seeking - skip debounce during drag or force mode
     if (!previewReady) return;
     const minGap = forceImmediate || isDraggingSeekBar.current ? 0.2 : 0.5;
     if (Math.abs(lastPreviewSeek.current - t) < minGap) return;
     lastPreviewSeek.current = t;
     
+    // Find a non-seeking pool member (round-robin)
     for (let attempt = 0; attempt < PREVIEW_POOL_SIZE; attempt++) {
       const idx = (previewRoundRobin.current + attempt) % PREVIEW_POOL_SIZE;
       const pv = previewVideoRefs.current[idx];
@@ -864,6 +783,7 @@ export default function HindiVideoPlayer({
         return;
       }
     }
+    // All busy — force the first one with very short timeout
     const pv = previewVideoRefs.current[0];
     if (pv) {
       previewSeeking.current[0] = true;
@@ -911,6 +831,7 @@ export default function HindiVideoPlayer({
     const pct = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width));
     const targetTime = pct * duration;
 
+    // Use RAF for smoother 60fps UI + preview updates during drag
     if (instantPreviewRAF.current) cancelAnimationFrame(instantPreviewRAF.current);
     instantPreviewRAF.current = requestAnimationFrame(() => {
       dragTargetTimeRef.current = targetTime;
@@ -950,6 +871,7 @@ export default function HindiVideoPlayer({
     }
   };
 
+  // ── Preview thumbnail hover (desktop/laptop hover devices) ────────────
   const handleProgressHover = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!duration) return;
     const rect = e.currentTarget.getBoundingClientRect();
@@ -1003,16 +925,7 @@ export default function HindiVideoPlayer({
     setSettingsPanel("main");
   };
 
-  // Ensure track mode updates when captionsOn changes
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    for (let i = 0; i < v.textTracks.length; i++) {
-      v.textTracks[i].mode = captionsOn && i === activeTrackIdx ? "showing" : "hidden";
-    }
-  }, [captionsOn, activeTrackIdx]);
-
-  // Nudge subtitles on mobile
+  // ── Nudge subtitle cues up on mobile so controls don't overlap ────────
   useEffect(() => {
     const v = videoRef.current;
     if (!v || !isMobile) return;
@@ -1068,6 +981,7 @@ export default function HindiVideoPlayer({
 
   const handleContainerTouchEnd = (e: React.TouchEvent) => {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    // ── FIX: mark touch just ended to prevent onClick double-fire ──
     touchJustEnded.current = true;
     setTimeout(() => { touchJustEnded.current = false; }, 300);
 
@@ -1120,12 +1034,6 @@ export default function HindiVideoPlayer({
   const previewLeft = `clamp(${PREVIEW_W / 2}px, ${hoverPct}%, calc(100% - ${PREVIEW_W / 2}px))`;
 
   const settingsPositionClass = "absolute bottom-14 sm:bottom-20 right-2 sm:right-3 z-40";
-
-  // Calculate intro/outro positions for visual markers
-  const introStartPct = intro ? (intro.start / duration) * 100 : 0;
-  const introEndPct = intro ? (intro.end / duration) * 100 : 0;
-  const outroStartPct = outro ? (outro.start / duration) * 100 : 0;
-  const outroEndPct = outro ? (outro.end / duration) * 100 : 0;
 
   return (
     <div ref={wrapperRef} className="relative">
@@ -1195,6 +1103,9 @@ export default function HindiVideoPlayer({
         onTouchMove={handleContainerTouchMove}
         onTouchEnd={handleContainerTouchEnd}
       >
+        {/* ═══════════════════════════════════════════════════════════════
+            IFRAME MODE — NO sandbox attribute + watermark overlay.
+            ═══════════════════════════════════════════════════════════════ */}
         {isIframe ? (
           <>
             <iframe
@@ -1204,6 +1115,7 @@ export default function HindiVideoPlayer({
               allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
               referrerPolicy="no-referrer-when-downgrade"
             />
+            {/* Watermark overlay on iframe */}
             <PlayerWatermark showIcon />
           </>
         ) : (
@@ -1214,15 +1126,19 @@ export default function HindiVideoPlayer({
               onTimeUpdate={handleTimeUpdate}
               onPlay={() => {
                 setPlaying(true);
+                // ── FIX: only update wasPlayingRef when NOT in a seek or fullscreen transition ──
                 if (!isSeeking.current && !isFullscreenTransition.current) {
                   wasPlayingRef.current = true;
                 }
               }}
               onPause={() => {
+                // ── FIX: Don't update state during fullscreen transitions or seek operations ──
+                // This is the root cause of the auto-pause bug on mobile fullscreen
                 if (isFullscreenTransition.current || isSeeking.current) return;
                 setPlaying(false);
+                // Do NOT reset wasPlayingRef here — it breaks seek resume on mobile
               }}
-              onEnded={handleEndedWithFullscreen}
+              onEnded={() => { setPlaying(false); wasPlayingRef.current = false; onEnded?.(); }}
               onClick={togglePlay}
               crossOrigin="anonymous"
               playsInline
@@ -1235,22 +1151,8 @@ export default function HindiVideoPlayer({
               ))}
             </video>
 
+            {/* Watermark on HLS player */}
             <PlayerWatermark showIcon />
-
-            {/* Episode title overlay (Feature 7) */}
-            {(animeName || episodeNumber || episodeTitle) && (
-              <div
-                className={`absolute top-0 inset-x-0 z-30 pointer-events-none
-                  bg-gradient-to-b from-black/80 via-black/20 to-transparent px-4 py-3
-                  transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}
-              >
-                <p className="text-white text-xs sm:text-sm font-medium drop-shadow-lg truncate">
-                  {animeName}
-                  {episodeNumber ? ` — Episode ${episodeNumber}` : ''}
-                  {episodeTitle ? `: ${episodeTitle}` : ''}
-                </p>
-              </div>
-            )}
 
             {/* Center flash icon */}
             <AnimatePresence>
@@ -1268,7 +1170,7 @@ export default function HindiVideoPlayer({
               )}
             </AnimatePresence>
 
-            {/* Buffering / Paused overlay */}
+            {/* Buffering / Paused overlay (mobile only for pause) */}
             {isBuffering && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
                 <div className="flex flex-col items-center gap-2">
@@ -1299,12 +1201,12 @@ export default function HindiVideoPlayer({
               )}
             </AnimatePresence>
 
-            {/* Skip Intro / Outro (moved up for mobile) */}
+            {/* Skip Intro / Outro */}
             <AnimatePresence>
               {showSkipIntro && (
                 <motion.button key="skip-intro" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
                   onClick={() => { if (videoRef.current && intro) videoRef.current.currentTime = intro.end; }}
-                  className="absolute bottom-40 sm:bottom-24 right-3 sm:right-4 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold hover:scale-105 active:scale-95 transition-transform z-20 flex items-center gap-2 shadow-lg">
+                  className="absolute bottom-32 sm:bottom-24 right-3 sm:right-4 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold hover:scale-105 active:scale-95 transition-transform z-20 flex items-center gap-2 shadow-lg">
                   <SkipForward className="w-4 h-4" /> Skip Intro
                 </motion.button>
               )}
@@ -1313,7 +1215,7 @@ export default function HindiVideoPlayer({
               {showSkipOutro && (
                 <motion.button key="skip-outro" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
                   onClick={() => { if (videoRef.current && outro) videoRef.current.currentTime = outro.end; }}
-                  className="absolute bottom-40 sm:bottom-24 right-3 sm:right-4 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold hover:scale-105 active:scale-95 transition-transform z-20 flex items-center gap-2 shadow-lg">
+                  className="absolute bottom-32 sm:bottom-24 right-3 sm:right-4 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold hover:scale-105 active:scale-95 transition-transform z-20 flex items-center gap-2 shadow-lg">
                   <SkipForward className="w-4 h-4" /> Skip Outro
                 </motion.button>
               )}
@@ -1321,133 +1223,131 @@ export default function HindiVideoPlayer({
 
             {/* Settings panel */}
             {settingsOpen && (
-              <div
-                className={`${settingsPositionClass} left-2 right-2 sm:left-auto sm:right-3 w-auto sm:w-48 max-w-[calc(100vw-1rem)] max-h-[min(35vh,200px)] sm:max-h-[min(50vh,320px)] overflow-y-auto overscroll-contain touch-pan-y bg-black/95 border border-white/10 rounded-lg sm:rounded-xl shadow-2xl text-[10px] sm:text-sm scrollbar-thin`}
-                onClick={(e) => e.stopPropagation()}
-                onTouchMove={(e) => e.stopPropagation()}
-              >
-                {settingsPanel === "main" && (
-                  <div className="py-1">
-                    {[
-                      { label: "Speed",    icon: Gauge,     value: `${speed}x`, action: () => setSettingsPanel("speed") },
-                      { label: "Captions", icon: Subtitles, value: captionsOn ? subtitleTracks[activeTrackIdx]?.label || "On" : "Off", action: () => setSettingsPanel("caption") },
-                    ].map(item => (
+                <div
+                  className={`${settingsPositionClass} left-2 right-2 sm:left-auto sm:right-3 w-auto sm:w-48 max-w-[calc(100vw-1rem)] max-h-[min(35vh,200px)] sm:max-h-[min(50vh,320px)] overflow-y-auto overscroll-contain touch-pan-y bg-black/95 border border-white/10 rounded-lg sm:rounded-xl shadow-2xl text-[10px] sm:text-sm scrollbar-thin`}
+                  onClick={(e) => e.stopPropagation()}
+                  onTouchMove={(e) => e.stopPropagation()}>
+                  {settingsPanel === "main" && (
+                    <div className="py-1">
+                      {[
+                        { label: "Speed",    icon: Gauge,     value: `${speed}x`, action: () => setSettingsPanel("speed") },
+                        { label: "Captions", icon: Subtitles, value: captionsOn ? subtitleTracks[activeTrackIdx]?.label || "On" : "Off", action: () => setSettingsPanel("caption") },
+                      ].map(item => (
                       <button key={item.label} onClick={item.action}
+                          className="flex items-center justify-between w-full px-2 sm:px-4 py-1 sm:py-2 text-[10px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
+                          <span className="flex items-center gap-2"><item.icon className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> {item.label}</span>
+                          <span className="flex items-center gap-1 text-white/40 text-[10px] sm:text-xs">{item.value} <ChevronRight className="w-3 h-3" /></span>
+                        </button>
+                      ))}
+                      {qualityLevels.length > 0 && (
+                        <button onClick={() => setSettingsPanel("quality")}
+                          className="flex items-center justify-between w-full px-2 sm:px-4 py-1 sm:py-2 text-[10px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
+                          <span className="flex items-center gap-2"><Layers className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> Quality</span>
+                          <span className="flex items-center gap-1 text-white/40 text-[10px] sm:text-xs">{qualityLabel(currentQuality)} <ChevronRight className="w-3 h-3" /></span>
+                        </button>
+                      )}
+                      <button onClick={() => setSettingsPanel("boost")}
                         className="flex items-center justify-between w-full px-2 sm:px-4 py-1 sm:py-2 text-[10px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
-                        <span className="flex items-center gap-2"><item.icon className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> {item.label}</span>
-                        <span className="flex items-center gap-1 text-white/40 text-[10px] sm:text-xs">{item.value} <ChevronRight className="w-3 h-3" /></span>
+                        <span className="flex items-center gap-2"><Volume1 className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> Audio Boost</span>
+                        <span className="flex items-center gap-1 text-white/40 text-[10px] sm:text-xs">{audioBoost > 1 ? `${audioBoost}x` : "Off"} <ChevronRight className="w-3 h-3" /></span>
                       </button>
-                    ))}
-                    {qualityLevels.length > 0 && (
-                      <button onClick={() => setSettingsPanel("quality")}
+                      <button onClick={takeScreenshot}
                         className="flex items-center justify-between w-full px-2 sm:px-4 py-1 sm:py-2 text-[10px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
-                        <span className="flex items-center gap-2"><Layers className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> Quality</span>
-                        <span className="flex items-center gap-1 text-white/40 text-[10px] sm:text-xs">{qualityLabel(currentQuality)} <ChevronRight className="w-3 h-3" /></span>
+                        <span className="flex items-center gap-2"><Camera className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> Screenshot</span>
+                        <span className="text-white/40 text-[10px] sm:text-xs">Save</span>
                       </button>
-                    )}
-                    <button onClick={() => setSettingsPanel("boost")}
-                      className="flex items-center justify-between w-full px-2 sm:px-4 py-1 sm:py-2 text-[10px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
-                      <span className="flex items-center gap-2"><Volume1 className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> Audio Boost</span>
-                      <span className="flex items-center gap-1 text-white/40 text-[10px] sm:text-xs">{audioBoost > 1 ? `${audioBoost}x` : "Off"} <ChevronRight className="w-3 h-3" /></span>
-                    </button>
-                    <button onClick={takeScreenshot}
-                      className="flex items-center justify-between w-full px-2 sm:px-4 py-1 sm:py-2 text-[10px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
-                      <span className="flex items-center gap-2"><Camera className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> Screenshot</span>
-                      <span className="text-white/40 text-[10px] sm:text-xs">Save</span>
-                    </button>
-                    <button onClick={() => { const v = videoRef.current; if (!v) return; if (abLoop.a === null) setAbLoop({ a: v.currentTime, b: null }); else if (abLoop.b === null) setAbLoop(prev => ({ ...prev, b: v.currentTime })); else setAbLoop({ a: null, b: null }); }}
-                      className="flex items-center justify-between w-full px-2 sm:px-4 py-1 sm:py-2 text-[10px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
-                      <span className="flex items-center gap-2"><Repeat className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> A-B Loop</span>
-                      <span className={`text-[10px] sm:text-xs ${abLoop.a !== null ? "text-primary font-medium" : "text-white/40"}`}>{abLoop.a !== null && abLoop.b !== null ? "Active ✓" : abLoop.a !== null ? "Set B →" : "Set A"}</span>
-                    </button>
-                    {[
-                      { label: "Ambient",  icon: Sun,         value: ambientEnabled, toggle: () => setAmbientEnabled(!ambientEnabled) },
-                      { label: "Cinema",   icon: SlidersHorizontal, value: cinemaMode, toggle: () => setCinemaMode(!cinemaMode) },
-                      { label: "Autoplay", icon: SkipForward, value: autoPlayNext,   toggle: () => onAutoPlayToggle?.(!autoPlayNext) },
-                      { label: "Auto Skip Intro", icon: SkipForward, value: autoSkipIntro, toggle: () => onAutoSkipToggle?.(!autoSkipIntro) },
-                    ].map(item => (
-                      <button key={item.label} onClick={item.toggle}
+                      <button onClick={() => { const v = videoRef.current; if (!v) return; if (abLoop.a === null) setAbLoop({ a: v.currentTime, b: null }); else if (abLoop.b === null) setAbLoop(prev => ({ ...prev, b: v.currentTime })); else setAbLoop({ a: null, b: null }); }}
                         className="flex items-center justify-between w-full px-2 sm:px-4 py-1 sm:py-2 text-[10px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
-                        <span className="flex items-center gap-2"><item.icon className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> {item.label}</span>
-                        <span className={`w-6 h-3 sm:w-9 sm:h-5 rounded-full transition-colors flex items-center ${item.value ? "bg-primary justify-end" : "bg-white/20 justify-start"}`}>
-                          <span className="w-2 h-2 sm:w-3.5 sm:h-3.5 rounded-full bg-white mx-0.5 shadow" />
-                        </span>
+                        <span className="flex items-center gap-2"><Repeat className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> A-B Loop</span>
+                        <span className={`text-[10px] sm:text-xs ${abLoop.a !== null ? "text-primary font-medium" : "text-white/40"}`}>{abLoop.a !== null && abLoop.b !== null ? "Active ✓" : abLoop.a !== null ? "Set B →" : "Set A"}</span>
                       </button>
-                    ))}
-                  </div>
-                )}
-                {settingsPanel === "speed" && (
-                  <div className="py-1">
-                    <button onClick={() => setSettingsPanel("main")} className="flex items-center gap-2 w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-white/50 hover:bg-white/10">
-                      <ChevronRight className="w-3 h-3 rotate-180" /> Speed
-                    </button>
-                    <div className="border-t border-white/10 mt-0.5" />
-                    {SPEEDS.map(s => (
-                      <button key={s} onClick={() => changeSpeed(s)}
-                        className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 transition-colors ${speed === s ? "text-primary font-semibold" : "text-white/80"}`}>
-                        {s === 1 ? "Normal" : `${s}×`}
+                      {[
+                        { label: "Ambient",  icon: Sun,         value: ambientEnabled, toggle: () => setAmbientEnabled(!ambientEnabled) },
+                        { label: "Cinema",   icon: SlidersHorizontal, value: cinemaMode, toggle: () => setCinemaMode(!cinemaMode) },
+                        { label: "Autoplay", icon: SkipForward, value: autoPlayNext,   toggle: () => onAutoPlayToggle?.(!autoPlayNext) },
+                      ].map(item => (
+                        <button key={item.label} onClick={item.toggle}
+                          className="flex items-center justify-between w-full px-2 sm:px-4 py-1 sm:py-2 text-[10px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
+                          <span className="flex items-center gap-2"><item.icon className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> {item.label}</span>
+                          <span className={`w-6 h-3 sm:w-9 sm:h-5 rounded-full transition-colors flex items-center ${item.value ? "bg-primary justify-end" : "bg-white/20 justify-start"}`}>
+                            <span className="w-2 h-2 sm:w-3.5 sm:h-3.5 rounded-full bg-white mx-0.5 shadow" />
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {settingsPanel === "speed" && (
+                    <div className="py-1">
+                      <button onClick={() => setSettingsPanel("main")} className="flex items-center gap-2 w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-white/50 hover:bg-white/10">
+                        <ChevronRight className="w-3 h-3 rotate-180" /> Speed
                       </button>
-                    ))}
-                  </div>
-                )}
-                {settingsPanel === "caption" && (
-                  <div className="py-1">
-                    <button onClick={() => setSettingsPanel("main")} className="flex items-center gap-2 w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-white/50 hover:bg-white/10">
-                      <ChevronRight className="w-3 h-3 rotate-180" /> Captions
-                    </button>
-                    <div className="border-t border-white/10 mt-0.5" />
-                    <button onClick={() => {
-                      setCaptionsOn(false);
-                      const v = videoRef.current;
-                      if (v) for (let i = 0; i < v.textTracks.length; i++) v.textTracks[i].mode = "hidden";
-                      setSettingsPanel("main");
-                    }} className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 ${!captionsOn ? "text-primary font-semibold" : "text-white/80"}`}>
-                      Off
-                    </button>
-                    {subtitleTracks.map((t, i) => (
-                      <button key={i} onClick={() => { setCaptionsOn(true); selectTrack(i); }}
-                        className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 ${captionsOn && activeTrackIdx === i ? "text-primary font-semibold" : "text-white/80"}`}>
-                        {t.label || "Unknown"}
+                      <div className="border-t border-white/10 mt-0.5" />
+                      {SPEEDS.map(s => (
+                        <button key={s} onClick={() => changeSpeed(s)}
+                          className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 transition-colors ${speed === s ? "text-primary font-semibold" : "text-white/80"}`}>
+                          {s === 1 ? "Normal" : `${s}×`}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {settingsPanel === "caption" && (
+                    <div className="py-1">
+                      <button onClick={() => setSettingsPanel("main")} className="flex items-center gap-2 w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-white/50 hover:bg-white/10">
+                        <ChevronRight className="w-3 h-3 rotate-180" /> Captions
                       </button>
-                    ))}
-                    {subtitleTracks.length === 0 && <p className="px-3 py-1.5 text-[10px] text-white/30">No captions available</p>}
-                  </div>
-                )}
-                {settingsPanel === "quality" && (
-                  <div className="py-1">
-                    <button onClick={() => setSettingsPanel("main")} className="flex items-center gap-2 w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-white/50 hover:bg-white/10">
-                      <ChevronRight className="w-3 h-3 rotate-180" /> Quality
-                    </button>
-                    <div className="border-t border-white/10 mt-0.5" />
-                    <button onClick={() => changeQuality(-1)}
-                      className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 ${currentQuality === -1 ? "text-primary font-semibold" : "text-white/80"}`}>
-                      Auto
-                    </button>
-                    {qualityLevels.map((lvl, i) => (
-                      <button key={i} onClick={() => changeQuality(i)}
-                        className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 ${currentQuality === i ? "text-primary font-semibold" : "text-white/80"}`}>
-                        {lvl.height ? `${lvl.height}p` : `${Math.round(lvl.bitrate / 1000)}k`}
-                        {lvl.height >= 1080 && <span className="ml-2 text-[10px] text-accent font-bold">HD</span>}
+                      <div className="border-t border-white/10 mt-0.5" />
+                      <button onClick={() => {
+                        setCaptionsOn(false);
+                        const v = videoRef.current;
+                        if (v) for (let i = 0; i < v.textTracks.length; i++) v.textTracks[i].mode = "hidden";
+                        setSettingsPanel("main");
+                      }} className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 ${!captionsOn ? "text-primary font-semibold" : "text-white/80"}`}>
+                        Off
                       </button>
-                    ))}
-                  </div>
-                )}
-                {settingsPanel === "boost" && (
-                  <div className="py-1">
-                    <button onClick={() => setSettingsPanel("main")}
-                      className="flex items-center gap-2 w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-white/50 hover:bg-white/10">
-                      <ChevronRight className="w-3 h-3 rotate-180" /> Audio Boost
-                    </button>
-                    <div className="border-t border-white/10 mt-0.5" />
-                    {[1, 1.5, 2, 2.5, 3].map(b => (
-                      <button key={b} onClick={() => { setAudioBoost(b); setSettingsPanel("main"); }}
-                        className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 transition-colors ${audioBoost === b ? "text-primary font-semibold" : "text-white/80"}`}>
-                        {b === 1 ? "Normal" : `${b}× Boost`}
+                      {subtitleTracks.map((t, i) => (
+                        <button key={i} onClick={() => { setCaptionsOn(true); selectTrack(i); }}
+                          className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 ${captionsOn && activeTrackIdx === i ? "text-primary font-semibold" : "text-white/80"}`}>
+                          {t.label || "Unknown"}
+                        </button>
+                      ))}
+                      {subtitleTracks.length === 0 && <p className="px-3 py-1.5 text-[10px] text-white/30">No captions available</p>}
+                    </div>
+                  )}
+                  {settingsPanel === "quality" && (
+                    <div className="py-1">
+                      <button onClick={() => setSettingsPanel("main")} className="flex items-center gap-2 w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-white/50 hover:bg-white/10">
+                        <ChevronRight className="w-3 h-3 rotate-180" /> Quality
                       </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+                      <div className="border-t border-white/10 mt-0.5" />
+                      <button onClick={() => changeQuality(-1)}
+                        className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 ${currentQuality === -1 ? "text-primary font-semibold" : "text-white/80"}`}>
+                        Auto
+                      </button>
+                      {qualityLevels.map((lvl, i) => (
+                        <button key={i} onClick={() => changeQuality(i)}
+                          className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 ${currentQuality === i ? "text-primary font-semibold" : "text-white/80"}`}>
+                          {lvl.height ? `${lvl.height}p` : `${Math.round(lvl.bitrate / 1000)}k`}
+                          {lvl.height >= 1080 && <span className="ml-2 text-[10px] text-accent font-bold">HD</span>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {settingsPanel === "boost" && (
+                    <div className="py-1">
+                      <button onClick={() => setSettingsPanel("main")}
+                        className="flex items-center gap-2 w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-white/50 hover:bg-white/10">
+                        <ChevronRight className="w-3 h-3 rotate-180" /> Audio Boost
+                      </button>
+                      <div className="border-t border-white/10 mt-0.5" />
+                      {[1, 1.5, 2, 2.5, 3].map(b => (
+                        <button key={b} onClick={() => { setAudioBoost(b); setSettingsPanel("main"); }}
+                          className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 transition-colors ${audioBoost === b ? "text-primary font-semibold" : "text-white/80"}`}>
+                          {b === 1 ? "Normal" : `${b}× Boost`}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
             )}
 
             {/* Controls overlay */}
@@ -1456,7 +1356,7 @@ export default function HindiVideoPlayer({
                 style={{ background: "linear-gradient(to top, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.6) 30%, rgba(0,0,0,0.1) 60%, transparent 100%)" }} />
 
               <div className="relative px-2 sm:px-5 pb-1.5 sm:pb-4 pt-8 sm:pt-12">
-                {/* Seek bar with intro/outro visual markers */}
+                {/* Seek bar — YouTube-style with preview thumbnail */}
                 <div className="w-full mb-3 sm:mb-3.5 cursor-pointer group/progress relative touch-none"
                   style={{ height: "32px", display: "flex", alignItems: "center" }}
                   onClick={seek}
@@ -1470,38 +1370,15 @@ export default function HindiVideoPlayer({
                     <style>{`.group\\/progress:hover .seek-track { height: 6px !important; }`}</style>
                     <div className="seek-track absolute inset-0 rounded-full overflow-hidden transition-all duration-150" style={{ height: "100%" }}>
                       <div className="absolute top-0 left-0 h-full bg-white/30 rounded-full" style={{ width: `${bufferedPct}%`, transition: "width 0.5s linear" }} />
-                      
-                      {/* Intro marker */}
-                      {intro && (
-                        <div
-                          className="absolute top-0 h-full bg-primary/40 rounded-full pointer-events-none"
-                          style={{
-                            left: `${introStartPct}%`,
-                            width: `${introEndPct - introStartPct}%`,
-                          }}
-                        />
-                      )}
-                      
-                      {/* Outro marker */}
-                      {outro && (
-                        <div
-                          className="absolute top-0 h-full bg-accent/40 rounded-full pointer-events-none"
-                          style={{
-                            left: `${outroStartPct}%`,
-                            width: `${outroEndPct - outroStartPct}%`,
-                          }}
-                        />
-                      )}
-                      
-                      <div className="absolute top-0 left-0 h-full rounded-full"
-                        style={{
-                          width: `${progress}%`,
-                          background: "linear-gradient(90deg, hsl(var(--primary)), hsl(var(--accent)))",
-                          transition: "width 0.1s linear",
-                          boxShadow: "0 0 12px hsl(var(--primary) / 0.7), 0 0 4px hsl(var(--primary) / 0.5)",
-                        }} />
+                      <div className="absolute top-0 left-0 h-full rounded-full" style={{
+                        width: `${progress}%`,
+                        background: "linear-gradient(90deg, hsl(var(--primary)), hsl(var(--accent)))",
+                        transition: "width 0.1s linear",
+                        boxShadow: "0 0 12px hsl(var(--primary) / 0.7), 0 0 4px hsl(var(--primary) / 0.5)",
+                      }} />
                     </div>
                   </div>
+                  {/* Thumb — appears on hover (desktop) / while scrubbing (mobile) */}
                   <div
                     className={`absolute rounded-full pointer-events-none transition-all duration-150 ${
                       canHover ? "opacity-0 group-hover/progress:opacity-100" : hoverTime !== null ? "opacity-100" : "opacity-0"
@@ -1516,8 +1393,13 @@ export default function HindiVideoPlayer({
                       boxShadow: "0 0 0 3px hsl(var(--primary) / 0.4), 0 2px 8px rgba(0,0,0,0.8)",
                     }}
                   />
+
+                  {/* Preview thumbnail */}
                   {hoverTime !== null && (
-                    <div className="absolute bottom-6 sm:bottom-8 flex flex-col items-center gap-1 sm:gap-1.5 pointer-events-none z-20 -translate-x-1/2" style={{ left: previewLeft }}>
+                    <div
+                      className="absolute bottom-6 sm:bottom-8 flex flex-col items-center gap-1 sm:gap-1.5 pointer-events-none z-20 -translate-x-1/2"
+                      style={{ left: previewLeft }}
+                    >
                       <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-px h-4 sm:h-6 bg-white/40" style={{ bottom: "-16px" }} />
                       <div className={`rounded-lg overflow-hidden border border-white/20 shadow-2xl bg-black/90 transition-opacity duration-75 ${previewHasFrame ? "opacity-100" : "opacity-40"}`}
                         style={{ boxShadow: "0 12px 32px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,255,255,0.1)" }}>
