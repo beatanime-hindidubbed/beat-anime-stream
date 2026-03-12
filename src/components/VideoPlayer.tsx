@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import PlayerWatermark from "@/components/PlayerWatermark";
+import { useNavigate } from "react-router-dom"; // for Escape navigation
 
 interface Track {
   file: string;
@@ -32,6 +33,10 @@ interface Props {
   animeName?: string;
   episodeNumber?: number;
   episodeTitle?: string;
+  // Feature 4 – keyboard shortcuts
+  onNextEpisode?: () => void;
+  onPrevEpisode?: () => void;
+  onJumpToEpisode?: (episodeNumber: number) => void;
 }
 
 const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
@@ -61,8 +66,10 @@ export default function VideoPlayer({
   src, tracks, intro, outro, onTimeUpdate, onEnded,
   startTime, ambientMode = false, autoPlayNext = true, onAutoPlayToggle,
   disableInternalMiniPlayer = false,
-  animeName, episodeNumber, episodeTitle,                     // ← NEW
+  animeName, episodeNumber, episodeTitle,
+  onNextEpisode, onPrevEpisode, onJumpToEpisode,
 }: Props) {
+  const navigate = useNavigate();
   const videoRef     = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef    = useRef<HTMLCanvasElement>(null);
@@ -158,6 +165,10 @@ export default function VideoPlayer({
   // Guard: true after a touch interaction — prevents onClick from double-toggling
   const touchJustEnded  = useRef(false);
 
+  // ── Digit buffering for episode jump ─────────────────────────────────────
+  const digitBuffer = useRef('');
+  const digitTimer = useRef<ReturnType<typeof setTimeout>>();
+
   // ── Audio boost via Web Audio API ─────────────────────────────────────
   useEffect(() => {
     const v = videoRef.current;
@@ -226,7 +237,6 @@ export default function VideoPlayer({
     if (!wrapperRef.current) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
-        // Show mini player only when playing and scrolled out of view
         setMiniPlayer(!entry.isIntersecting && playing);
       },
       { threshold: 0.2 }
@@ -235,7 +245,6 @@ export default function VideoPlayer({
     return () => observer.disconnect();
   }, [playing, disableInternalMiniPlayer]);
 
-  // Update mini player state when playing changes
   useEffect(() => {
     if (disableInternalMiniPlayer) {
       setMiniPlayer(false);
@@ -288,7 +297,7 @@ export default function VideoPlayer({
 
     if (Hls.isSupported()) {
       const hls = new Hls({
-        startPosition: startTime || 0,                 // FIXED: -1 → 0
+        startPosition: startTime || 0,
         maxBufferSize: isTV ? 120 * 1000 * 1000 : 60 * 1000 * 1000,
         maxBufferLength: isTV ? 60 : 30,
         maxMaxBufferLength: isTV ? 120 : 60,
@@ -306,7 +315,6 @@ export default function VideoPlayer({
       hls.loadSource(realSrc);
       hls.attachMedia(video);
 
-      // Error recovery (added)
       hls.on(Hls.Events.ERROR, (_e, data) => {
         if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
           hls.recoverMediaError();
@@ -369,7 +377,6 @@ export default function VideoPlayer({
       previewHlsRefs.current[i] = hls;
       destroyers.push(() => { hls.destroy(); previewHlsRefs.current[i] = null; });
     }
-    // Keep legacy ref pointing to first
     previewVideoRef.current = previewVideoRefs.current[0];
     previewHlsRef.current = previewHlsRefs.current[0];
 
@@ -390,7 +397,6 @@ export default function VideoPlayer({
         if (ctx) {
           ctx.drawImage(pv, 0, 0, canvas.width, canvas.height);
           setPreviewHasFrame(true);
-          // Cache the frame we just got from HLS
           const t = Math.round(pv.currentTime);
           try {
             const oc = new OffscreenCanvas(80, 45);
@@ -426,7 +432,7 @@ export default function VideoPlayer({
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
-    const CAPTURE_INTERVAL = 2; // capture every 2 seconds of video time
+    const CAPTURE_INTERVAL = 2;
     const captureFrame = () => {
       if (v.paused || v.ended || !v.videoWidth) return;
       const t = Math.round(v.currentTime);
@@ -459,7 +465,6 @@ export default function VideoPlayer({
       if (v.paused || v.ended || !v.duration) return;
       const ct = Math.round(v.currentTime);
       const dur = v.duration;
-      // Pre-fetch frames at 10s intervals ahead (up to 60s ahead)
       const targets: number[] = [];
       for (let offset = 10; offset <= 60; offset += 10) {
         const target = ct + offset;
@@ -467,7 +472,6 @@ export default function VideoPlayer({
           targets.push(target);
         }
       }
-      // Distribute pre-fetch seeks across pool (one per video)
       for (let i = 0; i < Math.min(targets.length, PREVIEW_POOL_SIZE); i++) {
         const poolIdx = (previewRoundRobin.current + i) % PREVIEW_POOL_SIZE;
         const pv = previewVideoRefs.current[poolIdx];
@@ -478,7 +482,7 @@ export default function VideoPlayer({
         }
       }
     };
-    const interval = setInterval(prefetch, 5000); // every 5s
+    const interval = setInterval(prefetch, 5000);
     return () => clearInterval(interval);
   }, [previewReady]);
 
@@ -519,7 +523,7 @@ export default function VideoPlayer({
     return () => { if (ambientFrameRef.current) cancelAnimationFrame(ambientFrameRef.current); };
   }, [ambientEnabled]);
 
-  // ── Keyboard ──────────────────────────────────────────────────────────────
+  // ── Extended keyboard shortcuts (Feature 4) ──────────────────────────────
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const v = videoRef.current;
@@ -547,7 +551,37 @@ export default function VideoPlayer({
       if (e.code === "ArrowDown")  { e.preventDefault(); v.volume = Math.max(0, v.volume - 0.1); setVolume(v.volume); }
       if (e.code === "KeyF") toggleFullscreen();
       if (e.code === "KeyM") toggleMute();
+
+      // ── Feature 4: N / P / Escape / Digit jump ─────────────────────────
+      if (e.code === "KeyN") {
+        e.preventDefault();
+        onNextEpisode?.();
+        return;
+      }
+      if (e.code === "KeyP") {
+        e.preventDefault();
+        onPrevEpisode?.();
+        return;
+      }
+      if (e.code === "Escape" || e.code === "Backspace") {
+        e.preventDefault();
+        navigate(-1);
+        return;
+      }
+
+      // Multi‑digit episode jump
+      if (e.key >= "0" && e.key <= "9") {
+        e.preventDefault();
+        digitBuffer.current += e.key;
+        clearTimeout(digitTimer.current);
+        digitTimer.current = setTimeout(() => {
+          const n = parseInt(digitBuffer.current, 10);
+          if (n > 0) onJumpToEpisode?.(n);
+          digitBuffer.current = '';
+        }, 1500);
+      }
     };
+
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.code !== "Space") return;
       const tag = (e.target as HTMLElement)?.tagName;
@@ -565,10 +599,15 @@ export default function VideoPlayer({
         else          { v.pause(); setPlaying(false); flashCenter("pause"); }
       }
     };
+
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup",   onKeyUp);
-    return () => { window.removeEventListener("keydown", onKeyDown); window.removeEventListener("keyup", onKeyUp); };
-  }, [speed]);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      if (digitTimer.current) clearTimeout(digitTimer.current);
+    };
+  }, [speed, onNextEpisode, onPrevEpisode, onJumpToEpisode, navigate]);
 
   const flashCenter = (icon: "play"|"pause"|"ff"|"rw"|"2x") => {
     setShowCenterIcon(icon);
@@ -590,7 +629,6 @@ export default function VideoPlayer({
   const togglePlay = useCallback(() => {
     const v = videoRef.current;
     if (!v) return;
-    // ── FIX: Prevent click from firing right after touch events on mobile ──
     if (touchJustEnded.current) {
       touchJustEnded.current = false;
       return;
@@ -623,19 +661,15 @@ export default function VideoPlayer({
     flashWatermark();
   };
 
-  // ── Seek bar touch ────────────────────────────────────────────────────
-  // Track active dragging for instant preview mode
+  // ── Seek bar touch (unchanged) ─────────────────────────────────────────
   const isDraggingSeekBar = useRef(false);
   const dragTargetTimeRef = useRef<number | null>(null);
   const instantPreviewRAF = useRef<number>();
 
-  // Instant preview: capture frame from main video at current seek position (fastest method)
   const captureInstantPreview = useCallback((targetTime: number) => {
     const v = videoRef.current;
     const canvas = previewCanvasRef.current;
     if (!v || !canvas || !v.videoWidth) return false;
-
-    // If main video is near target time, capture directly (instant!)
     if (Math.abs(v.currentTime - targetTime) < 3) {
       const ctx = canvas.getContext("2d");
       if (ctx) {
@@ -647,7 +681,6 @@ export default function VideoPlayer({
     return false;
   }, []);
 
-  // Ensure mobile preview updates AFTER the seek completes (fixes blank frames on iOS)
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
@@ -660,9 +693,7 @@ export default function VideoPlayer({
       try {
         ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
         setPreviewHasFrame(true);
-      } catch {
-        // ignore
-      }
+      } catch {}
     };
     v.addEventListener("seeked", onSeeked);
     return () => v.removeEventListener("seeked", onSeeked);
@@ -673,9 +704,7 @@ export default function VideoPlayer({
     const cache = frameCacheRef.current;
     const canvas = previewCanvasRef.current;
     
-    // FAST PATH: During dragging, use instant capture from main video
     if (isDraggingSeekBar.current && captureInstantPreview(t)) {
-      // Successfully captured from main video - still trigger background HLS seek
       if (previewReady && Math.abs(lastPreviewSeek.current - t) >= 2) {
         lastPreviewSeek.current = t;
         const idx = previewRoundRobin.current % PREVIEW_POOL_SIZE;
@@ -690,7 +719,6 @@ export default function VideoPlayer({
       return;
     }
     
-    // Find nearest cached frame within 3s for instant display
     let best: ImageBitmap | null = null;
     let bestDist = 4;
     for (const [time, bmp] of cache) {
@@ -703,13 +731,11 @@ export default function VideoPlayer({
       if (ctx) { ctx.drawImage(best, 0, 0, canvas.width, canvas.height); setPreviewHasFrame(true); }
     }
     
-    // HLS pool seeking - skip debounce during drag or force mode
     if (!previewReady) return;
     const minGap = forceImmediate || isDraggingSeekBar.current ? 0.2 : 0.5;
     if (Math.abs(lastPreviewSeek.current - t) < minGap) return;
     lastPreviewSeek.current = t;
     
-    // Find a non-seeking pool member (round-robin)
     for (let attempt = 0; attempt < PREVIEW_POOL_SIZE; attempt++) {
       const idx = (previewRoundRobin.current + attempt) % PREVIEW_POOL_SIZE;
       const pv = previewVideoRefs.current[idx];
@@ -722,7 +748,6 @@ export default function VideoPlayer({
         return;
       }
     }
-    // All busy — force the first one with very short timeout
     const pv = previewVideoRefs.current[0];
     if (pv) {
       previewSeeking.current[0] = true;
@@ -772,7 +797,6 @@ export default function VideoPlayer({
     const pct = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
     const targetTime = pct * duration;
 
-    // Use RAF for smoother 60fps UI + preview updates during drag
     if (instantPreviewRAF.current) cancelAnimationFrame(instantPreviewRAF.current);
     instantPreviewRAF.current = requestAnimationFrame(() => {
       dragTargetTimeRef.current = targetTime;
@@ -804,7 +828,6 @@ export default function VideoPlayer({
       setCurrent(targetTime);
       v.currentTime = targetTime;
     }
-    // Resume playback if it was playing before the seek
     const shouldResume = wasPlayingRef.current;
     isSeeking.current = false;
     if (shouldResume) {
@@ -813,7 +836,6 @@ export default function VideoPlayer({
     }
   };
 
-  // ── Preview thumbnail hover (desktop/laptop hover devices) ─────────────
   const handleProgressHover = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!duration) return;
     const rect = e.currentTarget.getBoundingClientRect();
@@ -868,7 +890,6 @@ export default function VideoPlayer({
     setSettingsPanel("main");
   };
 
-  // ── Nudge subtitle cues up on mobile so controls don't overlap ────────
   useEffect(() => {
     const v = videoRef.current;
     if (!v || !isMobile) return;
@@ -882,7 +903,6 @@ export default function VideoPlayer({
     const onTrackLoad = () => {
       for (let i = 0; i < v.textTracks.length; i++) nudgeCues(v.textTracks[i]);
     };
-    // Handle already-loaded and future tracks
     onTrackLoad();
     for (let i = 0; i < v.textTracks.length; i++) {
       v.textTracks[i].addEventListener("cuechange", () => nudgeCues(v.textTracks[i]));
@@ -904,7 +924,6 @@ export default function VideoPlayer({
     hideTimer.current = setTimeout(() => { if (playing && !settingsOpen) setShowControls(false); }, 3500);
   };
 
-  // ── Touch: double-tap to seek, long-press for 2x ─────────────────────
   const handleContainerTouchStart = (e: React.TouchEvent) => {
     if (touchOnSeekBar.current) return;
     touchStartTime.current = Date.now();
@@ -929,7 +948,6 @@ export default function VideoPlayer({
 
   const handleContainerTouchEnd = (e: React.TouchEvent) => {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
-    // ── FIX: mark that a touch just ended — prevents onClick from double-toggling ──
     touchJustEnded.current = true;
     setTimeout(() => { touchJustEnded.current = false; }, 300);
 
@@ -964,7 +982,7 @@ export default function VideoPlayer({
       const v = videoRef.current;
       if      (x < rect.width / 3)     { v.currentTime = Math.max(0, v.currentTime - 10);          flashCenter("rw"); }
       else if (x > rect.width * 2 / 3) { v.currentTime = Math.min(v.duration, v.currentTime + 10); flashCenter("ff"); }
-      flashWatermark(); // ← inside double-tap block
+      flashWatermark();
     }
   };
 
@@ -989,7 +1007,7 @@ export default function VideoPlayer({
 
   return (
     <div ref={wrapperRef} className="relative">
-      {/* ── YouTube-style mini/pip player ─────────────────────────────── */}
+      {/* Mini player */}
       <AnimatePresence>
         {miniPlayer && !fullscreen && !disableInternalMiniPlayer && (
           <motion.div
@@ -1010,14 +1028,6 @@ export default function VideoPlayer({
             onClick={() => wrapperRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })}
             style={{ aspectRatio: "16/9" }}
           >
-            {/* Mirror the actual video element */}
-            <video
-              ref={undefined}
-              className="w-full h-full object-cover pointer-events-none"
-              src={videoRef.current?.src}
-              style={{ display: "none" }}
-            />
-            {/* We clone by referencing the same HLS stream — instead show the main video as picture */}
             <div className="w-full h-full bg-black flex items-center justify-center relative">
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="text-white/60 text-xs text-center px-3">
@@ -1028,7 +1038,6 @@ export default function VideoPlayer({
                 </div>
               </div>
             </div>
-            {/* Mini controls bar */}
             <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 to-transparent p-2 flex items-center gap-2">
               <button
                 onClick={(e) => { e.stopPropagation(); togglePlay(); }}
@@ -1051,7 +1060,7 @@ export default function VideoPlayer({
           className="absolute -inset-8 w-[calc(100%+4rem)] h-[calc(100%+4rem)] opacity-40 blur-3xl scale-110 pointer-events-none -z-10 rounded-3xl" />
       )}
 
-      {/* Hidden preview video pool (3 parallel instances) */}
+      {/* Hidden preview pool */}
       {[0, 1, 2].map(i => (
         <video key={i} ref={el => { previewVideoRefs.current[i] = el; }} className="hidden" muted playsInline preload="auto" />
       ))}
@@ -1071,14 +1080,13 @@ export default function VideoPlayer({
           className="w-full h-full"
           onTimeUpdate={handleTimeUpdate}
           onPlay={() => { setPlaying(true); if (!isSeeking.current) wasPlayingRef.current = true; }}
-          onPause={() => { setPlaying(false); /* Do NOT reset wasPlayingRef here — it breaks seek resume on mobile */ }}
+          onPause={() => { setPlaying(false); }}
           onEnded={() => { setPlaying(false); wasPlayingRef.current = false; onEnded?.(); }}
           onClick={togglePlay}
           crossOrigin="anonymous"
           playsInline
           disablePictureInPicture
           controlsList="nodownload noremoteplayback"
-          // FIX: prevent mobile browser from auto-pausing on fullscreen
           x-webkit-airplay="allow"
         >
           {subtitleTracks.map((t, i) => (
@@ -1086,7 +1094,7 @@ export default function VideoPlayer({
           ))}
         </video>
 
-        {/* ── Feature 7: Episode title overlay ────────────────────────── */}
+        {/* Episode title overlay */}
         {(animeName || episodeNumber || episodeTitle) && (
           <div
             className={`absolute top-0 inset-x-0 z-30 pointer-events-none
@@ -1101,7 +1109,7 @@ export default function VideoPlayer({
           </div>
         )}
 
-        {/* ── Center flash icon ─────────────────────────────────────── */}
+        {/* Center flash icon */}
         <AnimatePresence>
           {showCenterIcon && (
             <motion.div key="ci"
@@ -1121,7 +1129,7 @@ export default function VideoPlayer({
           )}
         </AnimatePresence>
 
-        {/* ── Buffering / Paused overlay (mobile only for pause) ──── */}
+        {/* Buffering overlay */}
         {isBuffering && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
             <div className="flex flex-col items-center gap-2">
@@ -1140,7 +1148,7 @@ export default function VideoPlayer({
           </div>
         )}
 
-        {/* ── 2× badge ──────────────────────────────────────────────── */}
+        {/* 2× badge */}
         <AnimatePresence>
           {longPressActive && (
             <motion.div key="2xbadge"
@@ -1153,7 +1161,7 @@ export default function VideoPlayer({
           )}
         </AnimatePresence>
 
-        {/* ── Skip Intro / Outro ────────────────────────────────────── */}
+        {/* Skip buttons (moved up for mobile) */}
         <AnimatePresence>
           {showSkipIntro && (
             <motion.button key="skip-intro"
@@ -1177,151 +1185,146 @@ export default function VideoPlayer({
           )}
         </AnimatePresence>
 
-        {/* ── Settings panel ────────────────────────────────────────── */}
+        {/* Settings panel (unchanged) */}
         {settingsOpen && (
-            <div
-              className={`${settingsPositionClass} left-2 right-2 sm:left-auto sm:right-3 w-auto sm:w-48 max-w-[calc(100vw-1rem)] max-h-[min(35vh,200px)] sm:max-h-[min(50vh,320px)] overflow-y-auto overscroll-contain touch-pan-y bg-black/95 border border-white/10 rounded-lg sm:rounded-xl shadow-2xl text-[10px] sm:text-sm scrollbar-thin`}
-              onClick={(e) => e.stopPropagation()}
-              onTouchMove={(e) => e.stopPropagation()}
-            >
-              {settingsPanel === "main" && (
-                <div className="py-1">
-                  {[
-                    { label: "Speed", icon: Gauge, value: `${speed}x`, action: () => setSettingsPanel("speed") },
-                    { label: "Captions", icon: Subtitles, value: captionsOn ? subtitleTracks[activeTrackIdx]?.label || "On" : "Off", action: () => setSettingsPanel("caption") },
-                  ].map(item => (
-                    <button key={item.label} onClick={item.action}
-                      className="flex items-center justify-between w-full px-2 sm:px-4 py-1 sm:py-2 text-[10px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
-                      <span className="flex items-center gap-2">
-                        <item.icon className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> {item.label}
-                      </span>
-                      <span className="flex items-center gap-1 text-white/40 text-[10px] sm:text-xs">{item.value} <ChevronRight className="w-3 h-3" /></span>
-                    </button>
-                  ))}
-                  {qualityLevels.length > 0 && (
-                    <button onClick={() => setSettingsPanel("quality")}
-                      className="flex items-center justify-between w-full px-2 sm:px-4 py-1 sm:py-2 text-[10px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
-                      <span className="flex items-center gap-2"><Layers className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> Quality</span>
-                      <span className="flex items-center gap-1 text-white/40 text-[10px] sm:text-xs">{qualityLabel(currentQuality)} <ChevronRight className="w-3 h-3" /></span>
-                    </button>
-                  )}
-                  <button onClick={() => setSettingsPanel("boost" as any)}
+          <div
+            className={`${settingsPositionClass} left-2 right-2 sm:left-auto sm:right-3 w-auto sm:w-48 max-w-[calc(100vw-1rem)] max-h-[min(35vh,200px)] sm:max-h-[min(50vh,320px)] overflow-y-auto overscroll-contain touch-pan-y bg-black/95 border border-white/10 rounded-lg sm:rounded-xl shadow-2xl text-[10px] sm:text-sm scrollbar-thin`}
+            onClick={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
+          >
+            {/* ... settings panel content (unchanged) */}
+            {settingsPanel === "main" && (
+              <div className="py-1">
+                {[
+                  { label: "Speed", icon: Gauge, value: `${speed}x`, action: () => setSettingsPanel("speed") },
+                  { label: "Captions", icon: Subtitles, value: captionsOn ? subtitleTracks[activeTrackIdx]?.label || "On" : "Off", action: () => setSettingsPanel("caption") },
+                ].map(item => (
+                  <button key={item.label} onClick={item.action}
                     className="flex items-center justify-between w-full px-2 sm:px-4 py-1 sm:py-2 text-[10px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
-                    <span className="flex items-center gap-2"><Volume1 className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> Audio Boost</span>
-                    <span className="flex items-center gap-1 text-white/40 text-[10px] sm:text-xs">{audioBoost > 1 ? `${audioBoost}x` : "Off"} <ChevronRight className="w-3 h-3" /></span>
+                    <span className="flex items-center gap-2"><item.icon className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> {item.label}</span>
+                    <span className="flex items-center gap-1 text-white/40 text-[10px] sm:text-xs">{item.value} <ChevronRight className="w-3 h-3" /></span>
                   </button>
-                  <button onClick={takeScreenshot}
+                ))}
+                {qualityLevels.length > 0 && (
+                  <button onClick={() => setSettingsPanel("quality")}
                     className="flex items-center justify-between w-full px-2 sm:px-4 py-1 sm:py-2 text-[10px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
-                    <span className="flex items-center gap-2"><Camera className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> Screenshot</span>
-                    <span className="text-white/40 text-[10px] sm:text-xs">Save</span>
+                    <span className="flex items-center gap-2"><Layers className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> Quality</span>
+                    <span className="flex items-center gap-1 text-white/40 text-[10px] sm:text-xs">{qualityLabel(currentQuality)} <ChevronRight className="w-3 h-3" /></span>
                   </button>
-                  <button onClick={() => { const v = videoRef.current; if (!v) return; if (abLoop.a === null) setAbLoop({ a: v.currentTime, b: null }); else if (abLoop.b === null) setAbLoop(prev => ({ ...prev, b: v.currentTime })); else setAbLoop({ a: null, b: null }); }}
+                )}
+                <button onClick={() => setSettingsPanel("boost" as any)}
+                  className="flex items-center justify-between w-full px-2 sm:px-4 py-1 sm:py-2 text-[10px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
+                  <span className="flex items-center gap-2"><Volume1 className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> Audio Boost</span>
+                  <span className="flex items-center gap-1 text-white/40 text-[10px] sm:text-xs">{audioBoost > 1 ? `${audioBoost}x` : "Off"} <ChevronRight className="w-3 h-3" /></span>
+                </button>
+                <button onClick={takeScreenshot}
+                  className="flex items-center justify-between w-full px-2 sm:px-4 py-1 sm:py-2 text-[10px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
+                  <span className="flex items-center gap-2"><Camera className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> Screenshot</span>
+                  <span className="text-white/40 text-[10px] sm:text-xs">Save</span>
+                </button>
+                <button onClick={() => { const v = videoRef.current; if (!v) return; if (abLoop.a === null) setAbLoop({ a: v.currentTime, b: null }); else if (abLoop.b === null) setAbLoop(prev => ({ ...prev, b: v.currentTime })); else setAbLoop({ a: null, b: null }); }}
+                  className="flex items-center justify-between w-full px-2 sm:px-4 py-1 sm:py-2 text-[10px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
+                  <span className="flex items-center gap-2"><Repeat className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> A-B Loop</span>
+                  <span className={`text-[10px] sm:text-xs ${abLoop.a !== null ? "text-primary font-medium" : "text-white/40"}`}>{abLoop.a !== null && abLoop.b !== null ? "Active ✓" : abLoop.a !== null ? "Set B →" : "Set A"}</span>
+                </button>
+                {[
+                  { label: "Ambient", icon: Sun, value: ambientEnabled, toggle: () => setAmbientEnabled(!ambientEnabled) },
+                  { label: "Cinema", icon: SlidersHorizontal, value: cinemaMode, toggle: () => setCinemaMode(!cinemaMode) },
+                  { label: "Autoplay", icon: SkipForward, value: autoPlayNext, toggle: () => onAutoPlayToggle?.(!autoPlayNext) },
+                ].map(item => (
+                  <button key={item.label} onClick={item.toggle}
                     className="flex items-center justify-between w-full px-2 sm:px-4 py-1 sm:py-2 text-[10px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
-                    <span className="flex items-center gap-2"><Repeat className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> A-B Loop</span>
-                    <span className={`text-[10px] sm:text-xs ${abLoop.a !== null ? "text-primary font-medium" : "text-white/40"}`}>{abLoop.a !== null && abLoop.b !== null ? "Active ✓" : abLoop.a !== null ? "Set B →" : "Set A"}</span>
+                    <span className="flex items-center gap-2"><item.icon className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> {item.label}</span>
+                    <span className={`w-7 h-3.5 sm:w-9 sm:h-5 rounded-full transition-colors flex items-center ${item.value ? "bg-primary justify-end" : "bg-white/20 justify-start"}`}>
+                      <span className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 rounded-full bg-white mx-0.5 shadow" />
+                    </span>
                   </button>
-                  {[
-                    { label: "Ambient", icon: Sun, value: ambientEnabled, toggle: () => setAmbientEnabled(!ambientEnabled) },
-                    { label: "Cinema", icon: SlidersHorizontal, value: cinemaMode, toggle: () => setCinemaMode(!cinemaMode) },
-                    { label: "Autoplay", icon: SkipForward, value: autoPlayNext, toggle: () => onAutoPlayToggle?.(!autoPlayNext) },
-                  ].map(item => (
-                    <button key={item.label} onClick={item.toggle}
-                      className="flex items-center justify-between w-full px-2 sm:px-4 py-1 sm:py-2 text-[10px] sm:text-sm text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors">
-                      <span className="flex items-center gap-2"><item.icon className="w-3 h-3 sm:w-4 sm:h-4 text-white/50" /> {item.label}</span>
-                      <span className={`w-7 h-3.5 sm:w-9 sm:h-5 rounded-full transition-colors flex items-center ${item.value ? "bg-primary justify-end" : "bg-white/20 justify-start"}`}>
-                        <span className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 rounded-full bg-white mx-0.5 shadow" />
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-              {settingsPanel === "speed" && (
-                <div className="py-1">
-                  <button onClick={() => setSettingsPanel("main")}
-                    className="flex items-center gap-2 w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-white/50 hover:bg-white/10">
-                    <ChevronRight className="w-3 h-3 rotate-180" /> Speed
+                ))}
+              </div>
+            )}
+            {settingsPanel === "speed" && (
+              <div className="py-1">
+                <button onClick={() => setSettingsPanel("main")}
+                  className="flex items-center gap-2 w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-white/50 hover:bg-white/10">
+                  <ChevronRight className="w-3 h-3 rotate-180" /> Speed
+                </button>
+                <div className="border-t border-white/10 mt-0.5" />
+                {SPEEDS.map(s => (
+                  <button key={s} onClick={() => changeSpeed(s)}
+                    className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 transition-colors ${speed === s ? "text-primary font-semibold" : "text-white/80"}`}>
+                    {s === 1 ? "Normal" : `${s}×`}
                   </button>
-                  <div className="border-t border-white/10 mt-0.5" />
-                  {SPEEDS.map(s => (
-                    <button key={s} onClick={() => changeSpeed(s)}
-                      className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 transition-colors ${speed === s ? "text-primary font-semibold" : "text-white/80"}`}>
-                      {s === 1 ? "Normal" : `${s}×`}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {settingsPanel === "caption" && (
-                <div className="py-1">
-                  <button onClick={() => setSettingsPanel("main")}
-                    className="flex items-center gap-2 w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-white/50 hover:bg-white/10">
-                    <ChevronRight className="w-3 h-3 rotate-180" /> Captions
+                ))}
+              </div>
+            )}
+            {settingsPanel === "caption" && (
+              <div className="py-1">
+                <button onClick={() => setSettingsPanel("main")}
+                  className="flex items-center gap-2 w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-white/50 hover:bg-white/10">
+                  <ChevronRight className="w-3 h-3 rotate-180" /> Captions
+                </button>
+                <div className="border-t border-white/10 mt-0.5" />
+                <button onClick={() => {
+                  setCaptionsOn(false);
+                  const v = videoRef.current;
+                  if (v) for (let i = 0; i < v.textTracks.length; i++) v.textTracks[i].mode = "hidden";
+                  setSettingsPanel("main");
+                }} className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 ${!captionsOn ? "text-primary font-semibold" : "text-white/80"}`}>
+                  Off
+                </button>
+                {subtitleTracks.map((t, i) => (
+                  <button key={i} onClick={() => { setCaptionsOn(true); selectTrack(i); }}
+                    className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 ${captionsOn && activeTrackIdx === i ? "text-primary font-semibold" : "text-white/80"}`}>
+                    {t.label || "Unknown"}
                   </button>
-                  <div className="border-t border-white/10 mt-0.5" />
-                  <button onClick={() => {
-                    setCaptionsOn(false);
-                    const v = videoRef.current;
-                    if (v) for (let i = 0; i < v.textTracks.length; i++) v.textTracks[i].mode = "hidden";
-                    setSettingsPanel("main");
-                  }} className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 ${!captionsOn ? "text-primary font-semibold" : "text-white/80"}`}>
-                    Off
+                ))}
+                {subtitleTracks.length === 0 && <p className="px-3 py-1.5 text-[10px] text-white/30">No captions available</p>}
+              </div>
+            )}
+            {settingsPanel === "quality" && (
+              <div className="py-1">
+                <button onClick={() => setSettingsPanel("main")}
+                  className="flex items-center gap-2 w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-white/50 hover:bg-white/10">
+                  <ChevronRight className="w-3 h-3 rotate-180" /> Quality
+                </button>
+                <div className="border-t border-white/10 mt-0.5" />
+                <button onClick={() => changeQuality(-1)}
+                  className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 ${currentQuality === -1 ? "text-primary font-semibold" : "text-white/80"}`}>
+                  Auto
+                </button>
+                {qualityLevels.map((lvl, i) => (
+                  <button key={i} onClick={() => changeQuality(i)}
+                    className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 ${currentQuality === i ? "text-primary font-semibold" : "text-white/80"}`}>
+                    {lvl.height ? `${lvl.height}p` : `${Math.round(lvl.bitrate / 1000)}k`}
+                    {lvl.height >= 1080 && <span className="ml-2 text-[10px] text-accent font-bold">HD</span>}
                   </button>
-                  {subtitleTracks.map((t, i) => (
-                    <button key={i} onClick={() => { setCaptionsOn(true); selectTrack(i); }}
-                      className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 ${captionsOn && activeTrackIdx === i ? "text-primary font-semibold" : "text-white/80"}`}>
-                      {t.label || "Unknown"}
-                    </button>
-                  ))}
-                  {subtitleTracks.length === 0 && <p className="px-3 py-1.5 text-[10px] text-white/30">No captions available</p>}
-                </div>
-              )}
-              {settingsPanel === "quality" && (
-                <div className="py-1">
-                  <button onClick={() => setSettingsPanel("main")}
-                    className="flex items-center gap-2 w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-white/50 hover:bg-white/10">
-                    <ChevronRight className="w-3 h-3 rotate-180" /> Quality
+                ))}
+              </div>
+            )}
+            {settingsPanel === ("boost" as any) && (
+              <div className="py-1">
+                <button onClick={() => setSettingsPanel("main")}
+                  className="flex items-center gap-2 w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-white/50 hover:bg-white/10">
+                  <ChevronRight className="w-3 h-3 rotate-180" /> Audio Boost
+                </button>
+                <div className="border-t border-white/10 mt-0.5" />
+                {[1, 1.5, 2, 2.5, 3].map(b => (
+                  <button key={b} onClick={() => { setAudioBoost(b); setSettingsPanel("main"); }}
+                    className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 transition-colors ${audioBoost === b ? "text-primary font-semibold" : "text-white/80"}`}>
+                    {b === 1 ? "Normal" : `${b}× Boost`}
                   </button>
-                  <div className="border-t border-white/10 mt-0.5" />
-                  <button onClick={() => changeQuality(-1)}
-                    className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 ${currentQuality === -1 ? "text-primary font-semibold" : "text-white/80"}`}>
-                    Auto
-                  </button>
-                  {qualityLevels.map((lvl, i) => (
-                    <button key={i} onClick={() => changeQuality(i)}
-                      className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 ${currentQuality === i ? "text-primary font-semibold" : "text-white/80"}`}>
-                      {lvl.height ? `${lvl.height}p` : `${Math.round(lvl.bitrate / 1000)}k`}
-                      {lvl.height >= 1080 && <span className="ml-2 text-[10px] text-accent font-bold">HD</span>}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {settingsPanel === ("boost" as any) && (
-                <div className="py-1">
-                  <button onClick={() => setSettingsPanel("main")}
-                    className="flex items-center gap-2 w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-white/50 hover:bg-white/10">
-                    <ChevronRight className="w-3 h-3 rotate-180" /> Audio Boost
-                  </button>
-                  <div className="border-t border-white/10 mt-0.5" />
-                  {[1, 1.5, 2, 2.5, 3].map(b => (
-                    <button key={b} onClick={() => { setAudioBoost(b); setSettingsPanel("main"); }}
-                      className={`w-full px-3 py-1.5 sm:py-2 text-[11px] sm:text-sm text-left hover:bg-white/10 transition-colors ${audioBoost === b ? "text-primary font-semibold" : "text-white/80"}`}>
-                      {b === 1 ? "Normal" : `${b}× Boost`}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
 
-        {/* ══════════════════════════════════════════════════════════════
-            CONTROLS OVERLAY — Beautiful redesigned UI
-            ══════════════════════════════════════════════════════════════ */}
+        {/* Controls overlay */}
         <div className={`absolute inset-x-0 bottom-0 transition-opacity duration-300 z-20 ${showControls ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
-          {/* Multi-layer gradient for depth */}
           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent pointer-events-none" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.6) 30%, rgba(0,0,0,0.1) 60%, transparent 100%)" }} />
 
           <div className="relative px-2 sm:px-5 pb-1.5 sm:pb-4 pt-8 sm:pt-12">
-
-            {/* ── Seek bar — YouTube-style thick hover ──────────────── */}
+            {/* Seek bar */}
             <div
               className="w-full mb-3 sm:mb-3.5 cursor-pointer group/progress relative touch-none"
               style={{ height: "32px", display: "flex", alignItems: "center" }}
@@ -1332,23 +1335,11 @@ export default function VideoPlayer({
               onTouchMove={handleSeekBarTouchMove}
               onTouchEnd={handleSeekBarTouchEnd}
             >
-              {/* Track — thickens on hover like YouTube */}
-              <div
-                className="absolute inset-x-0 rounded-full overflow-hidden transition-all duration-150"
-                style={{
-                  height: "4px",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  background: "rgba(255,255,255,0.15)",
-                }}
-              >
+              <div className="absolute inset-x-0 rounded-full overflow-hidden transition-all duration-150"
+                style={{ height: "4px", top: "50%", transform: "translateY(-50%)", background: "rgba(255,255,255,0.15)" }}>
                 <style>{`.group\\/progress:hover .seek-track { height: 6px !important; }`}</style>
-                {/* We use inline group-hover via CSS trick */}
                 <div className="seek-track absolute inset-0 rounded-full overflow-hidden transition-all duration-150" style={{ height: "100%" }}>
-                  {/* Buffered */}
-                  <div className="absolute top-0 left-0 h-full bg-white/30 rounded-full"
-                    style={{ width: `${bufferedPct}%`, transition: "width 0.5s linear" }} />
-                  {/* Played — premium gradient */}
+                  <div className="absolute top-0 left-0 h-full bg-white/30 rounded-full" style={{ width: `${bufferedPct}%`, transition: "width 0.5s linear" }} />
                   <div className="absolute top-0 left-0 h-full rounded-full"
                     style={{
                       width: `${progress}%`,
@@ -1358,8 +1349,6 @@ export default function VideoPlayer({
                     }} />
                 </div>
               </div>
-
-              {/* Thumb — appears on hover (desktop) / while scrubbing (mobile) */}
               <div
                 className={`absolute rounded-full pointer-events-none transition-all duration-150 ${
                   canHover ? "opacity-0 group-hover/progress:opacity-100" : hoverTime !== null ? "opacity-100" : "opacity-0"
@@ -1373,13 +1362,8 @@ export default function VideoPlayer({
                   boxShadow: "0 0 0 3px hsl(var(--primary) / 0.4), 0 2px 8px rgba(0,0,0,0.8)",
                 }}
               />
-
-              {/* ── Preview thumbnail ────────────────────────────── */}
               {hoverTime !== null && (
-                <div
-                  className="absolute bottom-6 sm:bottom-8 flex flex-col items-center gap-1 sm:gap-1.5 pointer-events-none z-20 -translate-x-1/2"
-                  style={{ left: previewLeft }}
-                >
+                <div className="absolute bottom-6 sm:bottom-8 flex flex-col items-center gap-1 sm:gap-1.5 pointer-events-none z-20 -translate-x-1/2" style={{ left: previewLeft }}>
                   <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-px h-4 sm:h-6 bg-white/40" style={{ bottom: "-16px" }} />
                   <div className={`rounded-lg overflow-hidden border border-white/20 shadow-2xl bg-black/90 transition-opacity duration-75 ${previewHasFrame ? "opacity-100" : "opacity-40"}`}
                     style={{ boxShadow: "0 12px 32px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,255,255,0.1)" }}>
@@ -1392,12 +1376,9 @@ export default function VideoPlayer({
               )}
             </div>
 
-            {/* ── Bottom controls row ───────────────────────────────── */}
+            {/* Bottom controls */}
             <div className="flex items-center justify-between gap-0.5 sm:gap-1">
-
-              {/* ── Left group ── */}
               <div className="flex items-center gap-0">
-                {/* Skip back */}
                 <button
                   onClick={() => { const v = videoRef.current; if (v) { v.currentTime = Math.max(0, v.currentTime - 10); flashCenter("rw"); } }}
                   className="relative w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all rounded-full group/btn overflow-hidden"
@@ -1405,19 +1386,14 @@ export default function VideoPlayer({
                   <span className="absolute inset-0 rounded-full bg-white/0 group-hover/btn:bg-white/10 transition-colors duration-150" />
                   <SkipBack className="relative w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </button>
-
-                {/* Play/Pause */}
                 <button
                   onClick={togglePlay}
                   className="relative w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center transition-all rounded-full group/btn overflow-hidden"
                 >
                   <span className="absolute inset-0 rounded-full bg-white/0 group-hover/btn:bg-white/15 transition-colors duration-150" />
-                  {playing
-                    ? <Pause className="relative w-4 h-4 sm:w-4.5 sm:h-4.5 text-white drop-shadow-md" />
-                    : <Play  className="relative w-4 h-4 sm:w-4.5 sm:h-4.5 text-white drop-shadow-md ml-0.5" />}
+                  {playing ? <Pause className="relative w-4 h-4 sm:w-4.5 sm:h-4.5 text-white drop-shadow-md" />
+                           : <Play  className="relative w-4 h-4 sm:w-4.5 sm:h-4.5 text-white drop-shadow-md ml-0.5" />}
                 </button>
-
-                {/* Skip forward */}
                 <button
                   onClick={() => { const v = videoRef.current; if (v) { v.currentTime = Math.min(v.duration, v.currentTime + 10); flashCenter("ff"); } }}
                   className="relative w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all rounded-full group/btn overflow-hidden"
@@ -1426,20 +1402,15 @@ export default function VideoPlayer({
                   <SkipForward className="relative w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </button>
 
-                {/* Volume — desktop with smooth slider */}
                 <div className="hidden sm:flex items-center gap-1 group/vol">
-                  <button
-                    onClick={toggleMute}
-                    className="relative w-8 h-8 flex items-center justify-center text-white/70 hover:text-white transition-colors rounded-full group/btn overflow-hidden"
-                  >
+                  <button onClick={toggleMute}
+                    className="relative w-8 h-8 flex items-center justify-center text-white/70 hover:text-white transition-colors rounded-full group/btn overflow-hidden">
                     <span className="absolute inset-0 rounded-full bg-white/0 group-hover/btn:bg-white/10 transition-colors" />
                     {muted || volume === 0 ? <VolumeX className="relative w-4 h-4" /> : <Volume2 className="relative w-4 h-4" />}
                   </button>
-                  {/* Volume slider — expands on hover */}
                   <div className="w-0 overflow-hidden group-hover/vol:w-16 transition-all duration-200 ease-out">
                     <div className="relative w-16 cursor-pointer" style={{ height: "18px", display: "flex", alignItems: "center" }}>
-                      <div className="absolute inset-x-0 rounded-full bg-white/20 overflow-hidden"
-                        style={{ height: "3px", top: "50%", transform: "translateY(-50%)" }}>
+                      <div className="absolute inset-x-0 rounded-full bg-white/20 overflow-hidden" style={{ height: "3px", top: "50%", transform: "translateY(-50%)" }}>
                         <div className="h-full rounded-full transition-all" style={{ width: `${volumeFill}%`, background: "white" }} />
                       </div>
                       <input type="range" min={0} max={1} step={0.02} value={muted ? 0 : volume}
@@ -1449,34 +1420,20 @@ export default function VideoPlayer({
                   </div>
                 </div>
 
-                {/* Time display */}
                 <div className="flex items-center ml-1">
-                  <span className="text-[9px] sm:text-xs font-medium tabular-nums" style={{ color: "rgba(255,255,255,0.9)" }}>
-                    {fmt(currentTime)}
-                  </span>
+                  <span className="text-[9px] sm:text-xs font-medium tabular-nums" style={{ color: "rgba(255,255,255,0.9)" }}>{fmt(currentTime)}</span>
                   <span className="text-[9px] sm:text-xs mx-0.5 sm:mx-1" style={{ color: "rgba(255,255,255,0.3)" }}>/</span>
-                  <span className="text-[9px] sm:text-xs tabular-nums" style={{ color: "rgba(255,255,255,0.5)" }}>
-                    {fmt(duration)}
-                  </span>
+                  <span className="text-[9px] sm:text-xs tabular-nums" style={{ color: "rgba(255,255,255,0.5)" }}>{fmt(duration)}</span>
                 </div>
               </div>
 
-              {/* ── Right group ── */}
               <div className="flex items-center gap-0">
-                {/* Speed badge */}
                 {speed !== 1 && (
-                  <span className="text-[8px] sm:text-xs text-primary font-bold px-1 sm:px-1.5 py-0.5 rounded bg-primary/15 border border-primary/20">
-                    {speed}×
-                  </span>
+                  <span className="text-[8px] sm:text-xs text-primary font-bold px-1 sm:px-1.5 py-0.5 rounded bg-primary/15 border border-primary/20">{speed}×</span>
                 )}
-                {/* Quality badge */}
                 {currentQuality !== -1 && qualityLevels[currentQuality] && (
-                  <span className="hidden sm:inline text-[10px] text-accent font-medium px-1.5 py-0.5 rounded-md bg-accent/10 border border-accent/20">
-                    {qualityLabel(currentQuality)}
-                  </span>
+                  <span className="hidden sm:inline text-[10px] text-accent font-medium px-1.5 py-0.5 rounded-md bg-accent/10 border border-accent/20">{qualityLabel(currentQuality)}</span>
                 )}
-
-                {/* Mobile subtitle picker */}
                 <button
                   onClick={() => { setSettingsOpen(true); setSettingsPanel("caption"); }}
                   className={`sm:hidden relative w-7 h-7 flex items-center justify-center active:scale-90 transition-all rounded-full group/btn overflow-hidden ${captionsOn ? "text-primary" : "text-white/70 hover:text-white"}`}
@@ -1484,17 +1441,11 @@ export default function VideoPlayer({
                   <span className="absolute inset-0 rounded-full bg-white/0 group-hover/btn:bg-white/10 transition-colors" />
                   <Subtitles className="relative w-3.5 h-3.5" />
                 </button>
-
-                {/* Mobile volume toggle */}
-                <button
-                  onClick={toggleMute}
-                  className="sm:hidden relative w-7 h-7 flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all rounded-full group/btn overflow-hidden"
-                >
+                <button onClick={toggleMute}
+                  className="sm:hidden relative w-7 h-7 flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all rounded-full group/btn overflow-hidden">
                   <span className="absolute inset-0 rounded-full bg-white/0 group-hover/btn:bg-white/10 transition-colors" />
                   {muted || volume === 0 ? <VolumeX className="relative w-3.5 h-3.5" /> : <Volume2 className="relative w-3.5 h-3.5" />}
                 </button>
-
-                {/* Settings */}
                 <button
                   onClick={() => { setSettingsOpen(!settingsOpen); setSettingsPanel("main"); }}
                   className={`relative w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center transition-all rounded-full group/btn overflow-hidden ${settingsOpen ? "text-primary" : "text-white/70 hover:text-white"}`}
@@ -1502,12 +1453,8 @@ export default function VideoPlayer({
                   <span className={`absolute inset-0 rounded-full transition-colors ${settingsOpen ? "bg-primary/15" : "bg-white/0 group-hover/btn:bg-white/10"}`} />
                   <Settings className={`relative w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform duration-300 ${settingsOpen ? "rotate-45" : ""}`} />
                 </button>
-
-                {/* Fullscreen */}
-                <button
-                  onClick={toggleFullscreen}
-                  className="relative w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all rounded-full group/btn overflow-hidden"
-                >
+                <button onClick={toggleFullscreen}
+                  className="relative w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all rounded-full group/btn overflow-hidden">
                   <span className="absolute inset-0 rounded-full bg-white/0 group-hover/btn:bg-white/10 transition-colors" />
                   {fullscreen ? <Minimize className="relative w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Maximize className="relative w-3.5 h-3.5 sm:w-4 sm:h-4" />}
                 </button>
@@ -1515,7 +1462,7 @@ export default function VideoPlayer({
             </div>
           </div>
         </div>
-        {/* ── Watermark component ─────────────────────────────── */}
+
         <PlayerWatermark showIcon={showWatermarkIcon} />
       </div>
     </div>
