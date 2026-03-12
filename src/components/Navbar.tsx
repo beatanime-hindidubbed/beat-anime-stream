@@ -140,6 +140,20 @@ export default function Navbar() {
                 onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
                 className="w-full h-9 pl-9 pr-10 rounded-lg bg-secondary text-sm text-foreground placeholder:text-muted-foreground border border-border focus:outline-none focus:ring-1 focus:ring-primary font-body"
               />
+              {/* X clear button (desktop) */}
+              {query.length > 0 && (
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    setQuery('');
+                    setSuggestions([]);
+                  }}
+                  className="absolute right-9 top-1/2 -translate-y-1/2 p-1 rounded-md text-muted-foreground hover:text-foreground"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={listening ? stopVoice : startVoice}
@@ -161,11 +175,15 @@ export default function Navbar() {
                 className="absolute top-full mt-1 w-full bg-card border border-border rounded-lg shadow-card overflow-hidden z-50"
               >
                 {suggestions.map((s) => (
-                  <Link
+                  <div
                     key={s.id}
-                    to={`/anime/${s.id}`}
-                    onClick={() => { setShowSuggestions(false); setQuery(""); }}
-                    className="flex items-center gap-3 px-3 py-2 hover:bg-secondary transition-colors"
+                    onMouseDown={(e) => {
+                      e.preventDefault(); // prevents blur from firing first
+                      navigate(`/anime/${s.id}`);
+                      setShowSuggestions(false);
+                      setQuery('');
+                    }}
+                    className="flex items-center gap-3 px-3 py-2 hover:bg-secondary transition-colors cursor-pointer"
                   >
                     {s.poster && (
                       <img src={s.poster} alt={s.name} className="w-10 h-14 object-cover rounded" />
@@ -174,7 +192,7 @@ export default function Navbar() {
                       <p className="text-sm text-foreground line-clamp-1 font-body">{s.name}</p>
                       {s.jname && <p className="text-xs text-muted-foreground line-clamp-1">{s.jname}</p>}
                     </div>
-                  </Link>
+                  </div>
                 ))}
               </motion.div>
             )}
@@ -277,8 +295,23 @@ export default function Navbar() {
                     value={query}
                     onChange={(e) => handleSearch(e.target.value)}
                     autoFocus
-                    className="w-full h-10 pl-9 pr-10 rounded-lg bg-secondary text-sm text-foreground placeholder:text-muted-foreground border border-border focus:outline-none focus:ring-1 focus:ring-primary font-body"
+                    className="w-full h-10 pl-9 pr-20 rounded-lg bg-secondary text-sm text-foreground placeholder:text-muted-foreground border border-border focus:outline-none focus:ring-1 focus:ring-primary font-body"
                   />
+                  {/* X clear button (mobile) */}
+                  {query.length > 0 && (
+                    <button
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        setQuery('');
+                        setSuggestions([]);
+                      }}
+                      className="absolute right-9 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                  {/* Mic button (mobile) */}
                   <button
                     type="button"
                     onClick={listening ? stopVoice : startVoice}
@@ -294,11 +327,16 @@ export default function Navbar() {
               {showSuggestions && suggestions.length > 0 && (
                 <div className="mt-2 bg-card border border-border rounded-lg overflow-hidden max-h-60 overflow-y-auto">
                   {suggestions.map((s) => (
-                    <Link
+                    <div
                       key={s.id}
-                      to={`/anime/${s.id}`}
-                      onClick={() => { setShowSuggestions(false); setQuery(""); setMobileSearch(false); }}
-                      className="flex items-center gap-3 px-3 py-2.5 hover:bg-secondary transition-colors"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        navigate(`/anime/${s.id}`);
+                        setShowSuggestions(false);
+                        setQuery('');
+                        setMobileSearch(false);
+                      }}
+                      className="flex items-center gap-3 px-3 py-2.5 hover:bg-secondary transition-colors cursor-pointer"
                     >
                       {s.poster && (
                         <img src={s.poster} alt={s.name} className="w-9 h-12 object-cover rounded" />
@@ -307,7 +345,7 @@ export default function Navbar() {
                         <p className="text-sm text-foreground line-clamp-1">{s.name}</p>
                         {s.jname && <p className="text-xs text-muted-foreground line-clamp-1">{s.jname}</p>}
                       </div>
-                    </Link>
+                    </div>
                   ))}
                 </div>
               )}
