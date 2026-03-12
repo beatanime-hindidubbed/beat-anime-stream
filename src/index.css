@@ -473,3 +473,23 @@ video::cue {
     line-height: 1.2;
   }
 }
+/* ===== TV MODE (Feature 1) ===== */
+.tv-mode *:focus {
+  outline: 3px solid hsl(var(--primary)) !important;
+  box-shadow: 0 0 0 6px hsl(var(--primary) / 0.3) !important;
+}
+
+.tv-mode * {
+  transition-duration: 0.1s !important;
+}
+
+.tv-mode main {
+  padding: 40px !important;
+}
+
+.tv-mode button,
+.tv-mode a {
+  min-height: 56px !important;
+  min-width: 80px !important;
+  font-size: 1.2em !important;
+}
