@@ -1,5 +1,11 @@
 // Multi-API load distribution with round-robin
 import { getNextApi, getApiPool } from "./streaming";
+import {
+  searchWithFallback,
+  getHomeWithFallback,
+  getScheduleWithFallback,
+  getAnimeInfoWithFallback,
+} from "./apiFallback";
 
 // Fallback if streaming module hasn't loaded yet
 const FALLBACK_BASE = "https://beat-anime-api.onrender.com/api/v1";
@@ -140,15 +146,144 @@ export interface ScheduleData {
 }
 
 export const api = {
-  getHome: () => fetchApi<HomeData>("/hianime/home"),
-  getAnimeInfo: (id: string) => fetchApi<AnimeInfo>(`/hianime/anime/${id}`),
-  getEpisodes: (id: string) => fetchApi<{ episodes: Episode[]; totalEpisodes: number }>(`/hianime/anime/${id}/episodes`),
+  // ── Home ──────────────────────────────────────────────────────────────────
+  getHome: async (): Promise<HomeData> => {
+    try {
+      const data = await fetchApi<HomeData>("/hianime/home");
+      // Only accept if we got meaningful data
+      if ((data as any)?.trendingAnimes?.length > 0 || (data as any)?.latestEpisodeAnimes?.length > 0) {
+        return data;
+      }
+      throw new Error("Empty home data");
+    } catch {
+      // Fallback to animelok / hindidubbed
+      try {
+        const fb = await getHomeWithFallback();
+        return {
+          trendingAnimes: fb.trending as AnimeItem[],
+          latestEpisodeAnimes: fb.latest as AnimeItem[],
+          topAiringAnimes: fb.popular as AnimeItem[],
+          mostPopularAnimes: fb.popular as AnimeItem[],
+          spotlightAnimes: fb.trending.slice(0, 5) as AnimeItem[],
+        };
+      } catch {
+        return {};
+      }
+    }
+  },
+
+  // ── Anime info ────────────────────────────────────────────────────────────
+  getAnimeInfo: async (id: string): Promise<AnimeInfo> => {
+    try {
+      const data = await fetchApi<AnimeInfo>(`/hianime/anime/${id}`);
+      if ((data as any)?.anime?.info?.name) return data;
+      throw new Error("Empty anime info");
+    } catch {
+      // Fallback: animelok → animeya — returns a partial shape
+      try {
+        const fb = await getAnimeInfoWithFallback(id);
+        return {
+          anime: {
+            info: {
+              id: fb.id,
+              name: fb.name,
+              poster: fb.poster,
+              description: fb.description,
+              stats: {
+                rating: fb.rating,
+                type: fb.type,
+                episodes: fb.episodes,
+              },
+            },
+            moreInfo: {
+              ...(fb.status ? { status: fb.status } : {}),
+              ...(fb.genres?.length ? { genres: fb.genres.join(", ") } : {}),
+            },
+          },
+          seasons: [],
+          relatedAnimes: [],
+          recommendedAnimes: [],
+        };
+      } catch {
+        return {};
+      }
+    }
+  },
+
+  // ── Episodes ──────────────────────────────────────────────────────────────
+  getEpisodes: (id: string) =>
+    fetchApi<{ episodes: Episode[]; totalEpisodes: number }>(`/hianime/anime/${id}/episodes`),
+
+  // ── Episode sources ───────────────────────────────────────────────────────
   getEpisodeSources: (episodeId: string, category = "sub") =>
-    fetchApi<EpisodeSource>(`/hianime/episode/sources?animeEpisodeId=${episodeId}&category=${category}`),
-  proxyUrl: (url: string, referer = "https://megacloud.blog/") => getProxyUrl(url, referer),
-  search: (q: string, page = 1) => fetchApi<SearchResult>(`/hianime/search?q=${encodeURIComponent(q)}&page=${page}`),
-  searchSuggestions: (q: string) => fetchApi<{ suggestions: AnimeItem[] }>(`/hianime/search/suggestion?q=${encodeURIComponent(q)}`),
-  getCategory: (name: string, page = 1) => fetchApi<SearchResult>(`/hianime/category/${name}?page=${page}`),
-  getGenre: (name: string, page = 1) => fetchApi<SearchResult>(`/hianime/genre/${name}?page=${page}`),
-  getSchedule: (date: string) => fetchApi<ScheduleData>(`/hianime/schedule?date=${date}`),
+    fetchApi<EpisodeSource>(
+      `/hianime/episode/sources?animeEpisodeId=${episodeId}&category=${category}`
+    ),
+
+  // ── Proxy helper ──────────────────────────────────────────────────────────
+  proxyUrl: (url: string, referer = "https://megacloud.blog/") =>
+    getProxyUrl(url, referer),
+
+  // ── Search ────────────────────────────────────────────────────────────────
+  search: async (q: string, page = 1): Promise<SearchResult> => {
+    try {
+      const data = await fetchApi<SearchResult>(
+        `/hianime/search?q=${encodeURIComponent(q)}&page=${page}`
+      );
+      if ((data as any)?.animes?.length > 0) return data;
+      throw new Error("No results from hianime");
+    } catch {
+      // Fallback: animelok → animeya (merged + deduped)
+      try {
+        const results = await searchWithFallback(q, page);
+        return {
+          animes: results as AnimeItem[],
+          currentPage: page,
+          totalPages: 1,
+          hasNextPage: false,
+        };
+      } catch {
+        return { animes: [], currentPage: page, totalPages: 1, hasNextPage: false };
+      }
+    }
+  },
+
+  // ── Search suggestions ────────────────────────────────────────────────────
+  searchSuggestions: (q: string) =>
+    fetchApi<{ suggestions: AnimeItem[] }>(
+      `/hianime/search/suggestion?q=${encodeURIComponent(q)}`
+    ),
+
+  // ── Category ──────────────────────────────────────────────────────────────
+  getCategory: (name: string, page = 1) =>
+    fetchApi<SearchResult>(`/hianime/category/${name}?page=${page}`),
+
+  // ── Genre ─────────────────────────────────────────────────────────────────
+  getGenre: (name: string, page = 1) =>
+    fetchApi<SearchResult>(`/hianime/genre/${name}?page=${page}`),
+
+  // ── Schedule ──────────────────────────────────────────────────────────────
+  getSchedule: async (date: string): Promise<ScheduleData> => {
+    try {
+      const data = await fetchApi<ScheduleData>(`/hianime/schedule?date=${date}`);
+      if ((data as any)?.scheduledAnimes?.length > 0) return data;
+      throw new Error("Empty schedule");
+    } catch {
+      // Fallback: animelok schedule
+      try {
+        const items = await getScheduleWithFallback(date);
+        return {
+          scheduledAnimes: items.map((i) => ({
+            id: i.id,
+            name: i.name,
+            poster: i.poster,
+            time: i.time,
+            episode: i.episode,
+          })),
+        };
+      } catch {
+        return { scheduledAnimes: [] };
+      }
+    }
+  },
 };
