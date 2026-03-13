@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { detectCurrentFestival, DetectedFestival } from "@/lib/festivalDetector";
+import { setApiPool } from "@/lib/apiPool";
 
 export type ThemeType =
   | "classic" | "cyberpunk" | "neon" | "sakura" | "minimal"
@@ -179,6 +180,10 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
           setSettings((prev) => {
             const next = { ...prev, ...map };
             cacheSettings(next);
+            // Warm the API pool immediately so all fetchers use admin endpoints
+            if (Array.isArray(next.apiEndpoints) && next.apiEndpoints.length > 0) {
+              setApiPool(next.apiEndpoints);
+            }
             return next;
           });
         }
@@ -236,6 +241,8 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
       const next = { ...settings, ...partial };
       setSettings(next);
       cacheSettings(next);
+      // Keep API pool in sync whenever admin changes endpoints
+      if (partial.apiEndpoints) setApiPool(partial.apiEndpoints);
       for (const [key, value] of Object.entries(partial)) {
         await supabase
           .from("site_settings")
