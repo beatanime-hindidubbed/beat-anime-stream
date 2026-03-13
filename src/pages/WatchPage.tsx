@@ -439,8 +439,8 @@ export default function WatchPage() {
               );
               setThumbnailsVttUrl(thumbTrack ? (thumbTrack.file || thumbTrack.url || null) : null);
 
-              // If tracks are missing (API returned 404 on first try but video loaded),
-              // retry fetching tracks-only in the background for up to 5 more attempts
+              // If tracks are missing, retry in background: 10 attempts, 5s apart
+              // Pick ONE random API from the pool at the start and stick with it — no conflicts
               const hasTracks = (result.tracks || []).filter((t: any) => {
                 const k = t.kind || t.lang || "";
                 return k !== "thumbnails" && k !== "thumbnail";
@@ -448,33 +448,38 @@ export default function WatchPage() {
 
               if (!hasTracks) {
                 (async () => {
-                  for (let retryIdx = 0; retryIdx < 5; retryIdx++) {
+                  // Pick a single random API endpoint once and reuse for all retries
+                  const apiPool: string[] = JSON.parse(localStorage.getItem("beat_api_endpoints") || "[]");
+                  const fallback = "https://beat-anime-api-2.onrender.com/api/v1";
+                  const availableApis = apiPool.length > 0 ? apiPool : [fallback];
+                  const chosenApi = availableApis[Math.floor(Math.random() * availableApis.length)];
+                  const trackUrl = `${chosenApi}/hianime/episode/sources?animeEpisodeId=${encodeURIComponent(fullEpisodeId)}&server=${server}&category=${apiCat}`;
+
+                  for (let retryIdx = 0; retryIdx < 10; retryIdx++) {
                     if (cancelled) return;
-                    await new Promise(r => setTimeout(r, 1200 * Math.pow(1.4, retryIdx)));
+                    await new Promise(r => setTimeout(r, 5000));
+                    if (cancelled) return;
                     try {
-                      const apis = JSON.parse(localStorage.getItem("beat_api_endpoints") || "[]");
-                      const apiBase = apis[0] || "https://beat-anime-api-2.onrender.com/api/v1";
-                      const res = await fetch(
-                        `${apiBase}/hianime/episode/sources?animeEpisodeId=${encodeURIComponent(fullEpisodeId)}&server=${server}&category=${apiCat}`
-                      );
+                      const res = await fetch(trackUrl);
                       if (!res.ok) continue;
                       const data = await res.json();
                       if (cancelled) return;
-                      const newTracks = (data?.data?.tracks || []);
-                      const subtitleTracks = newTracks.filter((t: any) => {
+                      const newTracks: any[] = data?.data?.tracks || [];
+                      const newSubTracks = newTracks.filter((t: any) => {
                         const k = t.kind || t.lang || "";
                         return k !== "thumbnails" && k !== "thumbnail";
                       });
-                      const newThumbTrack = newTracks.find((t: any) =>
-                        (t.kind || t.lang || "") === "thumbnails" || (t.kind || t.lang || "") === "thumbnail"
-                      );
-                      if (subtitleTracks.length > 0) {
+                      const newThumbTrack = newTracks.find((t: any) => {
+                        const k = t.kind || t.lang || "";
+                        return k === "thumbnails" || k === "thumbnail";
+                      });
+                      if (newSubTracks.length > 0) {
                         setStreamResult(prev => prev ? { ...prev, tracks: newTracks } : prev);
+                        if (newThumbTrack) {
+                          setThumbnailsVttUrl(newThumbTrack.file || newThumbTrack.url || null);
+                        }
+                        break; // got tracks, stop retrying
                       }
-                      if (newThumbTrack) {
-                        setThumbnailsVttUrl(newThumbTrack.file || newThumbTrack.url || null);
-                      }
-                      if (subtitleTracks.length > 0) break; // success
                     } catch {}
                   }
                 })();
