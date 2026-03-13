@@ -177,6 +177,7 @@ export default function WatchPage() {
   const [streamError, setStreamError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const [retryMessage, setRetryMessage] = useState("");
+  const [thumbnailsVttUrl, setThumbnailsVttUrl] = useState<string | null>(null);
 
   // Hindi state
   const [hindiSources, setHindiSources] = useState<HindiSource[]>([]);
@@ -381,6 +382,7 @@ export default function WatchPage() {
       setHindiHlsSrc(null);
       setHindiIframeSrc(null);
       setRetryMessage("");
+      setThumbnailsVttUrl(null);
 
       // Check cache first (1hr TTL)
       const cacheKey = `eng_${fullEpisodeId}_${category}`;
@@ -395,13 +397,33 @@ export default function WatchPage() {
 
       const categoriesToTry = category === "eng" ? ["sub", "dub"] : ["sub"];
 
+      // Retry helper: retries a fetch up to maxRetries times on non-success, with backoff
+      const fetchWithRetry = async (fn: () => Promise<any>, maxRetries = 4, baseDelay = 800) => {
+        let lastErr: any;
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+          try {
+            const result = await fn();
+            if (result) return result;
+          } catch (e) {
+            lastErr = e;
+          }
+          if (attempt < maxRetries - 1) {
+            await new Promise(r => setTimeout(r, baseDelay * Math.pow(1.5, attempt)));
+          }
+        }
+        throw lastErr ?? new Error("All retries failed");
+      };
+
       for (const apiCat of categoriesToTry) {
         for (let i = 0; i < HIANIME_SERVERS.length; i++) {
           if (cancelled) return;
           const server = HIANIME_SERVERS[i];
           setRetryMessage(`Trying ${apiCat.toUpperCase()} on ${server.toUpperCase()}...`);
           try {
-            const result = await getWorkingStream({ episodeId: fullEpisodeId, category: apiCat, server });
+            const result = await fetchWithRetry(
+              () => getWorkingStream({ episodeId: fullEpisodeId, category: apiCat, server }),
+              4, 800
+            );
             if (cancelled) return;
             if (result) {
               setCachedStream(cacheKey, result);
@@ -410,6 +432,54 @@ export default function WatchPage() {
               setStreamLoading(false);
               setRetryMessage("");
               if (category === "eng") setEngMode(apiCat as "sub" | "dub");
+
+              // Extract thumbnails VTT from tracks if present
+              const thumbTrack = (result.tracks || []).find((t: any) =>
+                (t.kind || t.lang || "") === "thumbnails" || (t.kind || t.lang || "") === "thumbnail"
+              );
+              setThumbnailsVttUrl(thumbTrack ? (thumbTrack.file || thumbTrack.url || null) : null);
+
+              // If tracks are missing (API returned 404 on first try but video loaded),
+              // retry fetching tracks-only in the background for up to 5 more attempts
+              const hasTracks = (result.tracks || []).filter((t: any) => {
+                const k = t.kind || t.lang || "";
+                return k !== "thumbnails" && k !== "thumbnail";
+              }).length > 0;
+
+              if (!hasTracks) {
+                (async () => {
+                  for (let retryIdx = 0; retryIdx < 5; retryIdx++) {
+                    if (cancelled) return;
+                    await new Promise(r => setTimeout(r, 1200 * Math.pow(1.4, retryIdx)));
+                    try {
+                      const apis = JSON.parse(localStorage.getItem("beat_api_endpoints") || "[]");
+                      const apiBase = apis[0] || "https://beat-anime-api-2.onrender.com/api/v1";
+                      const res = await fetch(
+                        `${apiBase}/hianime/episode/sources?animeEpisodeId=${encodeURIComponent(fullEpisodeId)}&server=${server}&category=${apiCat}`
+                      );
+                      if (!res.ok) continue;
+                      const data = await res.json();
+                      if (cancelled) return;
+                      const newTracks = (data?.data?.tracks || []);
+                      const subtitleTracks = newTracks.filter((t: any) => {
+                        const k = t.kind || t.lang || "";
+                        return k !== "thumbnails" && k !== "thumbnail";
+                      });
+                      const newThumbTrack = newTracks.find((t: any) =>
+                        (t.kind || t.lang || "") === "thumbnails" || (t.kind || t.lang || "") === "thumbnail"
+                      );
+                      if (subtitleTracks.length > 0) {
+                        setStreamResult(prev => prev ? { ...prev, tracks: newTracks } : prev);
+                      }
+                      if (newThumbTrack) {
+                        setThumbnailsVttUrl(newThumbTrack.file || newThumbTrack.url || null);
+                      }
+                      if (subtitleTracks.length > 0) break; // success
+                    } catch {}
+                  }
+                })();
+              }
+
               return;
             }
           } catch {}
@@ -556,6 +626,7 @@ export default function WatchPage() {
           tracks={normalizedTracks}
           intro={streamResult.intro}
           outro={streamResult.outro}
+          thumbnailsVtt={selectedServer === "server3" && thumbnailsVttUrl ? thumbnailsVttUrl : undefined}
           onTimeUpdate={handleTimeUpdate}
           onEnded={() => { if (nextEp) navigate(buildEpLink(nextEp)); }}
         />
@@ -692,6 +763,17 @@ export default function WatchPage() {
                 Server {i + 1}
               </button>
             ))}
+            {thumbnailsVttUrl && (
+              <button
+                onClick={() => setSelectedServer("server3")}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
+                  selectedServer === "server3" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}
+                title="Server 3 — VTT thumbnail previews"
+              >
+                Server 3
+              </button>
+            )}
           </div>
         ) : null}
 
