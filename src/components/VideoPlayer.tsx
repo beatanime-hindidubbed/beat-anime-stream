@@ -466,22 +466,31 @@ export default function VideoPlayer({
     setVttThumbs([]);
     setActiveVttThumb(null);
 
-    fetch(thumbnailsVtt)
-      .then(res => {
-        if (!res.ok) throw new Error("VTT fetch failed");
-        return res.text();
-      })
-      .then(text => {
+    (async () => {
+      for (let attempt = 0; attempt < 10; attempt++) {
         if (cancelled) return;
-        const thumbs = parseVttThumbs(text, thumbnailsVtt);
-        setVttThumbs(thumbs);
-      })
-      .catch(() => {
-        if (!cancelled) setVttThumbs([]);
-      })
-      .finally(() => {
-        if (!cancelled) setVttThumbLoading(false);
-      });
+        // First attempt fires immediately; subsequent attempts wait 5s
+        if (attempt > 0) {
+          await new Promise(r => setTimeout(r, 5000));
+          if (cancelled) return;
+        }
+        try {
+          const res = await fetch(thumbnailsVtt);
+          if (!res.ok) continue; // 404/5xx — retry
+          const text = await res.text();
+          if (cancelled) return;
+          const thumbs = parseVttThumbs(text, thumbnailsVtt);
+          if (thumbs.length === 0) continue; // parsed nothing — retry
+          setVttThumbs(thumbs);
+          setVttThumbLoading(false);
+          return; // success — stop
+        } catch {
+          // network error — retry
+        }
+      }
+      // All 10 attempts exhausted
+      if (!cancelled) setVttThumbLoading(false);
+    })();
 
     return () => { cancelled = true; };
   }, [thumbnailsVtt]);
