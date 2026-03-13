@@ -1,19 +1,33 @@
-/**
- * streaming.ts
- * Delegates pool management to apiPool.ts — no hardcoded URLs here.
- * Re-exports getApiPool / getNextApi / getApi / setApiPool for backward compat.
- */
-import { getApiPool, getNextApi, getApi, setApiPool, racePool, pickApis } from "./apiPool";
+// Multi-API pool for load distribution
+const API_POOL = [
+  "https://beat-anime-api.onrender.com/api/v1",
+  "https://beat-anime-api-2.onrender.com/api/v1",
+  "https://beat-anime-api-3.onrender.com/api/v1",
+  "https://beat-anime-api-4.onrender.com/api/v1",
+];
 
-export { getApiPool, getNextApi, getApi, setApiPool };
+let apiRoundRobin = 0;
 
+/** Get next API base using round-robin for load distribution */
+export function getNextApi(): string {
+  const api = API_POOL[apiRoundRobin % API_POOL.length];
+  apiRoundRobin++;
+  return api;
+}
+
+/** Get a specific API by index */
+export function getApi(index: number): string {
+  return API_POOL[index % API_POOL.length];
+}
+
+export function getApiPool(): string[] {
+  return [...API_POOL];
+}
+
+const BASE = API_POOL[0];
 const PROXY = (base: string) => `${base}/hindiapi/proxy`;
 
-export function proxyUrl(
-  rawUrl: string,
-  referer = "https://megacloud.blog/",
-  apiBase?: string
-) {
+export function proxyUrl(rawUrl: string, referer = "https://megacloud.blog/", apiBase?: string) {
   const base = apiBase || getNextApi();
   return `${PROXY(base)}?url=${encodeURIComponent(rawUrl)}&referer=${encodeURIComponent(referer)}`;
 }
@@ -30,13 +44,10 @@ export interface StreamResult {
 }
 
 export const HIANIME_SERVERS = ["hd-2", "hd-1", "vidstreaming", "megacloud"] as const;
-export type HiAnimeServer = (typeof HIANIME_SERVERS)[number];
+export type HiAnimeServer = typeof HIANIME_SERVERS[number];
 
-async function tryHiAnimeServer(
-  episodeId: string,
-  server: string,
-  category: string
-): Promise<StreamResult | null> {
+// Try a specific HiAnime server+category, using round-robin API
+async function tryHiAnimeServer(episodeId: string, server: string, category: string): Promise<StreamResult | null> {
   const apiBase = getNextApi();
   try {
     const res = await fetch(
@@ -79,20 +90,16 @@ export interface GetStreamOptions {
   episodeId: string;
   category?: string;
   server?: string;
-  episodeNumber?: number;
-  animeSlug?: string;
 }
 
-export async function getWorkingStream(
-  opts: GetStreamOptions
-): Promise<StreamResult | null> {
-  const { episodeId, category = "sub", server, episodeNumber, animeSlug } = opts;
+export async function getWorkingStream(opts: GetStreamOptions): Promise<StreamResult | null> {
+  const { episodeId, category = "sub", server } = opts;
 
-  // ── Primary: HiAnime all servers ───────────────────────────────────────────
   if (server) {
     const result = await tryHiAnimeServer(episodeId, server, category);
     if (result) return result;
-    const alt = await tryHiAnimeServer(episodeId, server, category === "sub" ? "dub" : "sub");
+    const altCat = category === "sub" ? "dub" : "sub";
+    const alt = await tryHiAnimeServer(episodeId, server, altCat);
     if (alt) return alt;
   }
 
@@ -100,61 +107,38 @@ export async function getWorkingStream(
     if (s === server) continue;
     const result = await tryHiAnimeServer(episodeId, s, category);
     if (result) return result;
-    const alt = await tryHiAnimeServer(episodeId, s, category === "sub" ? "dub" : "sub");
+    const altCat = category === "sub" ? "dub" : "sub";
+    const alt = await tryHiAnimeServer(episodeId, s, altCat);
     if (alt) return alt;
   }
 
-  // ── Fallback: multi-provider chain ─────────────────────────────────────────
-  try {
-    const { getStreamWithFallback } = await import("./apiFallback");
-    const fb = await getStreamWithFallback({
-      episodeId,
-      category: category === "sub" || category === "dub" ? category : "sub",
-      server: server === "hd-1" || server === "hd-2" ? (server as "hd-1" | "hd-2") : "hd-2",
-      episodeNumber: episodeNumber ?? 1,
-      animeSlug,
-    });
-    return {
-      type: fb.type,
-      url: fb.url,
-      tracks: fb.tracks.map((t) => ({
-        file: t.file,
-        label: t.label,
-        kind: t.kind,
-        default: t.default ?? false,
-      })),
-      intro: fb.intro,
-      outro: fb.outro,
-      server: fb.server,
-      category: fb.category,
-      provider: fb.provider,
-    };
-  } catch (err) {
-    console.warn("[stream fallback] All providers exhausted:", err);
-    return null;
-  }
+  return null;
 }
 
-/** Fetch thumbnail VTT — races all pool APIs for fastest response */
-export async function fetchThumbnailVtt(
-  episodeId: string,
-  server = "hd-2",
-  category = "sub"
-): Promise<string | null> {
-  try {
-    const data = await racePool<any>(
-      (apiBase) =>
+/** Fetch thumbnail VTT using fastest available API (parallel race) */
+export async function fetchThumbnailVtt(episodeId: string, server = "hd-2", category = "sub"): Promise<string | null> {
+  // Race all 4 APIs to get the fastest thumbnail response
+  const promises = API_POOL.map(async (apiBase) => {
+    try {
+      const res = await fetch(
         `${apiBase}/hianime/episode/sources?animeEpisodeId=${encodeURIComponent(episodeId)}&server=${server}&category=${category}`
-    );
-    const tracks = data?.data?.tracks || [];
-    const thumbTrack = tracks.find(
-      (t: any) => t.kind === "thumbnails" || t.lang === "thumbnails"
-    );
-    if (thumbTrack) {
-      return proxyUrl(thumbTrack.url || thumbTrack.file, "https://megacloud.blog/");
+      );
+      if (!res.ok) return null;
+      const data = await res.json();
+      const tracks = data?.data?.tracks || [];
+      const thumbTrack = tracks.find((t: any) => t.kind === "thumbnails" || t.lang === "thumbnails");
+      if (thumbTrack) {
+        return proxyUrl(thumbTrack.url || thumbTrack.file, "https://megacloud.blog/", apiBase);
+      }
+      return null;
+    } catch {
+      return null;
     }
-    return null;
-  } catch {
-    return null;
+  });
+
+  const results = await Promise.allSettled(promises);
+  for (const r of results) {
+    if (r.status === "fulfilled" && r.value) return r.value;
   }
+  return null;
 }

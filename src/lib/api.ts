@@ -1,32 +1,63 @@
-/**
- * api.ts
- * All API calls go through racePool (all admin-configured endpoints in parallel).
- * Every method has a fallback chain so explore/genre/category/schedule
- * pages never show empty on a single endpoint failure.
- */
-import { racePool, getNextApi } from "./apiPool";
-import {
-  searchWithFallback,
-  getHomeWithFallback,
-  getScheduleWithFallback,
-  getAnimeInfoWithFallback,
-} from "./apiFallback";
+// Multi-API load distribution with round-robin
+import { getNextApi, getApiPool } from "./streaming";
 
-// ─── Generic fetcher ──────────────────────────────────────────────────────────
+// Fallback if streaming module hasn't loaded yet
+const FALLBACK_BASE = "https://beat-anime-api.onrender.com/api/v1";
 
 async function fetchApi<T>(path: string): Promise<T> {
-  const data = await racePool<any>((base) => `${base}${path}`);
-  return (data?.data ?? data) as T;
+  const apis = getApiPool();
+  if (apis.length === 0) apis.push(FALLBACK_BASE);
+
+  // Race the first 2 APIs for fastest response
+  const selected = apis.length >= 2
+    ? [getNextApi(), getNextApi()]
+    : [apis[0]];
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
+
+  try {
+    // Race selected APIs - first successful response wins
+    const promises = selected.map(async (base) => {
+      const res = await fetch(`${base}${path}`, { signal: controller.signal });
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      const json = await res.json();
+      return (json.data ?? json) as T;
+    });
+
+    // Use Promise.race with filtered settled promises
+    const result = await new Promise<T>((resolve, reject) => {
+      let rejected = 0;
+      promises.forEach(p => {
+        p.then(resolve).catch(() => {
+          rejected++;
+          if (rejected === promises.length) reject(new Error("All APIs failed"));
+        });
+      });
+    });
+    clearTimeout(timeout);
+    return result;
+  } catch (firstErr) {
+    clearTimeout(timeout);
+    // If first batch failed, try remaining APIs sequentially
+    for (const base of apis) {
+      if (selected.includes(base)) continue;
+      try {
+        const res = await fetch(`${base}${path}`);
+        if (!res.ok) continue;
+        const json = await res.json();
+        return (json.data ?? json) as T;
+      } catch { continue; }
+    }
+    throw firstErr;
+  }
 }
 
-// ─── Proxy helper ─────────────────────────────────────────────────────────────
-
+/** Get a proxy URL using round-robin API */
 function getProxyUrl(url: string, referer = "https://megacloud.blog/"): string {
   const base = getNextApi();
   return `${base}/hindiapi/proxy?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}`;
 }
-
-// ─── Interfaces ───────────────────────────────────────────────────────────────
 
 export interface AnimeItem {
   id: string;
@@ -108,210 +139,16 @@ export interface ScheduleData {
   scheduledAnimes?: ScheduleItem[];
 }
 
-// ─── Helper: check if result has meaningful data ──────────────────────────────
-
-function hasItems(data: any, keys: string[]): boolean {
-  return keys.some((k) => Array.isArray(data?.[k]) && data[k].length > 0);
-}
-
-// ─── API ──────────────────────────────────────────────────────────────────────
-
 export const api = {
-  // ── Home ──────────────────────────────────────────────────────────────────
-  getHome: async (): Promise<HomeData> => {
-    try {
-      const data = await fetchApi<HomeData>("/hianime/home");
-      if (hasItems(data, ["trendingAnimes", "latestEpisodeAnimes", "spotlightAnimes"])) {
-        return data;
-      }
-      throw new Error("empty");
-    } catch {
-      try {
-        const fb = await getHomeWithFallback();
-        return {
-          trendingAnimes: fb.trending as AnimeItem[],
-          latestEpisodeAnimes: fb.latest as AnimeItem[],
-          topAiringAnimes: fb.popular as AnimeItem[],
-          mostPopularAnimes: fb.popular as AnimeItem[],
-          spotlightAnimes: fb.trending.slice(0, 5) as AnimeItem[],
-        };
-      } catch {
-        return {};
-      }
-    }
-  },
-
-  // ── Anime Info ────────────────────────────────────────────────────────────
-  getAnimeInfo: async (id: string): Promise<AnimeInfo> => {
-    try {
-      const data = await fetchApi<AnimeInfo>(`/hianime/anime/${id}`);
-      if ((data as any)?.anime?.info?.name) return data;
-      throw new Error("empty");
-    } catch {
-      try {
-        const fb = await getAnimeInfoWithFallback(id);
-        return {
-          anime: {
-            info: {
-              id: fb.id,
-              name: fb.name,
-              poster: fb.poster,
-              description: fb.description,
-              stats: {
-                rating: fb.rating,
-                type: fb.type,
-                episodes: fb.episodes,
-              },
-            },
-            moreInfo: {
-              ...(fb.status ? { status: fb.status } : {}),
-              ...(fb.genres?.length ? { genres: fb.genres.join(", ") } : {}),
-            },
-          },
-          seasons: [],
-          relatedAnimes: [],
-          recommendedAnimes: [],
-        };
-      } catch {
-        return {};
-      }
-    }
-  },
-
-  // ── Episodes ──────────────────────────────────────────────────────────────
-  getEpisodes: (id: string) =>
-    fetchApi<{ episodes: Episode[]; totalEpisodes: number }>(
-      `/hianime/anime/${id}/episodes`
-    ),
-
-  // ── Episode sources ───────────────────────────────────────────────────────
+  getHome: () => fetchApi<HomeData>("/hianime/home"),
+  getAnimeInfo: (id: string) => fetchApi<AnimeInfo>(`/hianime/anime/${id}`),
+  getEpisodes: (id: string) => fetchApi<{ episodes: Episode[]; totalEpisodes: number }>(`/hianime/anime/${id}/episodes`),
   getEpisodeSources: (episodeId: string, category = "sub") =>
-    fetchApi<EpisodeSource>(
-      `/hianime/episode/sources?animeEpisodeId=${episodeId}&category=${category}`
-    ),
-
-  // ── Proxy ──────────────────────────────────────────────────────────────────
-  proxyUrl: (url: string, referer = "https://megacloud.blog/") =>
-    getProxyUrl(url, referer),
-
-  // ── Search ────────────────────────────────────────────────────────────────
-  search: async (q: string, page = 1): Promise<SearchResult> => {
-    try {
-      const data = await fetchApi<SearchResult>(
-        `/hianime/search?q=${encodeURIComponent(q)}&page=${page}`
-      );
-      if (hasItems(data, ["animes"])) return data;
-      throw new Error("empty");
-    } catch {
-      try {
-        const results = await searchWithFallback(q, page);
-        return {
-          animes: results as AnimeItem[],
-          currentPage: page,
-          totalPages: 1,
-          hasNextPage: false,
-        };
-      } catch {
-        return { animes: [], currentPage: page, totalPages: 1, hasNextPage: false };
-      }
-    }
-  },
-
-  // ── Search suggestions ────────────────────────────────────────────────────
-  searchSuggestions: (q: string) =>
-    fetchApi<{ suggestions: AnimeItem[] }>(
-      `/hianime/search/suggestion?q=${encodeURIComponent(q)}`
-    ),
-
-  // ── Category (explore, manhwa, hindi, etc.) ───────────────────────────────
-  getCategory: async (name: string, page = 1): Promise<SearchResult> => {
-    try {
-      const data = await fetchApi<SearchResult>(
-        `/hianime/category/${name}?page=${page}`
-      );
-      if (hasItems(data, ["animes"])) return data;
-      throw new Error("empty");
-    } catch {
-      // Try animelok category as fallback
-      try {
-        const data = await racePool<any>(
-          (base) => `${base}/animelok/category/${encodeURIComponent(name)}?page=${page}`
-        );
-        const animes = data?.data?.animes || data?.data?.results || data?.data || [];
-        if (animes.length > 0) {
-          return {
-            animes: animes.map((a: any) => ({
-              id: a.id || a.slug,
-              name: a.title || a.name,
-              poster: a.image || a.poster,
-              type: a.type,
-              episodes: a.episodes,
-            })) as AnimeItem[],
-            currentPage: page,
-            totalPages: data?.data?.totalPages ?? 1,
-            hasNextPage: data?.data?.hasNextPage ?? false,
-          };
-        }
-      } catch {}
-      return { animes: [], currentPage: page, totalPages: 1, hasNextPage: false };
-    }
-  },
-
-  // ── Genre ─────────────────────────────────────────────────────────────────
-  getGenre: async (name: string, page = 1): Promise<SearchResult> => {
-    try {
-      const data = await fetchApi<SearchResult>(
-        `/hianime/genre/${name}?page=${page}`
-      );
-      if (hasItems(data, ["animes"])) return data;
-      throw new Error("empty");
-    } catch {
-      // Try animelok genre as fallback
-      try {
-        const data = await racePool<any>(
-          (base) => `${base}/animelok/genre/${encodeURIComponent(name)}?page=${page}`
-        );
-        const animes = data?.data?.animes || data?.data?.results || data?.data || [];
-        if (animes.length > 0) {
-          return {
-            animes: animes.map((a: any) => ({
-              id: a.id || a.slug,
-              name: a.title || a.name,
-              poster: a.image || a.poster,
-              type: a.type,
-              episodes: a.episodes,
-            })) as AnimeItem[],
-            currentPage: page,
-            totalPages: data?.data?.totalPages ?? 1,
-            hasNextPage: data?.data?.hasNextPage ?? false,
-          };
-        }
-      } catch {}
-      return { animes: [], currentPage: page, totalPages: 1, hasNextPage: false };
-    }
-  },
-
-  // ── Schedule ──────────────────────────────────────────────────────────────
-  getSchedule: async (date: string): Promise<ScheduleData> => {
-    try {
-      const data = await fetchApi<ScheduleData>(`/hianime/schedule?date=${date}`);
-      if (hasItems(data, ["scheduledAnimes"])) return data;
-      throw new Error("empty");
-    } catch {
-      try {
-        const items = await getScheduleWithFallback(date);
-        return {
-          scheduledAnimes: items.map((i) => ({
-            id: i.id,
-            name: i.name,
-            poster: i.poster,
-            time: i.time,
-            episode: i.episode,
-          })),
-        };
-      } catch {
-        return { scheduledAnimes: [] };
-      }
-    }
-  },
+    fetchApi<EpisodeSource>(`/hianime/episode/sources?animeEpisodeId=${episodeId}&category=${category}`),
+  proxyUrl: (url: string, referer = "https://megacloud.blog/") => getProxyUrl(url, referer),
+  search: (q: string, page = 1) => fetchApi<SearchResult>(`/hianime/search?q=${encodeURIComponent(q)}&page=${page}`),
+  searchSuggestions: (q: string) => fetchApi<{ suggestions: AnimeItem[] }>(`/hianime/search/suggestion?q=${encodeURIComponent(q)}`),
+  getCategory: (name: string, page = 1) => fetchApi<SearchResult>(`/hianime/category/${name}?page=${page}`),
+  getGenre: (name: string, page = 1) => fetchApi<SearchResult>(`/hianime/genre/${name}?page=${page}`),
+  getSchedule: (date: string) => fetchApi<ScheduleData>(`/hianime/schedule?date=${date}`),
 };
