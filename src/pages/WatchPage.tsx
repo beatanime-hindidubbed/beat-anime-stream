@@ -200,6 +200,7 @@ export default function WatchPage() {
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
   }, []);
+
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (langRef.current && !langRef.current.contains(e.target as Node)) setShowLangMenu(false);
@@ -509,10 +510,12 @@ export default function WatchPage() {
       );
     }
 
+    // ── FIXED: episodeId passed so HindiVideoPlayer can fetch intro/outro/captions internally ──
     if (category === "dub" && hindiHlsSrc) {
       return (
         <HindiVideoPlayer
           src={hindiHlsSrc}
+          episodeId={fullEpisodeId}
           disableInternalMiniPlayer
           onTimeUpdate={handleTimeUpdate}
           onEnded={() => { if (nextEp) navigate(buildEpLink(nextEp)); }}
@@ -524,6 +527,7 @@ export default function WatchPage() {
       return (
         <HindiVideoPlayer
           iframeSrc={hindiIframeSrc}
+          episodeId={fullEpisodeId}
           disableInternalMiniPlayer
           onTimeUpdate={handleTimeUpdate}
           onEnded={() => { if (nextEp) navigate(buildEpLink(nextEp)); }}
@@ -532,11 +536,24 @@ export default function WatchPage() {
     }
 
     if (streamResult?.type === "hls") {
+      const normalizedTracks = (streamResult.tracks || [])
+        .filter((t: any) => {
+          const kind = t.kind || t.lang || "";
+          return kind !== "thumbnails" && kind !== "thumbnail";
+        })
+        .map((t: any) => ({
+          file: t.file || t.url,
+          label: t.label || t.lang || "Unknown",
+          kind: (t.kind === "captions" ? "captions" : "subtitles") as "subtitles" | "captions",
+          default: t.default || false,
+        }))
+        .filter((t: any) => !!t.file);
+
       return (
         <VideoPlayer
           src={streamResult.url}
           disableInternalMiniPlayer
-          tracks={streamResult.tracks}
+          tracks={normalizedTracks}
           intro={streamResult.intro}
           outro={streamResult.outro}
           onTimeUpdate={handleTimeUpdate}
