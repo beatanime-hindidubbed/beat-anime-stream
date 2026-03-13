@@ -44,6 +44,8 @@ interface Props {
   // Auto-skip intro/outro
   autoSkipIntro?: boolean;
   onAutoSkipToggle?: (enabled: boolean) => void;
+  // Server 3 – VTT thumbnail seek preview
+  thumbnailsVtt?: string;
 }
 
 // ============================================================================
@@ -67,9 +69,6 @@ const MAX_RETRIES = 3;
 // HELPER FUNCTIONS
 // ============================================================================
 
-/**
- * Obfuscate a URL to prevent simple scraping.
- */
 function obfuscate(url: string): string {
   const rev = url.split("").reverse().join("");
   return btoa(
@@ -79,9 +78,6 @@ function obfuscate(url: string): string {
   );
 }
 
-/**
- * Deobfuscate an obfuscated URL.
- */
 function deobfuscate(enc: string): string {
   try {
     const dec = atob(enc);
@@ -94,9 +90,6 @@ function deobfuscate(enc: string): string {
   }
 }
 
-/**
- * Create a time-limited accessor for an obfuscated URL.
- */
 function makeAccessor(enc: string): () => string {
   const created = Date.now();
   return () => {
@@ -105,9 +98,6 @@ function makeAccessor(enc: string): () => string {
   };
 }
 
-/**
- * Format time in seconds to MM:SS or HH:MM:SS.
- */
 function formatTime(seconds: number): string {
   if (!seconds || isNaN(seconds)) return "0:00";
   const h = Math.floor(seconds / 3600);
@@ -115,6 +105,85 @@ function formatTime(seconds: number): string {
   const s = Math.floor(seconds % 60);
   if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+// ============================================================================
+// VTT THUMBNAIL PARSER
+// Parses WebVTT thumbnail files into a list of {start, end, url, x, y, w, h}
+// ============================================================================
+
+interface VttThumb {
+  start: number;       // seconds
+  end: number;         // seconds
+  url: string;         // full image URL (may include #xywh sprite coords)
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  spriteUrl: string;   // URL without fragment
+}
+
+function parseVttTime(ts: string): number {
+  const parts = ts.trim().split(":").map(Number);
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return parts[0] ?? 0;
+}
+
+function parseVttThumbs(text: string, baseUrl: string): VttThumb[] {
+  const lines = text.replace(/\r/g, "").split("\n");
+  const thumbs: VttThumb[] = [];
+  let i = 0;
+  // Get base directory of the VTT file for relative URL resolution
+  const base = baseUrl.substring(0, baseUrl.lastIndexOf("/") + 1);
+
+  while (i < lines.length) {
+    const line = lines[i].trim();
+    // Look for timing lines: 00:00:00.000 --> 00:00:05.000
+    const timingMatch = line.match(
+      /^(\d{1,2}:\d{2}[:.]\d{2,3}(?:\.\d+)?)\s*-->\s*(\d{1,2}:\d{2}[:.]\d{2,3}(?:\.\d+)?)/
+    );
+    if (timingMatch) {
+      const start = parseVttTime(timingMatch[1].replace(",", "."));
+      const end = parseVttTime(timingMatch[2].replace(",", "."));
+      i++;
+      // Next non-empty line is the image reference
+      while (i < lines.length && lines[i].trim() === "") i++;
+      const imgLine = lines[i]?.trim() || "";
+      if (imgLine) {
+        // Resolve URL
+        let fullUrl = imgLine;
+        if (!imgLine.startsWith("http") && !imgLine.startsWith("//")) {
+          fullUrl = base + imgLine;
+        }
+        // Parse #xywh=x,y,w,h fragment
+        const xywhMatch = fullUrl.match(/#xywh=(\d+),(\d+),(\d+),(\d+)/);
+        const x = xywhMatch ? parseInt(xywhMatch[1]) : 0;
+        const y = xywhMatch ? parseInt(xywhMatch[2]) : 0;
+        const w = xywhMatch ? parseInt(xywhMatch[3]) : 0;
+        const h = xywhMatch ? parseInt(xywhMatch[4]) : 0;
+        const spriteUrl = fullUrl.split("#")[0];
+        thumbs.push({ start, end, url: fullUrl, x, y, w, h, spriteUrl });
+      }
+    }
+    i++;
+  }
+  return thumbs;
+}
+
+function findVttThumb(thumbs: VttThumb[], time: number): VttThumb | null {
+  if (!thumbs.length) return null;
+  // Find exact match
+  const exact = thumbs.find(t => time >= t.start && time < t.end);
+  if (exact) return exact;
+  // Find closest
+  let best = thumbs[0];
+  let bestDist = Math.abs((best.start + best.end) / 2 - time);
+  for (const t of thumbs) {
+    const dist = Math.abs((t.start + t.end) / 2 - time);
+    if (dist < bestDist) { best = t; bestDist = dist; }
+  }
+  return best;
 }
 
 // ============================================================================
@@ -141,6 +210,7 @@ export default function VideoPlayer({
   onJumpToEpisode,
   autoSkipIntro = false,
   onAutoSkipToggle,
+  thumbnailsVtt,
 }: Props) {
   const navigate = useNavigate();
 
@@ -235,6 +305,12 @@ export default function VideoPlayer({
   const [miniPlayer, setMiniPlayer] = useState(false);
   const [showWatermarkIcon, setShowWatermarkIcon] = useState(false);
 
+  // VTT thumbnail state (Server 3)
+  const [vttThumbs, setVttThumbs] = useState<VttThumb[]>([]);
+  const [vttThumbLoading, setVttThumbLoading] = useState(false);
+  // Current VTT thumb to display on hover
+  const [activeVttThumb, setActiveVttThumb] = useState<VttThumb | null>(null);
+
   // Audio context for boost
   const audioCtxRef = useRef<AudioContext | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
@@ -273,6 +349,9 @@ export default function VideoPlayer({
   const outroStartPct = outro ? (outro.start / duration) * 100 : 0;
   const outroEndPct = outro ? (outro.end / duration) * 100 : 0;
 
+  // Whether VTT thumbnail mode is active
+  const useVttPreview = !!thumbnailsVtt && vttThumbs.length > 0;
+
   // ==========================================================================
   // EFFECTS – DEVICE DETECTION
   // ==========================================================================
@@ -286,6 +365,41 @@ export default function VideoPlayer({
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
   }, []);
+
+  // ==========================================================================
+  // EFFECTS – VTT THUMBNAIL FETCH (Server 3)
+  // ==========================================================================
+
+  useEffect(() => {
+    if (!thumbnailsVtt) {
+      setVttThumbs([]);
+      setActiveVttThumb(null);
+      return;
+    }
+    let cancelled = false;
+    setVttThumbLoading(true);
+    setVttThumbs([]);
+    setActiveVttThumb(null);
+
+    fetch(thumbnailsVtt)
+      .then(res => {
+        if (!res.ok) throw new Error("VTT fetch failed");
+        return res.text();
+      })
+      .then(text => {
+        if (cancelled) return;
+        const thumbs = parseVttThumbs(text, thumbnailsVtt);
+        setVttThumbs(thumbs);
+      })
+      .catch(() => {
+        if (!cancelled) setVttThumbs([]);
+      })
+      .finally(() => {
+        if (!cancelled) setVttThumbLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [thumbnailsVtt]);
 
   // ==========================================================================
   // EFFECTS – MINI PLAYER
@@ -378,7 +492,7 @@ export default function VideoPlayer({
   }, []);
 
   // ==========================================================================
-  // EFFECTS – HLS LOADER WITH TV DETECTION & ERROR RECOVERY
+  // EFFECTS – HLS LOADER
   // ==========================================================================
 
   useEffect(() => {
@@ -445,11 +559,12 @@ export default function VideoPlayer({
   }, [src, startTime]);
 
   // ==========================================================================
-  // EFFECTS – PREVIEW POOL
+  // EFFECTS – PREVIEW POOL (canvas-based, used when thumbnailsVtt is NOT set)
   // ==========================================================================
 
   const [previewReadyCount, setPreviewReadyCount] = useState(0);
   useEffect(() => {
+    if (thumbnailsVtt) return; // Skip canvas pool when VTT mode is active
     let realSrc: string;
     try {
       realSrc = getUrl.current();
@@ -497,10 +612,11 @@ export default function VideoPlayer({
       setPreviewReady(false);
       setPreviewReadyCount(0);
     };
-  }, [src]);
+  }, [src, thumbnailsVtt]);
 
   // Draw preview frames
   useEffect(() => {
+    if (thumbnailsVtt) return;
     const handlers: (() => void)[] = [];
     for (let i = 0; i < PREVIEW_POOL_SIZE; i++) {
       const pv = previewVideoRefs.current[i];
@@ -544,10 +660,11 @@ export default function VideoPlayer({
       });
     }
     return () => handlers.forEach(h => h());
-  }, [previewReadyCount]);
+  }, [previewReadyCount, thumbnailsVtt]);
 
   // Capture frames from main video
   useEffect(() => {
+    if (thumbnailsVtt) return;
     const v = videoRef.current;
     if (!v) return;
     const captureFrame = () => {
@@ -574,10 +691,11 @@ export default function VideoPlayer({
     };
     const interval = setInterval(captureFrame, 400);
     return () => clearInterval(interval);
-  }, []);
+  }, [thumbnailsVtt]);
 
-  // Predictive pre‑fetch
+  // Predictive pre-fetch
   useEffect(() => {
+    if (thumbnailsVtt) return;
     const v = videoRef.current;
     if (!v || !previewReady) return;
     const prefetch = () => {
@@ -604,7 +722,7 @@ export default function VideoPlayer({
     };
     const interval = setInterval(prefetch, 5000);
     return () => clearInterval(interval);
-  }, [previewReady]);
+  }, [previewReady, thumbnailsVtt]);
 
   // Clear frame cache on src change
   useEffect(() => {
@@ -681,7 +799,7 @@ export default function VideoPlayer({
   }, [audioBoost]);
 
   // ==========================================================================
-  // EFFECTS – A‑B LOOP
+  // EFFECTS – A-B LOOP
   // ==========================================================================
 
   useEffect(() => {
@@ -877,7 +995,6 @@ export default function VideoPlayer({
     setShowSkipIntro(inIntro);
     setShowSkipOutro(inOutro);
 
-    // Auto-skip intro/outro if enabled and not already triggered
     if (autoSkipIntro && !autoSkipTriggeredRef.current) {
       if (inIntro && intro) {
         autoSkipTriggeredRef.current = true;
@@ -887,7 +1004,6 @@ export default function VideoPlayer({
         v.currentTime = outro.end;
       }
     }
-    // Reset trigger when leaving intro/outro
     if (!inIntro && !inOutro) {
       autoSkipTriggeredRef.current = false;
     }
@@ -955,8 +1071,22 @@ export default function VideoPlayer({
     return false;
   }, []);
 
+  // Update VTT thumbnail for current hover time
+  const updateVttThumb = useCallback((t: number) => {
+    if (!useVttPreview) return;
+    const thumb = findVttThumb(vttThumbs, t);
+    setActiveVttThumb(thumb);
+    setPreviewHasFrame(!!thumb);
+  }, [useVttPreview, vttThumbs]);
+
   const seekPreviewToTime = useCallback(
     (t: number, forceImmediate = false) => {
+      // If VTT mode is active, use VTT thumbnails instead of canvas pool
+      if (useVttPreview) {
+        updateVttThumb(t);
+        return;
+      }
+
       const rounded = Math.round(t);
       const cache = frameCacheRef.current;
       const canvas = previewCanvasRef.current;
@@ -1025,7 +1155,7 @@ export default function VideoPlayer({
         }, 80);
       }
     },
-    [previewReady, captureInstantPreview]
+    [previewReady, captureInstantPreview, useVttPreview, updateVttThumb]
   );
 
   const handleSeekBarTouchStart = useCallback(
@@ -1096,6 +1226,7 @@ export default function VideoPlayer({
       if (instantPreviewRAF.current) cancelAnimationFrame(instantPreviewRAF.current);
       setHoverTime(null);
       setScrubTime(null);
+      setActiveVttThumb(null);
       const v = videoRef.current;
       if (!v || !duration) return;
       const touch = e.changedTouches[0];
@@ -1132,6 +1263,7 @@ export default function VideoPlayer({
   const handleProgressLeave = useCallback(() => {
     setHoverTime(null);
     setScrubTime(null);
+    setActiveVttThumb(null);
     isDraggingSeekBar.current = false;
     dragTargetTimeRef.current = null;
     if (instantPreviewRAF.current) cancelAnimationFrame(instantPreviewRAF.current);
@@ -1300,7 +1432,6 @@ export default function VideoPlayer({
     wrapperRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, []);
 
-  
   // ==========================================================================
   // RENDER
   // ==========================================================================
@@ -1370,8 +1501,8 @@ export default function VideoPlayer({
         />
       )}
 
-      {/* Hidden preview pool */}
-      {[0, 1, 2].map(i => (
+      {/* Hidden preview pool (canvas mode only) */}
+      {!thumbnailsVtt && [0, 1, 2].map(i => (
         <video
           key={i}
           ref={el => {
@@ -1498,7 +1629,7 @@ export default function VideoPlayer({
           )}
         </AnimatePresence>
 
-        {/* Skip Intro / Outro (elevated z-index, positioned above preview) */}
+        {/* Skip Intro / Outro */}
         <AnimatePresence>
           {showSkipIntro && (
             <motion.button
@@ -1837,29 +1968,20 @@ export default function VideoPlayer({
                     className="absolute top-0 left-0 h-full bg-white/30 rounded-full"
                     style={{ width: `${bufferedPct}%`, transition: "width 0.5s linear" }}
                   />
-
                   {/* Intro marker */}
                   {intro && (
                     <div
                       className="absolute top-0 h-full bg-primary/40 rounded-full pointer-events-none"
-                      style={{
-                        left: `${introStartPct}%`,
-                        width: `${introEndPct - introStartPct}%`,
-                      }}
+                      style={{ left: `${introStartPct}%`, width: `${introEndPct - introStartPct}%` }}
                     />
                   )}
-
                   {/* Outro marker */}
                   {outro && (
                     <div
                       className="absolute top-0 h-full bg-accent/40 rounded-full pointer-events-none"
-                      style={{
-                        left: `${outroStartPct}%`,
-                        width: `${outroEndPct - outroStartPct}%`,
-                      }}
+                      style={{ left: `${outroStartPct}%`, width: `${outroEndPct - outroStartPct}%` }}
                     />
                   )}
-
                   {/* Played */}
                   <div
                     className="absolute top-0 left-0 h-full rounded-full"
@@ -1893,8 +2015,48 @@ export default function VideoPlayer({
                 }}
               />
 
-              {/* Preview thumbnail */}
-              {hoverTime !== null && (
+              {/* Preview thumbnail — VTT mode (Server 3) */}
+              {hoverTime !== null && useVttPreview && activeVttThumb && (
+                <div
+                  className="absolute bottom-6 sm:bottom-8 flex flex-col items-center gap-1 sm:gap-1.5 pointer-events-none z-50 -translate-x-1/2"
+                  style={{ left: previewLeft }}
+                >
+                  <div
+                    className="absolute bottom-0 left-1/2 -translate-x-1/2 w-px h-4 sm:h-6 bg-white/40"
+                    style={{ bottom: "-16px" }}
+                  />
+                  <div
+                    className="rounded-lg overflow-hidden border border-white/20 shadow-2xl bg-black/90"
+                    style={{
+                      width: PREVIEW_W,
+                      height: PREVIEW_H,
+                      boxShadow: "0 12px 32px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,255,255,0.1)",
+                    }}
+                  >
+                    {/* Sprite sheet crop using background-image + background-position */}
+                    <div
+                      style={{
+                        width: PREVIEW_W,
+                        height: PREVIEW_H,
+                        backgroundImage: `url(${activeVttThumb.spriteUrl})`,
+                        backgroundRepeat: "no-repeat",
+                        backgroundSize: activeVttThumb.w && activeVttThumb.h
+                          ? `${(PREVIEW_W / activeVttThumb.w) * 100}% ${(PREVIEW_H / activeVttThumb.h) * 100}%`
+                          : "cover",
+                        backgroundPosition: activeVttThumb.w && activeVttThumb.h
+                          ? `-${(activeVttThumb.x / activeVttThumb.w) * PREVIEW_W}px -${(activeVttThumb.y / activeVttThumb.h) * PREVIEW_H}px`
+                          : "center",
+                      }}
+                    />
+                  </div>
+                  <span className="text-[9px] sm:text-[11px] text-white font-bold px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg bg-black/90 shadow tabular-nums border border-white/10">
+                    {formatTime(hoverTime)}
+                  </span>
+                </div>
+              )}
+
+              {/* Preview thumbnail — Canvas pool mode (Server 1 & 2) */}
+              {hoverTime !== null && !useVttPreview && (
                 <div
                   className="absolute bottom-6 sm:bottom-8 flex flex-col items-center gap-1 sm:gap-1.5 pointer-events-none z-50 -translate-x-1/2"
                   style={{ left: previewLeft }}
