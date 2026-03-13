@@ -1,19 +1,11 @@
 /**
  * apiFallback.ts
- * Multi-provider fallback system for anime streams, info, and search.
- *
- * Priority order:
- *   1. hianime   (primary scraper — fast, best coverage)
- *   2. animelok  (broad multi-language catalog)
- *   3. animeya   (secondary scraper)
- *   4. watchaw   (tertiary scraper)
- *   5. desidubanime / toonstream (last-resort specialty scrapers)
- *
- * All providers are on the SAME backend pool (beat-anime-api clones).
- * Response shapes differ between scrapers — each provider has its own
- * normalizer so callers always receive a consistent NormalizedStream /
- * NormalizedAnimeInfo shape.
+ * Multi-provider fallback system.
+ * Uses apiPool.ts (racePool) — always hits admin-configured endpoints.
  */
+
+import { racePool } from "./apiPool";
+export { racePool };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -55,52 +47,7 @@ export interface FallbackEpisode {
   isFiller?: boolean;
 }
 
-// ─── API Pool helpers ─────────────────────────────────────────────────────────
-
-function getApiPool(): string[] {
-  try {
-    const stored = JSON.parse(localStorage.getItem("beat_api_endpoints") || "[]");
-    if (Array.isArray(stored) && stored.length > 0) return stored;
-  } catch {}
-  return [
-    "https://beat-anime-api.onrender.com/api/v1",
-    "https://beat-anime-api-2.onrender.com/api/v1",
-    "https://beat-anime-api-3.onrender.com/api/v1",
-    "https://beat-anime-api-4.onrender.com/api/v1",
-  ];
-}
-
-/** Round-robin: picks a random API from the pool */
-function pickApi(): string {
-  const pool = getApiPool();
-  return pool[Math.floor(Math.random() * pool.length)];
-}
-
-/** Try a fetch against ALL pool APIs and return first success */
-async function racePool<T>(
-  pathFn: (base: string) => string,
-  timeoutMs = 12000
-): Promise<T> {
-  const pool = getApiPool();
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    const promises = pool.map(async (base) => {
-      const res = await fetch(pathFn(base), { signal: controller.signal });
-      if (!res.ok) throw new Error(`${res.status}`);
-      return res.json() as Promise<T>;
-    });
-    const results = await Promise.allSettled(promises);
-    const ok = results.find((r) => r.status === "fulfilled");
-    if (ok && ok.status === "fulfilled") return ok.value;
-    throw new Error("All pool APIs failed");
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-// ─── Track normalizer (shared) ────────────────────────────────────────────────
+// ─── Track normalizer ─────────────────────────────────────────────────────────
 
 function normalizeTracks(raw: any[]): FallbackTrack[] {
   if (!Array.isArray(raw)) return [];
@@ -129,12 +76,10 @@ async function streamFromHianime(
     (base) =>
       `${base}/hianime/episode/sources?animeEpisodeId=${encodeURIComponent(episodeId)}&server=${server}&category=${category}`
   );
-
   const d = data?.data || data;
   const sources: any[] = d?.sources || [];
   const hls = sources.find((s: any) => s.type === "hls" || (s.url || "").includes(".m3u8"));
   if (!hls?.url) throw new Error("hianime: no HLS source");
-
   return {
     url: hls.url,
     type: "hls",
@@ -149,30 +94,24 @@ async function streamFromHianime(
 
 // ─── Provider 2 — Animelok ────────────────────────────────────────────────────
 
-/**
- * Animelok's /watch/:id returns:
- *   { data: { streams: [{ url, isM3U8, subtitles }], intro, outro } }
- */
 async function streamFromAnimelok(
   animeId: string,
   episodeNumber: number
 ): Promise<FallbackStream> {
-  // Animelok uses slug-based IDs — strip ?ep=N from hianime episodeId
   const slug = animeId.split("?")[0];
   const watchId = `${slug}-episode-${episodeNumber}`;
-
-  const data = await racePool<any>((base) => `${base}/animelok/watch/${encodeURIComponent(watchId)}`);
-
+  const data = await racePool<any>(
+    (base) => `${base}/animelok/watch/${encodeURIComponent(watchId)}`
+  );
   const d = data?.data || data;
   const streams: any[] = d?.streams || d?.sources || [];
-  const hls = streams.find((s: any) => s.isM3U8 || (s.url || "").includes(".m3u8")) || streams[0];
+  const hls =
+    streams.find((s: any) => s.isM3U8 || (s.url || "").includes(".m3u8")) || streams[0];
   if (!hls?.url) throw new Error("animelok: no stream");
-
-  const rawTracks: any[] = d?.subtitles || d?.tracks || [];
   return {
     url: hls.url,
     type: "hls",
-    tracks: normalizeTracks(rawTracks),
+    tracks: normalizeTracks(d?.subtitles || d?.tracks || []),
     intro: d?.intro ?? undefined,
     outro: d?.outro ?? undefined,
     server: "animelok",
@@ -181,12 +120,10 @@ async function streamFromAnimelok(
   };
 }
 
-/**
- * Animelok anime info:
- *   /animelok/anime/:id → { data: { title, image, description, episodes, genres } }
- */
 async function infoFromAnimelok(slug: string): Promise<FallbackAnimeInfo> {
-  const data = await racePool<any>((base) => `${base}/animelok/anime/${encodeURIComponent(slug)}`);
+  const data = await racePool<any>(
+    (base) => `${base}/animelok/anime/${encodeURIComponent(slug)}`
+  );
   const d = data?.data || data;
   return {
     id: slug,
@@ -204,20 +141,15 @@ async function infoFromAnimelok(slug: string): Promise<FallbackAnimeInfo> {
 
 // ─── Provider 3 — AnimeYa ─────────────────────────────────────────────────────
 
-/**
- * AnimeYa /watch/:episodeId returns:
- *   { data: { sources: [{ url, isM3U8 }], subtitles, intro, outro } }
- */
 async function streamFromAnimeya(episodeId: string): Promise<FallbackStream> {
   const data = await racePool<any>(
     (base) => `${base}/animeya/watch/${encodeURIComponent(episodeId)}`
   );
-
   const d = data?.data || data;
   const sources: any[] = d?.sources || d?.streams || [];
-  const hls = sources.find((s: any) => s.isM3U8 || (s.url || "").includes(".m3u8")) || sources[0];
+  const hls =
+    sources.find((s: any) => s.isM3U8 || (s.url || "").includes(".m3u8")) || sources[0];
   if (!hls?.url) throw new Error("animeya: no stream");
-
   return {
     url: hls.url,
     type: "hls",
@@ -230,11 +162,10 @@ async function streamFromAnimeya(episodeId: string): Promise<FallbackStream> {
   };
 }
 
-/**
- * AnimeYa /info/:slug
- */
 async function infoFromAnimeya(slug: string): Promise<FallbackAnimeInfo> {
-  const data = await racePool<any>((base) => `${base}/animeya/info/${encodeURIComponent(slug)}`);
+  const data = await racePool<any>(
+    (base) => `${base}/animeya/info/${encodeURIComponent(slug)}`
+  );
   const d = data?.data || data;
   return {
     id: slug,
@@ -252,20 +183,15 @@ async function infoFromAnimeya(slug: string): Promise<FallbackAnimeInfo> {
 
 // ─── Provider 4 — WatchAnimeWorld ─────────────────────────────────────────────
 
-/**
- * watchaw /episode?slug=...&ep=N
- */
 async function streamFromWatchaw(slug: string, epNumber: number): Promise<FallbackStream> {
   const data = await racePool<any>(
     (base) => `${base}/watchaw/episode?slug=${encodeURIComponent(slug)}&ep=${epNumber}`
   );
-
   const d = data?.data || data;
   const sources: any[] = d?.sources || d?.streams || [];
   const hls =
     sources.find((s: any) => s.isM3U8 || (s.url || "").includes(".m3u8")) || sources[0];
   if (!hls?.url) throw new Error("watchaw: no stream");
-
   return {
     url: hls.url,
     type: "hls",
@@ -278,19 +204,17 @@ async function streamFromWatchaw(slug: string, epNumber: number): Promise<Fallba
   };
 }
 
-// ─── Provider 5 — DesiDubAnime (Hindi specialty) ──────────────────────────────
+// ─── Provider 5 — DesiDubAnime ────────────────────────────────────────────────
 
-/**
- * /desidubanime/watch/:id — for Hindi fallback only
- */
 async function streamFromDesiDub(id: string): Promise<FallbackStream> {
-  const data = await racePool<any>((base) => `${base}/desidubanime/watch/${encodeURIComponent(id)}`);
+  const data = await racePool<any>(
+    (base) => `${base}/desidubanime/watch/${encodeURIComponent(id)}`
+  );
   const d = data?.data || data;
   const sources: any[] = d?.sources || d?.streams || [];
   const hls =
     sources.find((s: any) => s.isM3U8 || (s.url || "").includes(".m3u8")) || sources[0];
   if (!hls?.url) throw new Error("desidubanime: no stream");
-
   return {
     url: hls.url,
     type: "hls",
@@ -301,7 +225,7 @@ async function streamFromDesiDub(id: string): Promise<FallbackStream> {
   };
 }
 
-// ─── Search fallbacks ─────────────────────────────────────────────────────────
+// ─── Search ───────────────────────────────────────────────────────────────────
 
 export interface FallbackSearchResult {
   id: string;
@@ -354,29 +278,17 @@ async function searchAnimeya(query: string): Promise<FallbackSearchResult[]> {
   }));
 }
 
-// ─── Public API: Stream with fallback chain ───────────────────────────────────
+// ─── Public: Stream fallback chain ───────────────────────────────────────────
 
 export interface StreamFallbackOptions {
-  episodeId: string;         // hianime episodeId (e.g. "naruto-60?ep=1234")
-  category?: "sub" | "dub"; // defaults to "sub"
-  server?: "hd-1" | "hd-2"; // preferred server
-  episodeNumber?: number;    // needed for non-hianime providers
-  animeSlug?: string;        // needed for watchaw / animeya fallbacks
-  hindiOnly?: boolean;       // if true, only try dub-capable providers
+  episodeId: string;
+  category?: "sub" | "dub";
+  server?: "hd-1" | "hd-2";
+  episodeNumber?: number;
+  animeSlug?: string;
+  hindiOnly?: boolean;
 }
 
-/**
- * getStreamWithFallback
- *
- * Tries providers in order and returns the first working stream.
- * Throws only if ALL providers fail.
- *
- * Usage (drop-in replacement in WatchPage / HindiWatchPage):
- *
- *   import { getStreamWithFallback } from "@/lib/apiFallback";
- *   const stream = await getStreamWithFallback({ episodeId, category: "sub" });
- *   // stream.url is always the HLS URL
- */
 export async function getStreamWithFallback(
   opts: StreamFallbackOptions
 ): Promise<FallbackStream> {
@@ -392,113 +304,64 @@ export async function getStreamWithFallback(
   const slug = animeSlug || episodeId.split("?")[0];
   const errors: string[] = [];
 
-  // ── 1. HiAnime (primary) ──────────────────────────────────────────────────
   if (!hindiOnly) {
     for (const srv of [server, server === "hd-2" ? "hd-1" : "hd-2"] as const) {
-      try {
-        return await streamFromHianime(episodeId, category, srv);
-      } catch (e: any) {
-        errors.push(`hianime/${srv}: ${e.message}`);
-      }
+      try { return await streamFromHianime(episodeId, category, srv); }
+      catch (e: any) { errors.push(`hianime/${srv}: ${e.message}`); }
     }
   }
 
-  // ── 2. Animelok ───────────────────────────────────────────────────────────
   if (!hindiOnly) {
-    try {
-      return await streamFromAnimelok(slug, episodeNumber);
-    } catch (e: any) {
-      errors.push(`animelok: ${e.message}`);
-    }
+    try { return await streamFromAnimelok(slug, episodeNumber); }
+    catch (e: any) { errors.push(`animelok: ${e.message}`); }
   }
 
-  // ── 3. AnimeYa ────────────────────────────────────────────────────────────
   if (!hindiOnly) {
-    try {
-      return await streamFromAnimeya(episodeId);
-    } catch (e: any) {
-      errors.push(`animeya: ${e.message}`);
-    }
+    try { return await streamFromAnimeya(episodeId); }
+    catch (e: any) { errors.push(`animeya: ${e.message}`); }
   }
 
-  // ── 4. WatchAnimeWorld ────────────────────────────────────────────────────
   if (!hindiOnly) {
-    try {
-      return await streamFromWatchaw(slug, episodeNumber);
-    } catch (e: any) {
-      errors.push(`watchaw: ${e.message}`);
-    }
+    try { return await streamFromWatchaw(slug, episodeNumber); }
+    catch (e: any) { errors.push(`watchaw: ${e.message}`); }
   }
 
-  // ── 5. DesiDubAnime (Hindi/Dub last resort) ───────────────────────────────
   if (category === "dub" || hindiOnly) {
-    try {
-      return await streamFromDesiDub(slug);
-    } catch (e: any) {
-      errors.push(`desidubanime: ${e.message}`);
-    }
+    try { return await streamFromDesiDub(slug); }
+    catch (e: any) { errors.push(`desidubanime: ${e.message}`); }
   }
 
   throw new Error(`All stream providers failed:\n${errors.join("\n")}`);
 }
 
-// ─── Public API: Anime info with fallback chain ───────────────────────────────
+// ─── Public: Info fallback ────────────────────────────────────────────────────
 
-/**
- * getAnimeInfoWithFallback
- *
- * Falls back from hianime → animelok → animeya when info fetch fails.
- * Returns a normalised FallbackAnimeInfo — NOT the full hianime shape.
- * Primarily useful as a last-resort when the main api.getAnimeInfo fails.
- */
 export async function getAnimeInfoWithFallback(slug: string): Promise<FallbackAnimeInfo> {
   const errors: string[] = [];
-
-  try {
-    return await infoFromAnimelok(slug);
-  } catch (e: any) {
-    errors.push(`animelok: ${e.message}`);
-  }
-
-  try {
-    return await infoFromAnimeya(slug);
-  } catch (e: any) {
-    errors.push(`animeya: ${e.message}`);
-  }
-
+  try { return await infoFromAnimelok(slug); } catch (e: any) { errors.push(`animelok: ${e.message}`); }
+  try { return await infoFromAnimeya(slug); } catch (e: any) { errors.push(`animeya: ${e.message}`); }
   throw new Error(`All info providers failed:\n${errors.join("\n")}`);
 }
 
-// ─── Public API: Search with fallback chain ───────────────────────────────────
+// ─── Public: Search fallback ──────────────────────────────────────────────────
 
-/**
- * searchWithFallback
- *
- * Tries hianime search first, then merges/dedupes results from animelok
- * and animeya if hianime returns 0 results.
- */
 export async function searchWithFallback(
   query: string,
   page = 1
 ): Promise<FallbackSearchResult[]> {
-  // Always try hianime first
   try {
     const results = await searchHianime(query, page);
     if (results.length > 0) return results;
   } catch {}
 
-  // Parallel fallback from animelok + animeya
   const [lok, ya] = await Promise.allSettled([
     searchAnimelok(query),
     searchAnimeya(query),
   ]);
-
   const combined: FallbackSearchResult[] = [
     ...(lok.status === "fulfilled" ? lok.value : []),
     ...(ya.status === "fulfilled" ? ya.value : []),
   ];
-
-  // Dedupe by normalised name
   const seen = new Set<string>();
   return combined.filter((r) => {
     const key = r.name.toLowerCase().replace(/\s+/g, "");
@@ -508,7 +371,7 @@ export async function searchWithFallback(
   });
 }
 
-// ─── Public API: Home data with fallback ─────────────────────────────────────
+// ─── Public: Home fallback ────────────────────────────────────────────────────
 
 export interface FallbackHomeSection {
   trending: FallbackSearchResult[];
@@ -518,7 +381,6 @@ export interface FallbackHomeSection {
 }
 
 export async function getHomeWithFallback(): Promise<FallbackHomeSection> {
-  // Try animelok home first as fallback (hianime home is handled by main api.ts)
   try {
     const data = await racePool<any>((base) => `${base}/animelok/home`);
     const d = data?.data || data;
@@ -538,7 +400,6 @@ export async function getHomeWithFallback(): Promise<FallbackHomeSection> {
     };
   } catch {}
 
-  // Last resort: hindidubbed home
   try {
     const data = await racePool<any>((base) => `${base}/hindidubbed/home`);
     const d = data?.data || data;
@@ -560,7 +421,7 @@ export async function getHomeWithFallback(): Promise<FallbackHomeSection> {
   return { trending: [], latest: [], popular: [], provider: "none" };
 }
 
-// ─── Public API: Schedule with fallback ──────────────────────────────────────
+// ─── Public: Schedule fallback ────────────────────────────────────────────────
 
 export interface FallbackScheduleItem {
   id: string;
@@ -573,7 +434,6 @@ export interface FallbackScheduleItem {
 export async function getScheduleWithFallback(
   date: string
 ): Promise<FallbackScheduleItem[]> {
-  // Try animelok schedule
   try {
     const data = await racePool<any>(
       (base) => `${base}/animelok/schedule?date=${date}`
@@ -587,26 +447,15 @@ export async function getScheduleWithFallback(
       episode: a.episode,
     }));
   } catch {}
-
   return [];
 }
 
-// ─── Utility: probe all providers for a given episodeId ──────────────────────
+// ─── Diagnostic: probe all providers ─────────────────────────────────────────
 
-/**
- * probeAllProviders
- *
- * Diagnostic helper — tries every provider and returns results keyed by
- * provider name. Useful in AdminDashboard health checks.
- *
- * Example:
- *   const probe = await probeAllProviders({ episodeId: "naruto-60?ep=1234", episodeNumber: 1 });
- *   // { hianime: { ok: true, ms: 320 }, animelok: { ok: false, error: "..." }, ... }
- */
-export async function probeAllProviders(opts: StreamFallbackOptions): Promise<
-  Record<string, { ok: boolean; ms?: number; error?: string }>
-> {
-  const { episodeId, category = "sub", server = "hd-2", episodeNumber = 1 } = opts;
+export async function probeAllProviders(
+  opts: StreamFallbackOptions
+): Promise<Record<string, { ok: boolean; ms?: number; error?: string }>> {
+  const { episodeId, category = "sub", episodeNumber = 1 } = opts;
   const slug = opts.animeSlug || episodeId.split("?")[0];
 
   const probe = async (
@@ -628,6 +477,7 @@ export async function probeAllProviders(opts: StreamFallbackOptions): Promise<
     probe("animelok", () => streamFromAnimelok(slug, episodeNumber)),
     probe("animeya", () => streamFromAnimeya(episodeId)),
     probe("watchaw", () => streamFromWatchaw(slug, episodeNumber)),
+    probe("desidubanime", () => streamFromDesiDub(slug)),
   ]);
 
   return Object.fromEntries(
