@@ -320,10 +320,95 @@ export default function VideoPlayer({
   // MEMOIZED VALUES
   // ==========================================================================
 
-  const subtitleTracks = useMemo(
-    () => tracks?.filter(t => t.kind === "captions" || t.kind === "subtitles") || [],
+  // resolvedTracks: starts as raw dedup (first-wins), gets upgraded once URL probing completes
+  const [resolvedTracks, setResolvedTracks] = useState<Track[]>([]);
+
+  const rawDedupTracks = useMemo(
+    () => {
+      const all = tracks?.filter(t => t.kind === "captions" || t.kind === "subtitles") || [];
+      // Group by label — collect ALL duplicates per label
+      const groups = new Map<string, Track[]>();
+      for (const t of all) {
+        const key = (t.label || "Unknown").toLowerCase().trim();
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push(t);
+      }
+      // For now return first of each group — will be race-upgraded below
+      return Array.from(groups.entries()).map(([, group]) => group[0]);
+    },
     [tracks]
   );
+
+  // Race-probe duplicate URLs: for each label group with >1 URL, fetch all in parallel
+  // and keep whichever responds with 200 first. Sub-millisecond in practice (just headers).
+  useEffect(() => {
+    if (!tracks || tracks.length === 0) {
+      setResolvedTracks([]);
+      return;
+    }
+
+    const all = tracks.filter(t => t.kind === "captions" || t.kind === "subtitles");
+    const groups = new Map<string, Track[]>();
+    for (const t of all) {
+      const key = (t.label || "Unknown").toLowerCase().trim();
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(t);
+    }
+
+    // Start with first-of-each-group immediately so UI isn't blank
+    const initial = Array.from(groups.values()).map(g => g[0]);
+    setResolvedTracks(initial);
+
+    // For groups with duplicates, race-probe and upgrade
+    let cancelled = false;
+    const probeGroup = async (group: Track[]): Promise<Track> => {
+      if (group.length === 1) return group[0];
+      // Race all URLs with a 3s timeout — first 200 wins
+      return new Promise<Track>((resolve) => {
+        let settled = false;
+        const timer = setTimeout(() => {
+          if (!settled) { settled = true; resolve(group[0]); } // fallback to first
+        }, 3000);
+
+        group.forEach(track => {
+          // Use fetch with HEAD-like range to just check reachability, abort after win
+          const controller = new AbortController();
+          fetch(track.file, { method: "GET", signal: controller.signal, headers: { Range: "bytes=0-0" } })
+            .then(res => {
+              if ((res.ok || res.status === 206) && !settled) {
+                settled = true;
+                clearTimeout(timer);
+                resolve(track);
+                // Abort remaining fetches
+              }
+            })
+            .catch(() => {}); // ignore errors — another URL may still win
+        });
+      });
+    };
+
+    (async () => {
+      const entries = Array.from(groups.entries());
+      const results = await Promise.all(entries.map(([, group]) => probeGroup(group)));
+      if (!cancelled) setResolvedTracks(results);
+    })();
+
+    return () => { cancelled = true; };
+  }, [tracks]);
+
+  const subtitleTracks = resolvedTracks;
+
+  // Reset track selection whenever tracks change (new episode / server switch)
+  useEffect(() => {
+    setActiveTrackIdx(0);
+    setCaptionsOn(false);
+    const v = videoRef.current;
+    if (v) {
+      for (let i = 0; i < v.textTracks.length; i++) {
+        v.textTracks[i].mode = "hidden";
+      }
+    }
+  }, [tracks]);
 
   const displayTime = scrubTime ?? currentTime;
   const progress = duration ? (displayTime / duration) * 100 : 0;
@@ -957,14 +1042,18 @@ export default function VideoPlayer({
     const v = videoRef.current;
     if (!v) return;
     const apply = () => {
+      const targetLabel = captionsOn
+        ? subtitleTracks[activeTrackIdx]?.label?.toLowerCase().trim()
+        : null;
       for (let i = 0; i < v.textTracks.length; i++) {
-        v.textTracks[i].mode = captionsOn && i === activeTrackIdx ? "showing" : "hidden";
+        const tLabel = (v.textTracks[i].label || "").toLowerCase().trim();
+        v.textTracks[i].mode = (targetLabel && tLabel === targetLabel) ? "showing" : "hidden";
       }
     };
     apply();
     v.addEventListener("loadedmetadata", apply);
     return () => v.removeEventListener("loadedmetadata", apply);
-  }, [captionsOn, activeTrackIdx]);
+  }, [captionsOn, activeTrackIdx, subtitleTracks]);
 
   // ==========================================================================
   // HANDLERS
@@ -1309,12 +1398,15 @@ export default function VideoPlayer({
       if (!v) return;
       setActiveTrackIdx(idx);
       setCaptionsOn(true);
+      // Match by label to avoid index mismatch between subtitleTracks[] and v.textTracks
+      const targetLabel = subtitleTracks[idx]?.label?.toLowerCase().trim();
       for (let i = 0; i < v.textTracks.length; i++) {
-        v.textTracks[i].mode = i === idx ? "showing" : "hidden";
+        const tLabel = (v.textTracks[i].label || "").toLowerCase().trim();
+        v.textTracks[i].mode = (targetLabel && tLabel === targetLabel) ? "showing" : "hidden";
       }
       setSettingsPanel("main");
     },
-    []
+    [subtitleTracks]
   );
 
   const resetHideTimer = useCallback(() => {
