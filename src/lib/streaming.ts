@@ -1,30 +1,40 @@
 // Multi-API pool for load distribution
-const API_POOL = [
-  "https://beat-anime-api.onrender.com/api/v1",
-  "https://beat-anime-api-2.onrender.com/api/v1",
-  "https://beat-anime-api-3.onrender.com/api/v1",
-  "https://beat-anime-api-4.onrender.com/api/v1",
-];
+// Reads from localStorage so AdminDashboard endpoint changes take effect immediately
+
+function loadApiPool(): string[] {
+  try {
+    const stored = JSON.parse(localStorage.getItem("beat_api_endpoints") || "[]");
+    if (Array.isArray(stored) && stored.length > 0) return stored;
+  } catch {}
+  return [
+    "https://beat-anime-api.onrender.com/api/v1",
+    "https://beat-anime-api-2.onrender.com/api/v1",
+    "https://beat-anime-api-3.onrender.com/api/v1",
+    "https://beat-anime-api-4.onrender.com/api/v1",
+  ];
+}
 
 let apiRoundRobin = 0;
 
 /** Get next API base using round-robin for load distribution */
 export function getNextApi(): string {
-  const api = API_POOL[apiRoundRobin % API_POOL.length];
+  const pool = loadApiPool();
+  const api = pool[apiRoundRobin % pool.length];
   apiRoundRobin++;
   return api;
 }
 
 /** Get a specific API by index */
 export function getApi(index: number): string {
-  return API_POOL[index % API_POOL.length];
+  const pool = loadApiPool();
+  return pool[index % pool.length];
 }
 
+/** Returns the live pool — reads localStorage so admin changes apply instantly */
 export function getApiPool(): string[] {
-  return [...API_POOL];
+  return loadApiPool();
 }
 
-const BASE = API_POOL[0];
 const PROXY = (base: string) => `${base}/hindiapi/proxy`;
 
 export function proxyUrl(rawUrl: string, referer = "https://megacloud.blog/", apiBase?: string) {
@@ -47,7 +57,11 @@ export const HIANIME_SERVERS = ["hd-2", "hd-1", "vidstreaming", "megacloud"] as 
 export type HiAnimeServer = typeof HIANIME_SERVERS[number];
 
 // Try a specific HiAnime server+category, using round-robin API
-async function tryHiAnimeServer(episodeId: string, server: string, category: string): Promise<StreamResult | null> {
+async function tryHiAnimeServer(
+  episodeId: string,
+  server: string,
+  category: string
+): Promise<StreamResult | null> {
   const apiBase = getNextApi();
   try {
     const res = await fetch(
@@ -90,11 +104,16 @@ export interface GetStreamOptions {
   episodeId: string;
   category?: string;
   server?: string;
+  /** episode number — passed through to fallback providers */
+  episodeNumber?: number;
+  /** anime slug — passed through to fallback providers */
+  animeSlug?: string;
 }
 
 export async function getWorkingStream(opts: GetStreamOptions): Promise<StreamResult | null> {
-  const { episodeId, category = "sub", server } = opts;
+  const { episodeId, category = "sub", server, episodeNumber, animeSlug } = opts;
 
+  // ── Primary: HiAnime ───────────────────────────────────────────────────────
   if (server) {
     const result = await tryHiAnimeServer(episodeId, server, category);
     if (result) return result;
@@ -112,13 +131,47 @@ export async function getWorkingStream(opts: GetStreamOptions): Promise<StreamRe
     if (alt) return alt;
   }
 
-  return null;
+  // ── Fallback: multi-provider chain (animelok → animeya → watchaw → desidubanime) ──
+  try {
+    const { getStreamWithFallback } = await import("./apiFallback");
+    const fb = await getStreamWithFallback({
+      episodeId,
+      category: (category === "sub" || category === "dub") ? category : "sub",
+      server: (server === "hd-1" || server === "hd-2") ? server as "hd-1" | "hd-2" : "hd-2",
+      episodeNumber: episodeNumber ?? 1,
+      animeSlug,
+    });
+
+    return {
+      type: fb.type,
+      url: fb.url,
+      tracks: fb.tracks.map((t) => ({
+        file: t.file,
+        label: t.label,
+        kind: t.kind,
+        default: t.default ?? false,
+      })),
+      intro: fb.intro,
+      outro: fb.outro,
+      server: fb.server,
+      category: fb.category,
+      provider: fb.provider,
+    };
+  } catch (err) {
+    console.warn("[stream fallback] All providers exhausted:", err);
+    return null;
+  }
 }
 
 /** Fetch thumbnail VTT using fastest available API (parallel race) */
-export async function fetchThumbnailVtt(episodeId: string, server = "hd-2", category = "sub"): Promise<string | null> {
-  // Race all 4 APIs to get the fastest thumbnail response
-  const promises = API_POOL.map(async (apiBase) => {
+export async function fetchThumbnailVtt(
+  episodeId: string,
+  server = "hd-2",
+  category = "sub"
+): Promise<string | null> {
+  const pool = loadApiPool();
+  // Race all pool APIs to get the fastest thumbnail response
+  const promises = pool.map(async (apiBase) => {
     try {
       const res = await fetch(
         `${apiBase}/hianime/episode/sources?animeEpisodeId=${encodeURIComponent(episodeId)}&server=${server}&category=${category}`
@@ -126,7 +179,9 @@ export async function fetchThumbnailVtt(episodeId: string, server = "hd-2", cate
       if (!res.ok) return null;
       const data = await res.json();
       const tracks = data?.data?.tracks || [];
-      const thumbTrack = tracks.find((t: any) => t.kind === "thumbnails" || t.lang === "thumbnails");
+      const thumbTrack = tracks.find(
+        (t: any) => t.kind === "thumbnails" || t.lang === "thumbnails"
+      );
       if (thumbTrack) {
         return proxyUrl(thumbTrack.url || thumbTrack.file, "https://megacloud.blog/", apiBase);
       }
